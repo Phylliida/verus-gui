@@ -8,6 +8,8 @@ use crate::padding::Padding;
 use crate::widget::*;
 use crate::layout::*;
 use crate::layout::stack::*;
+use crate::layout::flex::*;
+use crate::layout::grid::*;
 use crate::layout::wrap::*;
 
 verus! {
@@ -77,6 +79,18 @@ pub open spec fn measure_widget<T: OrderedField>(
                 let total_height = padding.vertical().add(content.height);
                 limits.resolve(Size::new(total_width, total_height))
             },
+            Widget::Flex { .. } => {
+                // Flex fills its limits: parent_size = limits.resolve(limits.max)
+                limits.resolve(limits.max)
+            },
+            Widget::Grid { padding, h_spacing, v_spacing, h_align, v_align,
+                           col_widths, row_heights, children } => {
+                let content_w = grid_content_width(col_widths, h_spacing);
+                let content_h = grid_content_height(row_heights, v_spacing);
+                let tw = padding.horizontal().add(content_w);
+                let th = padding.vertical().add(content_h);
+                limits.resolve(Size::new(tw, th))
+            },
         }
     }
 }
@@ -117,6 +131,29 @@ pub open spec fn measure_stack_result<T: OrderedField>(
     let total_width = padding.horizontal().add(content.width);
     let total_height = padding.vertical().add(content.height);
     limits.resolve(Size::new(total_width, total_height))
+}
+
+/// Flex container size: always fills limits.
+pub open spec fn measure_flex_result<T: OrderedField>(
+    limits: Limits<T>,
+) -> Size<T> {
+    limits.resolve(limits.max)
+}
+
+/// Grid container size from column widths and row heights.
+pub open spec fn measure_grid_result<T: OrderedField>(
+    limits: Limits<T>,
+    padding: Padding<T>,
+    h_spacing: T,
+    v_spacing: T,
+    col_widths: Seq<Size<T>>,
+    row_heights: Seq<Size<T>>,
+) -> Size<T> {
+    let content_w = grid_content_width(col_widths, h_spacing);
+    let content_h = grid_content_height(row_heights, v_spacing);
+    let tw = padding.horizontal().add(content_w);
+    let th = padding.vertical().add(content_h);
+    limits.resolve(Size::new(tw, th))
 }
 
 /// Wrap container size from pre-measured child sizes.
@@ -245,6 +282,56 @@ pub proof fn lemma_measure_is_layout_size<T: OrderedField>(
                 let layout = wrap_layout(limits, padding, h_spacing, v_spacing, l_sizes);
                 assert(merge_layout(layout, cn).size == layout.size);
                 assert(layout_widget(limits, widget, fuel).size == layout.size);
+            },
+            Widget::Flex { padding, spacing, alignment, direction, children } => {
+                // Flex fills limits.max regardless of direction
+                // flex_column_layout / flex_row_layout both set parent_size = limits.resolve(limits.max)
+                let inner = limits.shrink(padding.horizontal(), padding.vertical());
+                let weights = Seq::new(children.len(), |i: int| children[i].weight);
+                let total_weight = sum_weights(weights, weights.len() as nat);
+                let total_spacing = if children.len() > 0 {
+                    repeated_add(spacing, (children.len() - 1) as nat)
+                } else { T::zero() };
+
+                match direction {
+                    FlexDirection::Column => {
+                        let ah = inner.max.height.sub(total_spacing);
+                        let cn = flex_column_widget_child_nodes(
+                            inner, children, weights, total_weight, ah, (fuel - 1) as nat);
+                        let cs = Seq::new(cn.len(), |i: int| cn[i].size);
+                        let layout = flex_column_layout(
+                            limits, padding, spacing, alignment, weights, cs);
+                        assert(merge_layout(layout, cn).size == layout.size);
+                    },
+                    FlexDirection::Row => {
+                        let aw = inner.max.width.sub(total_spacing);
+                        let cn = flex_row_widget_child_nodes(
+                            inner, children, weights, total_weight, aw, (fuel - 1) as nat);
+                        let cs = Seq::new(cn.len(), |i: int| cn[i].size);
+                        let layout = flex_row_layout(
+                            limits, padding, spacing, alignment, weights, cs);
+                        assert(merge_layout(layout, cn).size == layout.size);
+                    },
+                }
+            },
+            Widget::Grid { padding, h_spacing, v_spacing, h_align, v_align,
+                           col_widths, row_heights, children } => {
+                // Grid parent size depends only on col_widths and row_heights
+                let inner = limits.shrink(padding.horizontal(), padding.vertical());
+                let cn = grid_widget_child_nodes(
+                    inner, col_widths, row_heights, children,
+                    col_widths.len(), (fuel - 1) as nat);
+                let num_cols = col_widths.len();
+                let num_rows = row_heights.len();
+                let cs_2d = Seq::new(num_rows, |r: int|
+                    Seq::new(num_cols, |c: int|
+                        cn[(r * num_cols as int + c)].size
+                    )
+                );
+                let layout = grid_layout(
+                    limits, padding, h_spacing, v_spacing, h_align, v_align,
+                    col_widths, row_heights, cs_2d);
+                assert(merge_layout(layout, cn).size == layout.size);
             },
         }
     }
