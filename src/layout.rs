@@ -1,5 +1,6 @@
 use vstd::prelude::*;
 use verus_algebra::traits::ordered_ring::OrderedRing;
+use verus_algebra::traits::field::OrderedField;
 use verus_algebra::min_max::{min, max};
 use crate::size::Size;
 use crate::limits::Limits;
@@ -8,6 +9,14 @@ use crate::padding::Padding;
 use crate::alignment::{Alignment, align_offset};
 
 pub mod proofs;
+pub mod stack;
+pub mod stack_proofs;
+pub mod flex;
+pub mod flex_proofs;
+pub mod grid;
+pub mod grid_proofs;
+pub mod wrap;
+pub mod wrap_proofs;
 
 verus! {
 
@@ -78,7 +87,7 @@ pub open spec fn child_y_position<T: OrderedRing>(
 }
 
 /// Build the sequence of child Nodes for a column layout.
-pub open spec fn column_children<T: OrderedRing>(
+pub open spec fn column_children<T: OrderedField>(
     padding: Padding<T>,
     spacing: T,
     alignment: Alignment,
@@ -123,7 +132,7 @@ pub open spec fn column_content_height<T: OrderedRing>(
 /// 2. Place each child vertically, separated by spacing
 /// 3. Align children on cross-axis (horizontal) per Alignment
 /// 4. Return parent Node with positioned children
-pub open spec fn column_layout<T: OrderedRing>(
+pub open spec fn column_layout<T: OrderedField>(
     limits: Limits<T>,
     padding: Padding<T>,
     spacing: T,
@@ -164,7 +173,7 @@ pub open spec fn child_x_position<T: OrderedRing>(
 }
 
 /// Build the sequence of child Nodes for a row layout.
-pub open spec fn row_children<T: OrderedRing>(
+pub open spec fn row_children<T: OrderedField>(
     padding: Padding<T>,
     spacing: T,
     alignment: Alignment,
@@ -209,7 +218,7 @@ pub open spec fn row_content_width<T: OrderedRing>(
 /// 2. Place each child horizontally, separated by spacing
 /// 3. Align children on cross-axis (vertical) per Alignment
 /// 4. Return parent Node with positioned children
-pub open spec fn row_layout<T: OrderedRing>(
+pub open spec fn row_layout<T: OrderedField>(
     limits: Limits<T>,
     padding: Padding<T>,
     spacing: T,

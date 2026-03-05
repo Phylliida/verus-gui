@@ -6,6 +6,8 @@ edition = "2021"
 [dependencies]
 vstd = { path = "../verus/source/vstd" }
 verus-algebra = { path = "../verus-algebra" }
+verus-bigint = { path = "../verus-bigint" }
+verus-rational = { path = "../verus-rational" }
 
 [package.metadata.verus]
 verify = true

@@ -1,5 +1,6 @@
 use vstd::prelude::*;
-use verus_algebra::traits::ordered_ring::OrderedRing;
+use verus_algebra::traits::field::OrderedField;
+use verus_algebra::convex::two;
 
 verus! {
 
@@ -7,8 +8,7 @@ verus! {
 pub enum Alignment {
     /// Align to the start (left for columns, top for rows).
     Start,
-    /// Align to the center. Note: proper centering requires a Field
-    /// (division by 2). Over a general OrderedRing this behaves like Start.
+    /// Align to the center: (available - used) / 2.
     Center,
     /// Align to the end (right for columns, bottom for rows).
     End,
@@ -18,16 +18,16 @@ pub enum Alignment {
 /// and the child's extent along that axis.
 ///
 /// - Start  => 0
-/// - Center => 0  (degenerate over OrderedRing; requires Field for true centering)
+/// - Center => (available - used) / 2
 /// - End    => available - used
-pub open spec fn align_offset<T: OrderedRing>(
+pub open spec fn align_offset<T: OrderedField>(
     alignment: Alignment,
     available: T,
     used: T,
 ) -> T {
     match alignment {
         Alignment::Start  => T::zero(),
-        Alignment::Center => T::zero(),
+        Alignment::Center => available.sub(used).div(two::<T>()),
         Alignment::End    => available.sub(used),
     }
 }

@@ -1,9 +1,12 @@
 use vstd::prelude::*;
 use verus_algebra::traits::ordered_ring::OrderedRing;
+use verus_algebra::traits::field::OrderedField;
+use verus_algebra::convex::{two, lemma_two_nonzero};
 use verus_algebra::min_max::*;
 use crate::size::Size;
 use crate::limits::Limits;
 use crate::layout::*;
+use crate::padding::Padding;
 use crate::alignment::{Alignment, align_offset};
 
 verus! {
@@ -305,8 +308,48 @@ pub proof fn lemma_le_add_nonneg<T: OrderedRing>(x: T, val: T)
 
 // ── Alignment offset lemmas ───────────────────────────────────────
 
+/// 0 < two() in any ordered field.
+proof fn lemma_two_positive<T: OrderedField>()
+    ensures
+        T::zero().lt(two::<T>()),
+{
+    verus_algebra::lemmas::ordered_ring_lemmas::lemma_zero_lt_one::<T>();
+    T::axiom_lt_iff_le_and_not_eqv(T::zero(), T::one());
+    // 0 < 1 and 0 <= 1 => 0 < 1 + 1
+    verus_algebra::lemmas::ordered_ring_lemmas::lemma_add_pos_nonneg::<T>(T::one(), T::one());
+}
+
+/// zero / two() ≡ zero.
+proof fn lemma_zero_div_two<T: OrderedField>()
+    ensures
+        T::zero().div(two::<T>()).eqv(T::zero()),
+{
+    T::axiom_div_is_mul_recip(T::zero(), two::<T>());
+    verus_algebra::lemmas::ring_lemmas::lemma_mul_zero_left::<T>(two::<T>().recip());
+    T::axiom_eqv_transitive(
+        T::zero().div(two::<T>()),
+        T::zero().mul(two::<T>().recip()),
+        T::zero(),
+    );
+}
+
+/// a ≡ b implies a/c ≡ b/c.
+proof fn lemma_div_congruence_numerator<T: OrderedField>(a: T, b: T, c: T)
+    requires
+        a.eqv(b),
+    ensures
+        a.div(c).eqv(b.div(c)),
+{
+    T::axiom_div_is_mul_recip(a, c);
+    T::axiom_mul_congruence_left(a, b, c.recip());
+    T::axiom_eqv_transitive(a.div(c), a.mul(c.recip()), b.mul(c.recip()));
+    T::axiom_div_is_mul_recip(b, c);
+    T::axiom_eqv_symmetric(b.div(c), b.mul(c.recip()));
+    T::axiom_eqv_transitive(a.div(c), b.mul(c.recip()), b.div(c));
+}
+
 /// align_offset produces a non-negative offset when the child fits.
-pub proof fn lemma_align_offset_nonneg<T: OrderedRing>(
+pub proof fn lemma_align_offset_nonneg<T: OrderedField>(
     alignment: Alignment,
     available: T,
     used: T,
@@ -321,7 +364,23 @@ pub proof fn lemma_align_offset_nonneg<T: OrderedRing>(
             T::axiom_le_reflexive(T::zero());
         },
         Alignment::Center => {
-            T::axiom_le_reflexive(T::zero());
+            let x = available.sub(used);
+            // 0 <= x
+            verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_iff_sub_nonneg::<T>(
+                used, available,
+            );
+            // 0 < two()
+            lemma_two_positive::<T>();
+            // 0 <= x and 0 < two() => 0/two() <= x/two()
+            verus_algebra::lemmas::ordered_field_lemmas::lemma_le_div_monotone::<T>(
+                T::zero(), x, two::<T>(),
+            );
+            // 0/two() ≡ 0
+            lemma_zero_div_two::<T>();
+            // 0 <= x/two()
+            verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
+                T::zero().div(two::<T>()), T::zero(), x.div(two::<T>()),
+            );
         },
         Alignment::End => {
             verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_iff_sub_nonneg::<T>(
@@ -333,7 +392,7 @@ pub proof fn lemma_align_offset_nonneg<T: OrderedRing>(
 
 /// align_offset(alignment, available, used) + used <= available
 /// when the child fits in the available space.
-pub proof fn lemma_align_offset_bounded<T: OrderedRing>(
+pub proof fn lemma_align_offset_bounded<T: OrderedField>(
     alignment: Alignment,
     available: T,
     used: T,
@@ -353,10 +412,36 @@ pub proof fn lemma_align_offset_bounded<T: OrderedRing>(
             );
         },
         Alignment::Center => {
-            verus_algebra::lemmas::additive_group_lemmas::lemma_add_zero_left::<T>(used);
-            T::axiom_eqv_symmetric(T::zero().add(used), used);
+            let x = available.sub(used);
+            // 0 <= x
+            verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_iff_sub_nonneg::<T>(
+                used, available,
+            );
+
+            // midpoint(0, x) <= x via lemma_midpoint_between
+            verus_algebra::convex::lemma_midpoint_between::<T>(T::zero(), x);
+            // midpoint(0, x) = (0 + x) / two() by definition
+            // Need: (0+x)/two() ≡ x/two() via add_zero_left congruence
+            verus_algebra::lemmas::additive_group_lemmas::lemma_add_zero_left::<T>(x);
+            lemma_div_congruence_numerator::<T>(T::zero().add(x), x, two::<T>());
+            // midpoint(0, x) ≡ x/two(), and midpoint(0, x) <= x
+            // So x/two() <= x
             verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
-                used, T::zero().add(used), available,
+                verus_algebra::convex::midpoint::<T>(T::zero(), x),
+                x.div(two::<T>()),
+                x,
+            );
+
+            // x/two() <= x => x/two() + used <= x + used
+            T::axiom_le_add_monotone(x.div(two::<T>()), x, used);
+
+            // x + used ≡ available
+            verus_algebra::lemmas::additive_group_lemmas::lemma_sub_then_add_cancel::<T>(
+                available, used,
+            );
+            // x/two() + used <= available
+            verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_right::<T>(
+                x.div(two::<T>()).add(used), x.add(used), available,
             );
         },
         Alignment::End => {
@@ -379,7 +464,7 @@ pub proof fn lemma_align_offset_bounded<T: OrderedRing>(
 /// In a column layout, each child's x-position is >= padding_left.
 ///
 /// Precondition: the child's width fits within the available width.
-pub proof fn lemma_column_child_x_lower_bound<T: OrderedRing>(
+pub proof fn lemma_column_child_x_lower_bound<T: OrderedField>(
     padding_left: T,
     alignment: Alignment,
     available_width: T,
@@ -399,7 +484,7 @@ pub proof fn lemma_column_child_x_lower_bound<T: OrderedRing>(
 /// In a column layout, each child's right edge <= padding_left + available_width.
 ///
 /// Precondition: the child's width fits within the available width.
-pub proof fn lemma_column_child_x_upper_bound<T: OrderedRing>(
+pub proof fn lemma_column_child_x_upper_bound<T: OrderedField>(
     padding_left: T,
     alignment: Alignment,
     available_width: T,
@@ -487,7 +572,7 @@ pub proof fn lemma_column_child_y_lower_bound<T: OrderedRing>(
 // ── Row: cross-axis containment ──────────────────────────────────
 
 /// In a row layout, each child's y-position is >= padding_top.
-pub proof fn lemma_row_child_y_lower_bound<T: OrderedRing>(
+pub proof fn lemma_row_child_y_lower_bound<T: OrderedField>(
     padding_top: T,
     alignment: Alignment,
     available_height: T,
@@ -505,7 +590,7 @@ pub proof fn lemma_row_child_y_lower_bound<T: OrderedRing>(
 }
 
 /// In a row layout, each child's bottom edge <= padding_top + available_height.
-pub proof fn lemma_row_child_y_upper_bound<T: OrderedRing>(
+pub proof fn lemma_row_child_y_upper_bound<T: OrderedField>(
     padding_top: T,
     alignment: Alignment,
     available_height: T,
@@ -581,7 +666,7 @@ pub proof fn lemma_row_child_x_lower_bound<T: OrderedRing>(
 // ── Helpers for rearrangement ─────────────────────────────────────
 
 /// (a + b) + c ≡ (a + c) + b — swap the last two addends.
-proof fn lemma_add_swap_last<T: OrderedRing>(a: T, b: T, c: T)
+pub proof fn lemma_add_swap_last<T: OrderedRing>(a: T, b: T, c: T)
     ensures
         a.add(b).add(c).eqv(a.add(c).add(b)),
 {
@@ -1054,6 +1139,632 @@ pub proof fn lemma_row_child_x_upper_bound<T: OrderedRing>(
         child_x_position(pl, sizes, sp, i).add(w),
         pl.add(sum_widths(sizes, n).add(repeated_add(sp, (n - 1) as nat))),
     );
+}
+
+// ── Children sequence lemmas ──────────────────────────────────────
+
+/// Length of column_children sequence.
+pub proof fn lemma_column_children_len<T: OrderedField>(
+    padding: crate::padding::Padding<T>,
+    spacing: T,
+    alignment: Alignment,
+    child_sizes: Seq<Size<T>>,
+    available_width: T,
+    index: nat,
+)
+    requires
+        index <= child_sizes.len(),
+    ensures
+        column_children(padding, spacing, alignment, child_sizes, available_width, index).len()
+            == child_sizes.len() - index,
+    decreases child_sizes.len() - index,
+{
+    if index >= child_sizes.len() {
+    } else {
+        lemma_column_children_len(padding, spacing, alignment, child_sizes, available_width, index + 1);
+    }
+}
+
+/// Element access into column_children: the k-th child (from start) has the expected fields.
+pub proof fn lemma_column_children_element<T: OrderedField>(
+    padding: crate::padding::Padding<T>,
+    spacing: T,
+    alignment: Alignment,
+    child_sizes: Seq<Size<T>>,
+    available_width: T,
+    k: nat,
+)
+    requires
+        k < child_sizes.len(),
+    ensures
+        column_children(padding, spacing, alignment, child_sizes, available_width, 0)[k as int]
+            == crate::node::Node::leaf(
+                padding.left.add(align_offset(alignment, available_width, child_sizes[k as int].width)),
+                child_y_position(padding.top, child_sizes, spacing, k),
+                child_sizes[k as int],
+            ),
+{
+    lemma_column_children_element_shifted(padding, spacing, alignment, child_sizes, available_width, 0, k);
+}
+
+/// Helper: column_children(pad, sp, al, sizes, aw, start)[k - start] for start <= k < sizes.len()
+proof fn lemma_column_children_element_shifted<T: OrderedField>(
+    padding: crate::padding::Padding<T>,
+    spacing: T,
+    alignment: Alignment,
+    child_sizes: Seq<Size<T>>,
+    available_width: T,
+    start: nat,
+    k: nat,
+)
+    requires
+        start <= k,
+        k < child_sizes.len(),
+    ensures
+        column_children(padding, spacing, alignment, child_sizes, available_width, start)[(k - start) as int]
+            == crate::node::Node::leaf(
+                padding.left.add(align_offset(alignment, available_width, child_sizes[k as int].width)),
+                child_y_position(padding.top, child_sizes, spacing, k),
+                child_sizes[k as int],
+            ),
+    decreases k - start,
+{
+    if start == k {
+        // Base case: one-step unfolding gives column_children(.., k)[0] = node_k
+    } else {
+        // Establish tail length so axiom_seq_add_index2 precondition is satisfied
+        lemma_column_children_len(padding, spacing, alignment, child_sizes, available_width, start + 1);
+        lemma_column_children_len(padding, spacing, alignment, child_sizes, available_width, start);
+
+        // Apply induction first
+        lemma_column_children_element_shifted(padding, spacing, alignment, child_sizes, available_width, start + 1, k);
+
+        // column_children(.., start) = head.add(tail) where head has length 1
+        // For index (k-start) >= 1: element is tail[(k-start) - 1] = tail[(k-(start+1))]
+        let tail = column_children(padding, spacing, alignment, child_sizes, available_width, start + 1);
+        let cc = column_children(padding, spacing, alignment, child_sizes, available_width, start);
+        // cc[k-start] == tail[(k-start) - 1] by axiom_seq_add_index2 (since head.len() == 1)
+        assert(cc[(k - start) as int] == tail[((k - start) as int) - 1]);
+    }
+}
+
+/// Length of row_children sequence.
+pub proof fn lemma_row_children_len<T: OrderedField>(
+    padding: crate::padding::Padding<T>,
+    spacing: T,
+    alignment: Alignment,
+    child_sizes: Seq<Size<T>>,
+    available_height: T,
+    index: nat,
+)
+    requires
+        index <= child_sizes.len(),
+    ensures
+        row_children(padding, spacing, alignment, child_sizes, available_height, index).len()
+            == child_sizes.len() - index,
+    decreases child_sizes.len() - index,
+{
+    if index >= child_sizes.len() {
+    } else {
+        lemma_row_children_len(padding, spacing, alignment, child_sizes, available_height, index + 1);
+    }
+}
+
+/// Element access into row_children: the k-th child (from start) has the expected fields.
+pub proof fn lemma_row_children_element<T: OrderedField>(
+    padding: crate::padding::Padding<T>,
+    spacing: T,
+    alignment: Alignment,
+    child_sizes: Seq<Size<T>>,
+    available_height: T,
+    k: nat,
+)
+    requires
+        k < child_sizes.len(),
+    ensures
+        row_children(padding, spacing, alignment, child_sizes, available_height, 0)[k as int]
+            == crate::node::Node::leaf(
+                child_x_position(padding.left, child_sizes, spacing, k),
+                padding.top.add(align_offset(alignment, available_height, child_sizes[k as int].height)),
+                child_sizes[k as int],
+            ),
+{
+    lemma_row_children_element_shifted(padding, spacing, alignment, child_sizes, available_height, 0, k);
+}
+
+/// Helper: row_children(pad, sp, al, sizes, ah, start)[k - start] for start <= k < sizes.len()
+proof fn lemma_row_children_element_shifted<T: OrderedField>(
+    padding: crate::padding::Padding<T>,
+    spacing: T,
+    alignment: Alignment,
+    child_sizes: Seq<Size<T>>,
+    available_height: T,
+    start: nat,
+    k: nat,
+)
+    requires
+        start <= k,
+        k < child_sizes.len(),
+    ensures
+        row_children(padding, spacing, alignment, child_sizes, available_height, start)[(k - start) as int]
+            == crate::node::Node::leaf(
+                child_x_position(padding.left, child_sizes, spacing, k),
+                padding.top.add(align_offset(alignment, available_height, child_sizes[k as int].height)),
+                child_sizes[k as int],
+            ),
+    decreases k - start,
+{
+    if start == k {
+        // Base case: one-step unfolding gives row_children(.., k)[0] = node_k
+    } else {
+        // Establish tail length so axiom_seq_add_index2 precondition is satisfied
+        lemma_row_children_len(padding, spacing, alignment, child_sizes, available_height, start + 1);
+        lemma_row_children_len(padding, spacing, alignment, child_sizes, available_height, start);
+
+        // Apply induction first
+        lemma_row_children_element_shifted(padding, spacing, alignment, child_sizes, available_height, start + 1, k);
+
+        // row_children(.., start) = head.add(tail) where head has length 1
+        let tail = row_children(padding, spacing, alignment, child_sizes, available_height, start + 1);
+        let rc = row_children(padding, spacing, alignment, child_sizes, available_height, start);
+        assert(rc[(k - start) as int] == tail[((k - start) as int) - 1]);
+    }
+}
+
+// ── Phase 4: Additional Properties ────────────────────────────────
+
+/// Helper: x/two() + x/two() ≡ x.
+/// Proof: (x/2)*2 ≡ x by div_mul_cancel, and (x/2)*2 = (x/2)*(1+1)
+/// = (x/2)*1 + (x/2)*1 = x/2 + x/2 by distributivity and mul_one.
+proof fn lemma_half_plus_half<T: OrderedField>(x: T)
+    ensures
+        x.div(two::<T>()).add(x.div(two::<T>())).eqv(x),
+{
+    let h = x.div(two::<T>());
+
+    // (x/two()) * two() ≡ x
+    lemma_two_nonzero::<T>();
+    verus_algebra::lemmas::field_lemmas::lemma_div_mul_cancel::<T>(x, two::<T>());
+    // h.mul(two()) ≡ x
+
+    // two() = one() + one()
+    // h * (one() + one()) ≡ h*one() + h*one() by distributivity
+    T::axiom_mul_distributes_left(h, T::one(), T::one());
+    // h.mul(T::one().add(T::one())) ≡ h.mul(T::one()).add(h.mul(T::one()))
+
+    // h * one() ≡ h
+    T::axiom_mul_one_right(h);
+    // So h*one() + h*one() ≡ h + h via congruence
+    verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence::<T>(
+        h.mul(T::one()), h, h.mul(T::one()), h,
+    );
+
+    // h * two() ≡ h * (one() + one()) by definition (they're equal)
+    // and h * (one() + one()) ≡ h*one() + h*one() ≡ h + h
+    T::axiom_eqv_transitive(
+        h.mul(T::one().add(T::one())),
+        h.mul(T::one()).add(h.mul(T::one())),
+        h.add(h),
+    );
+    // h.mul(two()) ≡ h + h (since two() == one() + one())
+
+    // h.mul(two()) ≡ h + h, so h + h ≡ h.mul(two()) by symmetry
+    T::axiom_eqv_symmetric(h.mul(two::<T>()), h.add(h));
+    // h.mul(two()) ≡ x by div_mul_cancel, flip to get x side
+    // h + h ≡ h.mul(two()) ≡ x
+    T::axiom_eqv_transitive(h.add(h), h.mul(two::<T>()), x);
+}
+
+/// Center alignment is symmetric: the gap on the left equals the gap on the right.
+///
+/// For Center alignment: align_offset = (available - used) / 2.
+/// This lemma proves: align_offset ≡ (available - used) - align_offset,
+/// i.e. the child is equidistant from both edges.
+pub proof fn lemma_center_alignment_symmetric<T: OrderedField>(
+    available: T,
+    used: T,
+)
+    requires
+        used.le(available),
+    ensures
+        align_offset(Alignment::Center, available, used).eqv(
+            available.sub(used).sub(align_offset(Alignment::Center, available, used))
+        ),
+{
+    let x = available.sub(used);
+    let h = x.div(two::<T>());
+    // align_offset(Center, available, used) == h == x / two()
+
+    // h + h ≡ x
+    lemma_half_plus_half::<T>(x);
+
+    // (h + h) - h ≡ h  by add_then_sub_cancel
+    verus_algebra::lemmas::additive_group_lemmas::lemma_add_then_sub_cancel::<T>(h, h);
+
+    // h + h ≡ x, so (h + h) - h ≡ x - h by sub_congruence
+    T::axiom_eqv_reflexive(h);
+    verus_algebra::lemmas::additive_group_lemmas::lemma_sub_congruence::<T>(
+        h.add(h), x, h, h,
+    );
+
+    // (h + h) - h ≡ h, and (h + h) - h ≡ x - h
+    // => h ≡ x - h
+    T::axiom_eqv_symmetric(h.add(h).sub(h), h);
+    T::axiom_eqv_transitive(h, h.add(h).sub(h), x.sub(h));
+}
+
+/// Column children are contained within the padded region: both
+/// cross-axis and layout-axis bounds hold simultaneously.
+///
+/// Each child i satisfies:
+///   - padding_left <= child_x  (cross-axis lower)
+///   - child_x + child_width <= padding_left + available_width  (cross-axis upper)
+///   - padding_top <= child_y  (layout-axis lower)
+pub proof fn lemma_column_child_contained<T: OrderedField>(
+    padding: Padding<T>,
+    spacing: T,
+    alignment: Alignment,
+    child_sizes: Seq<Size<T>>,
+    available_width: T,
+    i: nat,
+)
+    requires
+        i < child_sizes.len(),
+        T::zero().le(spacing),
+        forall|j: int| 0 <= j < child_sizes.len() ==> T::zero().le(child_sizes[j].height),
+        forall|j: int| 0 <= j < child_sizes.len() ==> child_sizes[j].width.le(available_width),
+    ensures
+        // Cross-axis lower bound
+        padding.left.le(
+            padding.left.add(align_offset(alignment, available_width, child_sizes[i as int].width))
+        ),
+        // Cross-axis upper bound
+        padding.left.add(align_offset(alignment, available_width, child_sizes[i as int].width))
+            .add(child_sizes[i as int].width)
+            .le(padding.left.add(available_width)),
+        // Layout-axis lower bound
+        padding.top.le(
+            child_y_position(padding.top, child_sizes, spacing, i)
+        ),
+{
+    lemma_column_child_x_lower_bound(
+        padding.left, alignment, available_width, child_sizes[i as int].width,
+    );
+    lemma_column_child_x_upper_bound(
+        padding.left, alignment, available_width, child_sizes[i as int].width,
+    );
+    lemma_column_child_y_lower_bound(padding.top, child_sizes, spacing, i);
+}
+
+/// Adding a child increases column content height.
+///
+/// content_height(sizes.push(new_size)) >= content_height(sizes)
+/// for non-negative child heights and spacing.
+pub proof fn lemma_column_content_height_monotone<T: OrderedRing>(
+    child_sizes: Seq<Size<T>>,
+    new_size: Size<T>,
+    spacing: T,
+)
+    requires
+        T::zero().le(spacing),
+        T::zero().le(new_size.height),
+        forall|j: int| 0 <= j < child_sizes.len() ==> T::zero().le(child_sizes[j].height),
+    ensures
+        column_content_height(child_sizes, spacing).le(
+            column_content_height(child_sizes.push(new_size), spacing)
+        ),
+{
+    let n = child_sizes.len();
+    let ext = child_sizes.push(new_size);
+    assert(ext.len() == n + 1);
+
+    if n == 0 {
+        // content_height(empty) = 0, content_height([new]) = new.height + 0
+        // Need: 0 <= content_height([new])
+        lemma_column_content_height_nonneg(ext, spacing);
+    } else {
+        // LHS = sum_heights(sizes, n) + repeated_add(spacing, n-1)
+        // RHS = sum_heights(ext, n+1) + repeated_add(spacing, n)
+        //     = (sum_heights(ext, n) + new.height) + (repeated_add(spacing, n-1) + spacing)
+        // Since ext[j] == sizes[j] for j < n:
+        //     = (sum_heights(sizes, n) + new.height) + (repeated_add(spacing, n-1) + spacing)
+        lemma_sum_heights_ext_equal::<T>(child_sizes, ext, n as nat);
+
+        let sh_n = sum_heights(child_sizes, n as nat);
+        let ra_nm1 = repeated_add(spacing, (n - 1) as nat);
+
+        // sh_n <= sh_n + new.height  (new.height >= 0)
+        lemma_le_add_nonneg::<T>(sh_n, new_size.height);
+        // ra_nm1 <= ra_nm1 + spacing  (spacing >= 0)
+        lemma_le_add_nonneg::<T>(ra_nm1, spacing);
+
+        // sh_n + ra_nm1 <= (sh_n + new.height) + (ra_nm1 + spacing)
+        verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_add_both::<T>(
+            sh_n, sh_n.add(new_size.height),
+            ra_nm1, ra_nm1.add(spacing),
+        );
+
+        // Assert definitional equalities to help Z3 connect to column_content_height
+        assert(column_content_height(child_sizes, spacing) == sh_n.add(ra_nm1));
+        assert(sum_heights(ext, (n + 1) as nat) ==
+            sum_heights(ext, n as nat).add(ext[n as int].height));
+        assert(ext[n as int] == new_size);
+        assert(column_content_height(ext, spacing) ==
+            sum_heights(ext, (n + 1) as nat).add(repeated_add(spacing, n as nat)));
+    }
+}
+
+/// Helper: sum_heights gives the same result when the first `count` elements are identical.
+proof fn lemma_sum_heights_ext_equal<T: OrderedRing>(
+    a: Seq<Size<T>>,
+    b: Seq<Size<T>>,
+    count: nat,
+)
+    requires
+        count <= a.len(),
+        count <= b.len(),
+        forall|j: int| 0 <= j < count ==> a[j] == b[j],
+    ensures
+        sum_heights(a, count) == sum_heights(b, count),
+    decreases count,
+{
+    if count == 0 {
+    } else {
+        lemma_sum_heights_ext_equal(a, b, (count - 1) as nat);
+    }
+}
+
+/// Grid 2D non-overlap: consecutive cells don't overlap in both directions.
+///
+/// Combines column and row non-overlap into a single lemma.
+pub proof fn lemma_grid_2d_nonoverlapping<T: OrderedRing>(
+    padding_left: T,
+    padding_top: T,
+    col_widths: Seq<Size<T>>,
+    row_heights: Seq<Size<T>>,
+    h_spacing: T,
+    v_spacing: T,
+    col: nat,
+    row: nat,
+)
+    requires
+        (col + 1) < col_widths.len(),
+        (row + 1) < row_heights.len(),
+        T::zero().le(h_spacing),
+        T::zero().le(v_spacing),
+    ensures
+        // Columns: right edge of col <= left edge of col+1
+        crate::layout::grid::grid_cell_x(padding_left, col_widths, h_spacing, col)
+            .add(col_widths[col as int].width)
+            .le(crate::layout::grid::grid_cell_x(padding_left, col_widths, h_spacing, col + 1)),
+        // Rows: bottom edge of row <= top edge of row+1
+        crate::layout::grid::grid_cell_y(padding_top, row_heights, v_spacing, row)
+            .add(row_heights[row as int].height)
+            .le(crate::layout::grid::grid_cell_y(padding_top, row_heights, v_spacing, row + 1)),
+{
+    crate::layout::grid_proofs::lemma_grid_columns_nonoverlapping(
+        padding_left, col_widths, h_spacing, col,
+    );
+    crate::layout::grid_proofs::lemma_grid_rows_nonoverlapping(
+        padding_top, row_heights, v_spacing, row,
+    );
+}
+
+// ── Stack children helper lemmas ──────────────────────────────────
+
+/// Length of stack_children sequence.
+pub proof fn lemma_stack_children_len<T: OrderedField>(
+    padding: Padding<T>,
+    h_align: Alignment,
+    v_align: Alignment,
+    child_sizes: Seq<Size<T>>,
+    available_width: T,
+    available_height: T,
+    index: nat,
+)
+    requires
+        index <= child_sizes.len(),
+    ensures
+        crate::layout::stack::stack_children(
+            padding, h_align, v_align, child_sizes,
+            available_width, available_height, index,
+        ).len() == child_sizes.len() - index,
+    decreases child_sizes.len() - index,
+{
+    if index >= child_sizes.len() {
+    } else {
+        lemma_stack_children_len(
+            padding, h_align, v_align, child_sizes,
+            available_width, available_height, index + 1,
+        );
+    }
+}
+
+/// Element access into stack_children.
+pub proof fn lemma_stack_children_element<T: OrderedField>(
+    padding: Padding<T>,
+    h_align: Alignment,
+    v_align: Alignment,
+    child_sizes: Seq<Size<T>>,
+    available_width: T,
+    available_height: T,
+    k: nat,
+)
+    requires
+        k < child_sizes.len(),
+    ensures
+        crate::layout::stack::stack_children(
+            padding, h_align, v_align, child_sizes,
+            available_width, available_height, 0,
+        )[k as int]
+            == crate::node::Node::leaf(
+                padding.left.add(align_offset(h_align, available_width, child_sizes[k as int].width)),
+                padding.top.add(align_offset(v_align, available_height, child_sizes[k as int].height)),
+                child_sizes[k as int],
+            ),
+{
+    lemma_stack_children_element_shifted(
+        padding, h_align, v_align, child_sizes,
+        available_width, available_height, 0, k,
+    );
+}
+
+proof fn lemma_stack_children_element_shifted<T: OrderedField>(
+    padding: Padding<T>,
+    h_align: Alignment,
+    v_align: Alignment,
+    child_sizes: Seq<Size<T>>,
+    available_width: T,
+    available_height: T,
+    start: nat,
+    k: nat,
+)
+    requires
+        start <= k,
+        k < child_sizes.len(),
+    ensures
+        crate::layout::stack::stack_children(
+            padding, h_align, v_align, child_sizes,
+            available_width, available_height, start,
+        )[(k - start) as int]
+            == crate::node::Node::leaf(
+                padding.left.add(align_offset(h_align, available_width, child_sizes[k as int].width)),
+                padding.top.add(align_offset(v_align, available_height, child_sizes[k as int].height)),
+                child_sizes[k as int],
+            ),
+    decreases k - start,
+{
+    if start == k {
+    } else {
+        lemma_stack_children_len(
+            padding, h_align, v_align, child_sizes,
+            available_width, available_height, start + 1,
+        );
+        lemma_stack_children_len(
+            padding, h_align, v_align, child_sizes,
+            available_width, available_height, start,
+        );
+        lemma_stack_children_element_shifted(
+            padding, h_align, v_align, child_sizes,
+            available_width, available_height, start + 1, k,
+        );
+        let tail = crate::layout::stack::stack_children(
+            padding, h_align, v_align, child_sizes,
+            available_width, available_height, start + 1,
+        );
+        let sc = crate::layout::stack::stack_children(
+            padding, h_align, v_align, child_sizes,
+            available_width, available_height, start,
+        );
+        assert(sc[(k - start) as int] == tail[((k - start) as int) - 1]);
+    }
+}
+
+// ── Row content width monotone lemma (symmetric to column) ────────
+
+/// Helper: sum_widths gives the same result when the first `count` elements are identical.
+proof fn lemma_sum_widths_ext_equal<T: OrderedRing>(
+    a: Seq<Size<T>>,
+    b: Seq<Size<T>>,
+    count: nat,
+)
+    requires
+        count <= a.len(),
+        count <= b.len(),
+        forall|j: int| 0 <= j < count ==> a[j] == b[j],
+    ensures
+        sum_widths(a, count) == sum_widths(b, count),
+    decreases count,
+{
+    if count == 0 {
+    } else {
+        lemma_sum_widths_ext_equal(a, b, (count - 1) as nat);
+    }
+}
+
+/// The row content width is non-negative when spacing and all child widths are non-negative.
+pub proof fn lemma_row_content_width_nonneg<T: OrderedRing>(
+    child_sizes: Seq<Size<T>>,
+    spacing: T,
+)
+    requires
+        T::zero().le(spacing),
+        forall|i: int| 0 <= i < child_sizes.len() ==> T::zero().le(child_sizes[i].width),
+    ensures
+        T::zero().le(row_content_width(child_sizes, spacing)),
+{
+    if child_sizes.len() == 0 {
+        T::axiom_le_reflexive(T::zero());
+    } else {
+        crate::layout::grid_proofs::lemma_sum_widths_nonneg(
+            child_sizes, child_sizes.len() as nat,
+        );
+        lemma_repeated_add_nonneg(spacing, (child_sizes.len() - 1) as nat);
+        verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_add_both::<T>(
+            T::zero(), sum_widths(child_sizes, child_sizes.len() as nat),
+            T::zero(), repeated_add(spacing, (child_sizes.len() - 1) as nat),
+        );
+        T::axiom_add_zero_right(T::zero());
+        T::axiom_eqv_symmetric(T::zero().add(T::zero()), T::zero());
+        let total = sum_widths(child_sizes, child_sizes.len() as nat)
+            .add(repeated_add(spacing, (child_sizes.len() - 1) as nat));
+        T::axiom_eqv_reflexive(total);
+        T::axiom_le_congruence(
+            T::zero().add(T::zero()), T::zero(),
+            total, total,
+        );
+    }
+}
+
+/// Adding a child increases row content width.
+///
+/// content_width(sizes.push(new_size)) >= content_width(sizes)
+/// for non-negative child widths and spacing.
+pub proof fn lemma_row_content_width_monotone<T: OrderedRing>(
+    child_sizes: Seq<Size<T>>,
+    new_size: Size<T>,
+    spacing: T,
+)
+    requires
+        T::zero().le(spacing),
+        T::zero().le(new_size.width),
+        forall|j: int| 0 <= j < child_sizes.len() ==> T::zero().le(child_sizes[j].width),
+    ensures
+        row_content_width(child_sizes, spacing).le(
+            row_content_width(child_sizes.push(new_size), spacing)
+        ),
+{
+    let n = child_sizes.len();
+    let ext = child_sizes.push(new_size);
+    assert(ext.len() == n + 1);
+
+    if n == 0 {
+        lemma_row_content_width_nonneg(ext, spacing);
+    } else {
+        lemma_sum_widths_ext_equal::<T>(child_sizes, ext, n as nat);
+
+        let sw_n = sum_widths(child_sizes, n as nat);
+        let ra_nm1 = repeated_add(spacing, (n - 1) as nat);
+
+        // sw_n <= sw_n + new.width  (new.width >= 0)
+        lemma_le_add_nonneg::<T>(sw_n, new_size.width);
+        // ra_nm1 <= ra_nm1 + spacing  (spacing >= 0)
+        lemma_le_add_nonneg::<T>(ra_nm1, spacing);
+
+        // sw_n + ra_nm1 <= (sw_n + new.width) + (ra_nm1 + spacing)
+        verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_add_both::<T>(
+            sw_n, sw_n.add(new_size.width),
+            ra_nm1, ra_nm1.add(spacing),
+        );
+
+        // Assert definitional equalities to help Z3
+        assert(row_content_width(child_sizes, spacing) == sw_n.add(ra_nm1));
+        assert(sum_widths(ext, (n + 1) as nat) ==
+            sum_widths(ext, n as nat).add(ext[n as int].width));
+        assert(ext[n as int] == new_size);
+        assert(row_content_width(ext, spacing) ==
+            sum_widths(ext, (n + 1) as nat).add(repeated_add(spacing, n as nat)));
+    }
 }
 
 } // verus!
