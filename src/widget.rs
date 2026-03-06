@@ -130,6 +130,7 @@ pub open spec fn layout_wrap_body<T: OrderedField>(
 }
 
 /// Flex column layout body: given pre-computed child nodes, run flex_column_layout and merge.
+/// Cross-axis = width for column direction.
 pub open spec fn layout_flex_column_body<T: OrderedField>(
     limits: Limits<T>,
     padding: Padding<T>,
@@ -138,12 +139,12 @@ pub open spec fn layout_flex_column_body<T: OrderedField>(
     weights: Seq<T>,
     child_nodes: Seq<Node<T>>,
 ) -> Node<T> {
-    let child_sizes = Seq::new(child_nodes.len(), |i: int| child_nodes[i].size);
-    let layout = flex_column_layout(limits, padding, spacing, alignment, weights, child_sizes);
+    let child_cross_sizes = Seq::new(child_nodes.len(), |i: int| child_nodes[i].size.width);
+    let layout = flex_column_layout(limits, padding, spacing, alignment, weights, child_cross_sizes);
     merge_layout(layout, child_nodes)
 }
 
-/// Flex row layout body.
+/// Flex row layout body. Cross-axis = height for row direction.
 pub open spec fn layout_flex_row_body<T: OrderedField>(
     limits: Limits<T>,
     padding: Padding<T>,
@@ -152,8 +153,8 @@ pub open spec fn layout_flex_row_body<T: OrderedField>(
     weights: Seq<T>,
     child_nodes: Seq<Node<T>>,
 ) -> Node<T> {
-    let child_sizes = Seq::new(child_nodes.len(), |i: int| child_nodes[i].size);
-    let layout = flex_row_layout(limits, padding, spacing, alignment, weights, child_sizes);
+    let child_cross_sizes = Seq::new(child_nodes.len(), |i: int| child_nodes[i].size.height);
+    let layout = flex_row_layout(limits, padding, spacing, alignment, weights, child_cross_sizes);
     merge_layout(layout, child_nodes)
 }
 
@@ -488,15 +489,11 @@ proof fn lemma_flex_column_child_nodes_fuel_monotone<T: OrderedField>(
             == flex_column_widget_child_nodes(inner, children, weights, total_weight, available_height, fuel + 1),
     decreases fuel, 1nat,
 {
-    assert forall|i: int| 0 <= i < children.len() implies {
-        let main_alloc = flex_child_main_size(weights[i], total_weight, available_height);
-        let child_lim = Limits {
-            min: inner.min,
-            max: Size::new(inner.max.width, main_alloc),
-        };
-        layout_widget(child_lim, children[i].child, fuel)
-            == layout_widget(child_lim, children[i].child, fuel + 1)
-    } by {
+    let ghost old_cn = flex_column_widget_child_nodes(inner, children, weights, total_weight, available_height, fuel);
+    let ghost new_cn = flex_column_widget_child_nodes(inner, children, weights, total_weight, available_height, fuel + 1);
+    assert forall|i: int| 0 <= i < children.len() implies
+        #[trigger] old_cn[i] == #[trigger] new_cn[i]
+    by {
         let main_alloc = flex_child_main_size(weights[i], total_weight, available_height);
         let child_lim = Limits {
             min: inner.min,
@@ -504,8 +501,7 @@ proof fn lemma_flex_column_child_nodes_fuel_monotone<T: OrderedField>(
         };
         lemma_layout_widget_fuel_monotone(child_lim, children[i].child, fuel);
     }
-    assert(flex_column_widget_child_nodes(inner, children, weights, total_weight, available_height, fuel)
-        =~= flex_column_widget_child_nodes(inner, children, weights, total_weight, available_height, fuel + 1));
+    assert(old_cn =~= new_cn);
 }
 
 /// Flex row child nodes are fuel-monotone.
@@ -525,15 +521,11 @@ proof fn lemma_flex_row_child_nodes_fuel_monotone<T: OrderedField>(
             == flex_row_widget_child_nodes(inner, children, weights, total_weight, available_width, fuel + 1),
     decreases fuel, 1nat,
 {
-    assert forall|i: int| 0 <= i < children.len() implies {
-        let main_alloc = flex_child_main_size(weights[i], total_weight, available_width);
-        let child_lim = Limits {
-            min: inner.min,
-            max: Size::new(main_alloc, inner.max.height),
-        };
-        layout_widget(child_lim, children[i].child, fuel)
-            == layout_widget(child_lim, children[i].child, fuel + 1)
-    } by {
+    let ghost old_cn = flex_row_widget_child_nodes(inner, children, weights, total_weight, available_width, fuel);
+    let ghost new_cn = flex_row_widget_child_nodes(inner, children, weights, total_weight, available_width, fuel + 1);
+    assert forall|i: int| 0 <= i < children.len() implies
+        #[trigger] old_cn[i] == #[trigger] new_cn[i]
+    by {
         let main_alloc = flex_child_main_size(weights[i], total_weight, available_width);
         let child_lim = Limits {
             min: inner.min,
@@ -541,8 +533,7 @@ proof fn lemma_flex_row_child_nodes_fuel_monotone<T: OrderedField>(
         };
         lemma_layout_widget_fuel_monotone(child_lim, children[i].child, fuel);
     }
-    assert(flex_row_widget_child_nodes(inner, children, weights, total_weight, available_width, fuel)
-        =~= flex_row_widget_child_nodes(inner, children, weights, total_weight, available_width, fuel + 1));
+    assert(old_cn =~= new_cn);
 }
 
 /// Grid child nodes are fuel-monotone.
@@ -562,16 +553,12 @@ proof fn lemma_grid_child_nodes_fuel_monotone<T: OrderedField>(
             == grid_widget_child_nodes(inner, col_widths, row_heights, children, num_cols, fuel + 1),
     decreases fuel, 1nat,
 {
-    assert forall|i: int| 0 <= i < children.len() implies {
-        let r = i / num_cols as int;
-        let c = i % num_cols as int;
-        let child_lim = Limits {
-            min: inner.min,
-            max: Size::new(col_widths[c].width, row_heights[r].height),
-        };
-        layout_widget(child_lim, children[i], fuel)
-            == layout_widget(child_lim, children[i], fuel + 1)
-    } by {
+    // Prove each child layout is unchanged by extra fuel
+    let ghost old_cn = grid_widget_child_nodes(inner, col_widths, row_heights, children, num_cols, fuel);
+    let ghost new_cn = grid_widget_child_nodes(inner, col_widths, row_heights, children, num_cols, fuel + 1);
+    assert forall|i: int| 0 <= i < children.len() implies
+        #[trigger] old_cn[i] == #[trigger] new_cn[i]
+    by {
         let r = i / num_cols as int;
         let c = i % num_cols as int;
         let child_lim = Limits {
@@ -580,8 +567,7 @@ proof fn lemma_grid_child_nodes_fuel_monotone<T: OrderedField>(
         };
         lemma_layout_widget_fuel_monotone(child_lim, children[i], fuel);
     }
-    assert(grid_widget_child_nodes(inner, col_widths, row_heights, children, num_cols, fuel)
-        =~= grid_widget_child_nodes(inner, col_widths, row_heights, children, num_cols, fuel + 1));
+    assert(old_cn =~= new_cn);
 }
 
 /// Extra fuel doesn't change the result when the widget has converged.
@@ -657,8 +643,14 @@ pub proof fn lemma_layout_widget_fuel_monotone<T: OrderedField>(
                     widget_child_nodes(inner, children, fuel)));
         },
         Widget::Flex { padding, spacing, alignment, direction, children } => {
-            assert(get_children(widget) =~=
-                Seq::new(children.len(), |i: int| children[i].child));
+            let gc = get_children(widget);
+            assert(gc =~= Seq::new(children.len(), |i: int| children[i].child));
+            // Connect get_children convergence to children[i].child convergence
+            assert forall|i: int| 0 <= i < children.len() implies
+                widget_converged(#[trigger] children[i].child, (fuel - 1) as nat)
+            by {
+                assert(gc[i] == children[i].child);
+            }
             let inner = limits.shrink(padding.horizontal(), padding.vertical());
             let weights = Seq::new(children.len(), |i: int| children[i].weight);
             let total_weight = sum_weights(weights, weights.len() as nat);
@@ -666,28 +658,39 @@ pub proof fn lemma_layout_widget_fuel_monotone<T: OrderedField>(
                 repeated_add(spacing, (children.len() - 1) as nat)
             } else { T::zero() };
 
-            // Flex children converge via FlexItem.child
-            if children.len() > 0 {
-                match direction {
-                    FlexDirection::Column => {
-                        let ah = inner.max.height.sub(total_spacing);
+            match direction {
+                FlexDirection::Column => {
+                    let ah = inner.max.height.sub(total_spacing);
+                    if children.len() > 0 {
                         lemma_flex_column_child_nodes_fuel_monotone(
                             inner, children, weights, total_weight, ah, (fuel - 1) as nat);
-                        let cn = flex_column_widget_child_nodes(
-                            inner, children, weights, total_weight, ah, (fuel - 1) as nat);
-                        assert(cn =~= flex_column_widget_child_nodes(
-                            inner, children, weights, total_weight, ah, fuel));
-                    },
-                    FlexDirection::Row => {
-                        let aw = inner.max.width.sub(total_spacing);
+                    }
+                    let cn = flex_column_widget_child_nodes(
+                        inner, children, weights, total_weight, ah, (fuel - 1) as nat);
+                    assert(cn =~= flex_column_widget_child_nodes(
+                        inner, children, weights, total_weight, ah, fuel));
+                    assert(layout_widget(limits, widget, fuel)
+                        == layout_flex_column_body(limits, padding, spacing, alignment, weights, cn));
+                    assert(layout_widget(limits, widget, fuel + 1)
+                        == layout_flex_column_body(limits, padding, spacing, alignment, weights,
+                            flex_column_widget_child_nodes(inner, children, weights, total_weight, ah, fuel)));
+                },
+                FlexDirection::Row => {
+                    let aw = inner.max.width.sub(total_spacing);
+                    if children.len() > 0 {
                         lemma_flex_row_child_nodes_fuel_monotone(
                             inner, children, weights, total_weight, aw, (fuel - 1) as nat);
-                        let cn = flex_row_widget_child_nodes(
-                            inner, children, weights, total_weight, aw, (fuel - 1) as nat);
-                        assert(cn =~= flex_row_widget_child_nodes(
-                            inner, children, weights, total_weight, aw, fuel));
-                    },
-                }
+                    }
+                    let cn = flex_row_widget_child_nodes(
+                        inner, children, weights, total_weight, aw, (fuel - 1) as nat);
+                    assert(cn =~= flex_row_widget_child_nodes(
+                        inner, children, weights, total_weight, aw, fuel));
+                    assert(layout_widget(limits, widget, fuel)
+                        == layout_flex_row_body(limits, padding, spacing, alignment, weights, cn));
+                    assert(layout_widget(limits, widget, fuel + 1)
+                        == layout_flex_row_body(limits, padding, spacing, alignment, weights,
+                            flex_row_widget_child_nodes(inner, children, weights, total_weight, aw, fuel)));
+                },
             }
         },
         Widget::Grid { padding, h_spacing, v_spacing, h_align, v_align,

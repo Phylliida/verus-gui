@@ -298,7 +298,7 @@ pub proof fn lemma_measure_is_layout_size<T: OrderedField>(
                         let ah = inner.max.height.sub(total_spacing);
                         let cn = flex_column_widget_child_nodes(
                             inner, children, weights, total_weight, ah, (fuel - 1) as nat);
-                        let cs = Seq::new(cn.len(), |i: int| cn[i].size);
+                        let cs = Seq::new(cn.len(), |i: int| cn[i].size.width);
                         let layout = flex_column_layout(
                             limits, padding, spacing, alignment, weights, cs);
                         assert(merge_layout(layout, cn).size == layout.size);
@@ -307,7 +307,7 @@ pub proof fn lemma_measure_is_layout_size<T: OrderedField>(
                         let aw = inner.max.width.sub(total_spacing);
                         let cn = flex_row_widget_child_nodes(
                             inner, children, weights, total_weight, aw, (fuel - 1) as nat);
-                        let cs = Seq::new(cn.len(), |i: int| cn[i].size);
+                        let cs = Seq::new(cn.len(), |i: int| cn[i].size.height);
                         let layout = flex_row_layout(
                             limits, padding, spacing, alignment, weights, cs);
                         assert(merge_layout(layout, cn).size == layout.size);

@@ -18,7 +18,7 @@ use crate::layout::grid_proofs::*;
 verus! {
 
 /// Compute grid content width at runtime: sum_widths + (ncols-1) * h_spacing.
-fn grid_content_width_exec(
+pub fn grid_content_width_exec(
     col_widths: &Vec<RuntimeSize>,
     h_spacing: &RuntimeRational,
 ) -> (out: RuntimeRational)
@@ -73,7 +73,7 @@ fn grid_content_width_exec(
 }
 
 /// Compute grid content height at runtime: sum_heights + (nrows-1) * v_spacing.
-fn grid_content_height_exec(
+pub fn grid_content_height_exec(
     row_heights: &Vec<RuntimeSize>,
     v_spacing: &RuntimeRational,
 ) -> (out: RuntimeRational)
@@ -162,6 +162,7 @@ pub fn grid_layout_exec(
                 Seq::new(child_sizes@[i]@.len() as nat, |j: int| child_sizes@[i]@[j]@)
             ),
         ),
+        out.children@.len() == row_heights@.len() * col_widths@.len(),
 {
     let ghost spec_cw: Seq<Size<RationalModel>> =
         Seq::new(col_widths@.len() as nat, |i: int| col_widths@[i]@);

@@ -45,6 +45,7 @@ pub fn flex_column_layout_exec(
             Seq::new(weights@.len() as nat, |i: int| weights@[i]@),
             Seq::new(child_cross_sizes@.len() as nat, |i: int| child_cross_sizes@[i]@),
         ),
+        out.children@.len() == weights@.len(),
 {
     let ghost spec_weights: Seq<RationalModel> =
         Seq::new(weights@.len() as nat, |i: int| weights@[i]@);
@@ -231,6 +232,10 @@ pub fn flex_column_layout_exec(
             padding@, spacing@, *h_align, spec_weights, spec_cross,
             total_weight@, available_width@, available_height@, 0,
         );
+        lemma_flex_column_children_len::<RationalModel>(
+            padding@, spacing@, *h_align, spec_weights, spec_cross,
+            total_weight@, available_width@, available_height@, 0nat,
+        );
         assert(out@.children == fc);
         assert(out.children@.len() == out@.children.len());
         assert forall|i: int| 0 <= i < out.children@.len() implies {
@@ -269,6 +274,7 @@ pub fn flex_row_layout_exec(
             Seq::new(weights@.len() as nat, |i: int| weights@[i]@),
             Seq::new(child_cross_sizes@.len() as nat, |i: int| child_cross_sizes@[i]@),
         ),
+        out.children@.len() == weights@.len(),
 {
     let ghost spec_weights: Seq<RationalModel> =
         Seq::new(weights@.len() as nat, |i: int| weights@[i]@);
@@ -452,6 +458,10 @@ pub fn flex_row_layout_exec(
         let fr = flex_row_children::<RationalModel>(
             padding@, spacing@, *v_align, spec_weights, spec_cross,
             total_weight@, available_width@, available_height@, 0,
+        );
+        lemma_flex_row_children_len::<RationalModel>(
+            padding@, spacing@, *v_align, spec_weights, spec_cross,
+            total_weight@, available_width@, available_height@, 0nat,
         );
         assert(out@.children == fr);
         assert(out.children@.len() == out@.children.len());

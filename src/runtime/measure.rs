@@ -6,12 +6,14 @@ use crate::runtime::size::RuntimeSize;
 use crate::runtime::limits::RuntimeLimits;
 use crate::runtime::padding::RuntimePadding;
 use crate::runtime::widget::{RuntimeWidget, ContainerKind};
+use crate::runtime::grid::{grid_content_width_exec, grid_content_height_exec};
 use crate::size::Size;
 use crate::widget::Widget;
 use crate::measure::*;
 use crate::layout::*;
 use crate::layout::stack::*;
 use crate::layout::wrap::*;
+use crate::layout::grid::*;
 
 verus! {
 
@@ -88,6 +90,20 @@ pub fn measure_widget_exec(
                 }
                 measure_container_exec(limits, padding, h_spacing, v_spacing,
                     children, fuel, ContainerKind::Wrap)
+            },
+            RuntimeWidget::Flex { padding, spacing, alignment, direction, children, model } => {
+                // Flex fills limits.max regardless of children
+                limits.resolve_exec(limits.max.copy_size())
+            },
+            RuntimeWidget::Grid { padding, h_spacing, v_spacing, h_align, v_align,
+                                  col_widths, row_heights, children, model } => {
+                let pad_h = padding.horizontal_exec();
+                let pad_v = padding.vertical_exec();
+                let content_w = grid_content_width_exec(col_widths, h_spacing);
+                let content_h = grid_content_height_exec(row_heights, v_spacing);
+                let tw = pad_h.add(&content_w);
+                let th = pad_v.add(&content_h);
+                limits.resolve_exec(RuntimeSize::new(tw, th))
             },
         }
     }
