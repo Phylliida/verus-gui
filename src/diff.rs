@@ -165,4 +165,125 @@ pub proof fn lemma_diff_same_implies_children_eqv<T: OrderedRing>(
     lemma_diff_children_all_same::<T>(old, new, old.children.len(), (fuel - 1) as nat);
 }
 
+/// Deep equivalence: top-level fields eqv + children recursively eqv to given depth.
+pub open spec fn nodes_deeply_eqv<T: OrderedRing>(
+    a: Node<T>,
+    b: Node<T>,
+    depth: nat,
+) -> bool
+    decreases depth,
+{
+    a.x.eqv(b.x)
+    && a.y.eqv(b.y)
+    && a.size.width.eqv(b.size.width)
+    && a.size.height.eqv(b.size.height)
+    && a.children.len() == b.children.len()
+    && (depth > 0 ==> forall|i: int| 0 <= i < a.children.len() ==>
+        nodes_deeply_eqv(a.children[i], b.children[i], (depth - 1) as nat))
+}
+
+/// diff_nodes returning Same implies deep equivalence to depth fuel-1.
+/// (At fuel=f, children are compared with fuel f-1, so field eqv holds to depth f-1.)
+pub proof fn lemma_diff_same_implies_deeply_eqv<T: OrderedRing>(
+    old: Node<T>,
+    new: Node<T>,
+    fuel: nat,
+)
+    requires
+        fuel > 0,
+        diff_nodes::<T>(old, new, fuel) === DiffResult::<T>::Same,
+    ensures
+        nodes_deeply_eqv(old, new, (fuel - 1) as nat),
+    decreases fuel,
+{
+    lemma_diff_same_implies_children_eqv::<T>(old, new, fuel);
+    if fuel > 1 {
+        assert forall|i: int| 0 <= i < old.children.len() implies
+            nodes_deeply_eqv(
+                old.children[i], new.children[i], (fuel - 2) as nat,
+            )
+        by {
+            // diff_nodes(child_old, child_new, fuel-1) === Same
+            lemma_diff_same_implies_deeply_eqv::<T>(
+                old.children[i], new.children[i], (fuel - 1) as nat,
+            );
+        };
+    }
+}
+
+/// Deep equivalence is reflexive.
+pub proof fn lemma_deeply_eqv_reflexive<T: OrderedRing>(node: Node<T>, depth: nat)
+    ensures
+        nodes_deeply_eqv(node, node, depth),
+    decreases depth,
+{
+    T::axiom_eqv_reflexive(node.x);
+    T::axiom_eqv_reflexive(node.y);
+    T::axiom_eqv_reflexive(node.size.width);
+    T::axiom_eqv_reflexive(node.size.height);
+    if depth > 0 {
+        assert forall|i: int| 0 <= i < node.children.len() implies
+            nodes_deeply_eqv(node.children[i], node.children[i], (depth - 1) as nat)
+        by {
+            lemma_deeply_eqv_reflexive::<T>(node.children[i], (depth - 1) as nat);
+        };
+    }
+}
+
+/// Deep equivalence is symmetric.
+pub proof fn lemma_deeply_eqv_symmetric<T: OrderedRing>(
+    a: Node<T>,
+    b: Node<T>,
+    depth: nat,
+)
+    requires
+        nodes_deeply_eqv(a, b, depth),
+    ensures
+        nodes_deeply_eqv(b, a, depth),
+    decreases depth,
+{
+    T::axiom_eqv_symmetric(a.x, b.x);
+    T::axiom_eqv_symmetric(a.y, b.y);
+    T::axiom_eqv_symmetric(a.size.width, b.size.width);
+    T::axiom_eqv_symmetric(a.size.height, b.size.height);
+    if depth > 0 {
+        assert forall|i: int| 0 <= i < b.children.len() implies
+            nodes_deeply_eqv(b.children[i], a.children[i], (depth - 1) as nat)
+        by {
+            lemma_deeply_eqv_symmetric::<T>(
+                a.children[i], b.children[i], (depth - 1) as nat,
+            );
+        };
+    }
+}
+
+/// Deep equivalence is transitive.
+pub proof fn lemma_deeply_eqv_transitive<T: OrderedRing>(
+    a: Node<T>,
+    b: Node<T>,
+    c: Node<T>,
+    depth: nat,
+)
+    requires
+        nodes_deeply_eqv(a, b, depth),
+        nodes_deeply_eqv(b, c, depth),
+    ensures
+        nodes_deeply_eqv(a, c, depth),
+    decreases depth,
+{
+    T::axiom_eqv_transitive(a.x, b.x, c.x);
+    T::axiom_eqv_transitive(a.y, b.y, c.y);
+    T::axiom_eqv_transitive(a.size.width, b.size.width, c.size.width);
+    T::axiom_eqv_transitive(a.size.height, b.size.height, c.size.height);
+    if depth > 0 {
+        assert forall|i: int| 0 <= i < a.children.len() implies
+            nodes_deeply_eqv(a.children[i], c.children[i], (depth - 1) as nat)
+        by {
+            lemma_deeply_eqv_transitive::<T>(
+                a.children[i], b.children[i], c.children[i], (depth - 1) as nat,
+            );
+        };
+    }
+}
+
 } // verus!
