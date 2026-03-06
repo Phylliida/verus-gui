@@ -19,6 +19,7 @@ pub mod stack;
 pub mod flex;
 pub mod grid;
 pub mod wrap;
+pub mod absolute;
 pub mod widget;
 pub mod measure;
 

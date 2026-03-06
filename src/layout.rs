@@ -17,6 +17,8 @@ pub mod grid;
 pub mod grid_proofs;
 pub mod wrap;
 pub mod wrap_proofs;
+pub mod absolute;
+pub mod absolute_proofs;
 
 verus! {
 

@@ -13,6 +13,9 @@ use crate::runtime::stack::*;
 use crate::runtime::wrap::*;
 use crate::runtime::flex::*;
 use crate::runtime::grid::*;
+use crate::runtime::absolute::*;
+use crate::layout::absolute::*;
+use crate::layout::absolute_proofs::*;
 use crate::size::Size;
 use crate::node::Node;
 use crate::limits::Limits;
@@ -33,6 +36,13 @@ verus! {
 /// Runtime flex child: weight + child widget.
 pub struct RuntimeFlexItem {
     pub weight: RuntimeRational,
+    pub child: RuntimeWidget,
+}
+
+/// Runtime absolute child: explicit (x, y) offset + child widget.
+pub struct RuntimeAbsoluteChild {
+    pub x: RuntimeRational,
+    pub y: RuntimeRational,
     pub child: RuntimeWidget,
 }
 
@@ -89,11 +99,27 @@ pub enum RuntimeWidget {
         children: Vec<RuntimeWidget>,
         model: Ghost<Widget<RationalModel>>,
     },
+    Absolute {
+        padding: RuntimePadding,
+        children: Vec<RuntimeAbsoluteChild>,
+        model: Ghost<Widget<RationalModel>>,
+    },
+    Margin {
+        margin: RuntimePadding,
+        child: Box<RuntimeWidget>,
+        model: Ghost<Widget<RationalModel>>,
+    },
 }
 
 impl RuntimeFlexItem {
     pub open spec fn model(&self) -> FlexItem<RationalModel> {
         FlexItem { weight: self.weight@, child: self.child.model() }
+    }
+}
+
+impl RuntimeAbsoluteChild {
+    pub open spec fn model(&self) -> AbsoluteChild<RationalModel> {
+        AbsoluteChild { x: self.x@, y: self.y@, child: self.child.model() }
     }
 }
 
@@ -108,6 +134,8 @@ impl RuntimeWidget {
             RuntimeWidget::Wrap { model, .. } => model@,
             RuntimeWidget::Flex { model, .. } => model@,
             RuntimeWidget::Grid { model, .. } => model@,
+            RuntimeWidget::Absolute { model, .. } => model@,
+            RuntimeWidget::Margin { model, .. } => model@,
         }
     }
 
@@ -193,6 +221,22 @@ impl RuntimeWidget {
                     children: Seq::new(children@.len() as nat, |i: int| children@[i].model()),
                 }
             },
+            RuntimeWidget::Absolute { padding, children, model } => {
+                &&& padding.wf_spec()
+                &&& forall|i: int| 0 <= i < children@.len() ==> children@[i].x.wf_spec()
+                &&& forall|i: int| 0 <= i < children@.len() ==> children@[i].y.wf_spec()
+                &&& model@ == Widget::Absolute {
+                    padding: padding@,
+                    children: Seq::new(children@.len() as nat, |i: int| children@[i].model()),
+                }
+            },
+            RuntimeWidget::Margin { margin, child, model } => {
+                &&& margin.wf_spec()
+                &&& model@ == Widget::Margin {
+                    margin: margin@,
+                    child: Box::new(child.model()),
+                }
+            },
         }
     }
 
@@ -229,6 +273,13 @@ impl RuntimeWidget {
                 RuntimeWidget::Grid { children, .. } => {
                     forall|i: int| 0 <= i < children@.len() ==>
                         (#[trigger] children@[i]).wf_spec((fuel - 1) as nat)
+                },
+                RuntimeWidget::Absolute { children, .. } => {
+                    forall|i: int| 0 <= i < children@.len() ==>
+                        (#[trigger] children@[i]).child.wf_spec((fuel - 1) as nat)
+                },
+                RuntimeWidget::Margin { child, .. } => {
+                    child.wf_spec((fuel - 1) as nat)
                 },
             }
         }
@@ -343,6 +394,26 @@ pub fn layout_widget_exec(
                 }
                 layout_grid_widget_exec(limits, padding, h_spacing, v_spacing,
                     h_align, v_align, col_widths, row_heights, children, fuel)
+            },
+            RuntimeWidget::Absolute { padding, children, model } => {
+                proof {
+                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
+                    assert forall|j: int| 0 <= j < children@.len() implies
+                        (#[trigger] children@[j]).child.wf_spec((fuel - 1) as nat)
+                    by {
+                        assert(children@[j].child.wf_spec((fuel as nat - 1) as nat));
+                    }
+                }
+                layout_absolute_widget_exec(limits, padding, children, fuel)
+            },
+            RuntimeWidget::Margin { margin, child, model } => {
+                proof {
+                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
+                    assert(child.wf_spec((fuel - 1) as nat)) by {
+                        assert(child.wf_spec((fuel as nat - 1) as nat));
+                    }
+                }
+                layout_margin_widget_exec(limits, margin, child, fuel)
             },
         }
     }
@@ -1247,6 +1318,286 @@ fn layout_grid_widget_exec(
     }
 
     merged
+}
+
+// ── Absolute widget exec ─────────────────────────────────────────
+
+/// Layout an absolute widget: each child at explicit (x, y) offsets.
+fn layout_absolute_widget_exec(
+    limits: &RuntimeLimits,
+    padding: &RuntimePadding,
+    children: &Vec<RuntimeAbsoluteChild>,
+    fuel: usize,
+) -> (out: RuntimeNode)
+    requires
+        limits.wf_spec(),
+        padding.wf_spec(),
+        fuel > 0,
+        forall|i: int| 0 <= i < children@.len() ==> children@[i].x.wf_spec(),
+        forall|i: int| 0 <= i < children@.len() ==> children@[i].y.wf_spec(),
+        forall|i: int| 0 <= i < children@.len() ==>
+            (#[trigger] children@[i]).child.wf_spec((fuel - 1) as nat),
+    ensures
+        out.wf_spec(),
+        out@ == ({
+            let spec_ac = Seq::new(children@.len() as nat, |i: int| children@[i].model());
+            let spec_w = Widget::Absolute {
+                padding: padding@,
+                children: spec_ac,
+            };
+            layout_widget::<RationalModel>(limits@, spec_w, fuel as nat)
+        }),
+    decreases fuel, 0nat,
+{
+    let ghost spec_ac: Seq<AbsoluteChild<RationalModel>> =
+        Seq::new(children@.len() as nat, |i: int| children@[i].model());
+
+    let pad_h = padding.horizontal_exec();
+    let pad_v = padding.vertical_exec();
+    let inner = limits.shrink_exec(&pad_h, &pad_v);
+    let n = children.len();
+
+    // Recursively layout each child, collecting child nodes + sizes + offsets
+    let mut child_nodes: Vec<RuntimeNode> = Vec::new();
+    let mut child_sizes: Vec<RuntimeSize> = Vec::new();
+    let mut offsets_x: Vec<RuntimeRational> = Vec::new();
+    let mut offsets_y: Vec<RuntimeRational> = Vec::new();
+    let mut i: usize = 0;
+
+    while i < n
+        invariant
+            0 <= i <= n,
+            n == children@.len(),
+            spec_ac.len() == n as nat,
+            inner.wf_spec(),
+            inner@ == limits@.shrink(pad_h@, pad_v@),
+            fuel > 0,
+            child_nodes@.len() == i as int,
+            child_sizes@.len() == i as int,
+            offsets_x@.len() == i as int,
+            offsets_y@.len() == i as int,
+            forall|j: int| 0 <= j < children@.len() ==> children@[j].x.wf_spec(),
+            forall|j: int| 0 <= j < children@.len() ==> children@[j].y.wf_spec(),
+            forall|j: int| 0 <= j < children@.len() ==>
+                (#[trigger] children@[j]).child.wf_spec((fuel - 1) as nat),
+            forall|j: int| 0 <= j < n ==>
+                spec_ac[j] == (#[trigger] children@[j]).model(),
+            forall|j: int| 0 <= j < i ==> {
+                &&& (#[trigger] child_nodes@[j]).wf_spec()
+                &&& child_nodes@[j]@ == layout_widget::<RationalModel>(
+                        inner@, spec_ac[j].child, (fuel - 1) as nat)
+            },
+            forall|j: int| 0 <= j < i ==> {
+                &&& (#[trigger] child_sizes@[j]).wf_spec()
+                &&& child_sizes@[j]@ == child_nodes@[j]@.size
+            },
+            forall|j: int| 0 <= j < i ==> {
+                &&& (#[trigger] offsets_x@[j]).wf_spec()
+                &&& offsets_x@[j]@ == spec_ac[j].x
+            },
+            forall|j: int| 0 <= j < i ==> {
+                &&& (#[trigger] offsets_y@[j]).wf_spec()
+                &&& offsets_y@[j]@ == spec_ac[j].y
+            },
+        decreases n - i,
+    {
+        let cn = layout_widget_exec(&inner, &children[i].child, fuel - 1);
+        child_sizes.push(cn.size.copy_size());
+        offsets_x.push(copy_rational(&children[i].x));
+        offsets_y.push(copy_rational(&children[i].y));
+        child_nodes.push(cn);
+        i = i + 1;
+    }
+
+    // Assert preconditions for absolute_layout_exec
+    proof {
+        assert forall|j: int| 0 <= j < child_sizes@.len() implies
+            (#[trigger] child_sizes@[j]).wf_spec()
+        by {}
+        assert forall|j: int| 0 <= j < offsets_x@.len() implies
+            (#[trigger] offsets_x@[j]).wf_spec()
+        by {}
+        assert forall|j: int| 0 <= j < offsets_y@.len() implies
+            (#[trigger] offsets_y@[j]).wf_spec()
+        by {}
+    }
+
+    let layout_result = absolute_layout_exec(limits, padding, &child_sizes,
+        &offsets_x, &offsets_y);
+
+    // Merge
+    let ghost cn_models: Seq<Node<RationalModel>> =
+        Seq::new(n as nat, |j: int| child_nodes@[j]@);
+
+    proof {
+        lemma_absolute_children_len::<RationalModel>(
+            padding@,
+            Seq::new(child_sizes@.len() as nat, |i: int|
+                (offsets_x@[i]@, offsets_y@[i]@, child_sizes@[i]@)),
+            0,
+        );
+        assert(layout_result.children@.len() == child_nodes@.len());
+    }
+
+    let merged = merge_layout_exec(layout_result, child_nodes, Ghost(cn_models));
+
+    // Connect to spec
+    proof {
+        let inner_spec = limits@.shrink(padding@.horizontal(), padding@.vertical());
+        let spec_cn = absolute_widget_child_nodes(inner_spec, spec_ac, (fuel - 1) as nat);
+
+        // cn_models =~= spec_cn
+        assert(cn_models.len() == spec_cn.len());
+        assert forall|j: int| 0 <= j < cn_models.len() as int implies
+            cn_models[j] == spec_cn[j]
+        by {
+            let ac_j = spec_ac[j];
+            assert(ac_j == children@[j].model());
+            assert(ac_j.child == children@[j].child.model());
+        }
+        assert(cn_models =~= spec_cn);
+
+        // child_sizes view matches spec
+        let sizes_view: Seq<Size<RationalModel>> =
+            Seq::new(child_sizes@.len() as nat, |i: int| child_sizes@[i]@);
+        let spec_sizes: Seq<Size<RationalModel>> =
+            Seq::new(spec_cn.len(), |i: int| spec_cn[i].size);
+        assert(sizes_view =~= spec_sizes) by {
+            assert forall|j: int| 0 <= j < sizes_view.len() as int implies
+                sizes_view[j] == spec_sizes[j]
+            by {}
+        }
+
+        // offsets match spec
+        let ox_view: Seq<RationalModel> =
+            Seq::new(offsets_x@.len() as nat, |i: int| offsets_x@[i]@);
+        let oy_view: Seq<RationalModel> =
+            Seq::new(offsets_y@.len() as nat, |i: int| offsets_y@[i]@);
+
+        // Build spec child_data from spec_ac
+        let body_offsets: Seq<(RationalModel, RationalModel)> =
+            Seq::new(spec_ac.len(), |i: int| (spec_ac[i].x, spec_ac[i].y));
+        let body_data: Seq<(RationalModel, RationalModel, Size<RationalModel>)> =
+            Seq::new(spec_cn.len(), |i: int|
+                (body_offsets[i].0, body_offsets[i].1, spec_cn[i].size));
+
+        // layout_result data matches body_data
+        let exec_data: Seq<(RationalModel, RationalModel, Size<RationalModel>)> =
+            Seq::new(child_sizes@.len() as nat, |i: int|
+                (offsets_x@[i]@, offsets_y@[i]@, child_sizes@[i]@));
+        assert(exec_data =~= body_data) by {
+            assert forall|j: int| 0 <= j < exec_data.len() as int implies
+                exec_data[j] == body_data[j]
+            by {
+                assert(offsets_x@[j]@ == spec_ac[j].x);
+                assert(offsets_y@[j]@ == spec_ac[j].y);
+            }
+        }
+    }
+
+    merged
+}
+
+// ── Margin widget exec ──────────────────────────────────────────
+
+/// Layout a margin widget: shrink limits, layout child, wrap with offsets.
+fn layout_margin_widget_exec(
+    limits: &RuntimeLimits,
+    margin: &RuntimePadding,
+    child: &Box<RuntimeWidget>,
+    fuel: usize,
+) -> (out: RuntimeNode)
+    requires
+        limits.wf_spec(),
+        margin.wf_spec(),
+        fuel > 0,
+        child.wf_spec((fuel - 1) as nat),
+    ensures
+        out.wf_spec(),
+        out@ == ({
+            let spec_w = Widget::Margin {
+                margin: margin@,
+                child: Box::new(child.model()),
+            };
+            layout_widget::<RationalModel>(limits@, spec_w, fuel as nat)
+        }),
+    decreases fuel, 0nat,
+{
+    let pad_h = margin.horizontal_exec();
+    let pad_v = margin.vertical_exec();
+    let inner = limits.shrink_exec(&pad_h, &pad_v);
+
+    let child_node = layout_widget_exec(&inner, child, fuel - 1);
+
+    // Compute total size
+    let pad_h2 = margin.horizontal_exec();
+    let pad_v2 = margin.vertical_exec();
+    let total_w = pad_h2.add(&child_node.size.width);
+    let total_h = pad_v2.add(&child_node.size.height);
+    let parent_size = limits.resolve_exec(RuntimeSize::new(total_w, total_h));
+
+    // Build the single child with margin offsets
+    let child_x = copy_rational(&margin.left);
+    let child_y = copy_rational(&margin.top);
+    let child_size = child_node.size.copy_size();
+
+    let ghost child_spec = layout_widget::<RationalModel>(
+        inner@, child.model(), (fuel - 1) as nat);
+
+    let positioned_child = RuntimeNode {
+        x: child_x,
+        y: child_y,
+        size: child_size,
+        children: child_node.children,
+        model: Ghost(Node::<RationalModel> {
+            x: margin@.left,
+            y: margin@.top,
+            size: child_spec.size,
+            children: child_spec.children,
+        }),
+    };
+
+    proof {
+        assert(positioned_child.wf_shallow());
+        assert(positioned_child@ == Node::<RationalModel> {
+            x: margin@.left,
+            y: margin@.top,
+            size: child_spec.size,
+            children: child_spec.children,
+        });
+    }
+
+    let x = RuntimeRational::from_int(0);
+    let y = RuntimeRational::from_int(0);
+
+    let ghost parent_model = layout_widget::<RationalModel>(
+        limits@,
+        Widget::Margin { margin: margin@, child: Box::new(child.model()) },
+        fuel as nat,
+    );
+
+    let mut result_children: Vec<RuntimeNode> = Vec::new();
+    result_children.push(positioned_child);
+
+    let out = RuntimeNode {
+        x,
+        y,
+        size: parent_size,
+        children: result_children,
+        model: Ghost(parent_model),
+    };
+
+    proof {
+        // Show out@ == parent_model
+        // parent_model.children == Seq::empty().push(Node { x: margin.left, y: margin.top, ... })
+        assert(parent_model.children.len() == 1);
+        assert(out.children@.len() == 1);
+        assert(out@.children.len() == 1);
+        assert(out.children@[0].wf_shallow());
+        assert(out.children@[0]@ == out@.children[0]);
+    }
+
+    out
 }
 
 // ── Merge layout exec ────────────────────────────────────────────

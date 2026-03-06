@@ -5,15 +5,17 @@ use crate::runtime::copy_rational;
 use crate::runtime::size::RuntimeSize;
 use crate::runtime::limits::RuntimeLimits;
 use crate::runtime::padding::RuntimePadding;
-use crate::runtime::widget::{RuntimeWidget, ContainerKind};
+use crate::runtime::widget::{RuntimeWidget, RuntimeAbsoluteChild, ContainerKind};
 use crate::runtime::grid::{grid_content_width_exec, grid_content_height_exec};
 use crate::size::Size;
 use crate::widget::Widget;
+use crate::widget::AbsoluteChild;
 use crate::measure::*;
 use crate::layout::*;
 use crate::layout::stack::*;
 use crate::layout::wrap::*;
 use crate::layout::grid::*;
+use crate::layout::absolute::*;
 
 verus! {
 
@@ -103,6 +105,34 @@ pub fn measure_widget_exec(
                 let content_h = grid_content_height_exec(row_heights, v_spacing);
                 let tw = pad_h.add(&content_w);
                 let th = pad_v.add(&content_h);
+                limits.resolve_exec(RuntimeSize::new(tw, th))
+            },
+            RuntimeWidget::Absolute { padding, children, model } => {
+                proof {
+                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
+                    assert forall|j: int| 0 <= j < children@.len() implies
+                        (#[trigger] children@[j]).child.wf_spec((fuel - 1) as nat)
+                    by {
+                        assert(children@[j].child.wf_spec((fuel as nat - 1) as nat));
+                    }
+                }
+                measure_absolute_exec(limits, padding, children, fuel)
+            },
+            RuntimeWidget::Margin { margin, child, model } => {
+                proof {
+                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
+                    assert(child.wf_spec((fuel - 1) as nat)) by {
+                        assert(child.wf_spec((fuel as nat - 1) as nat));
+                    }
+                }
+                let pad_h = margin.horizontal_exec();
+                let pad_v = margin.vertical_exec();
+                let inner = limits.shrink_exec(&pad_h, &pad_v);
+                let child_size = measure_widget_exec(&inner, child, fuel - 1);
+                let pad_h2 = margin.horizontal_exec();
+                let pad_v2 = margin.vertical_exec();
+                let tw = pad_h2.add(&child_size.width);
+                let th = pad_v2.add(&child_size.height);
                 limits.resolve_exec(RuntimeSize::new(tw, th))
             },
         }
@@ -217,6 +247,127 @@ fn measure_container_exec(
                 Ghost(child_sizes_seq), &pad_h, &pad_v)
         },
     }
+}
+
+/// Measure an absolute widget: recursively measure children, compute bounding box, resolve.
+fn measure_absolute_exec(
+    limits: &RuntimeLimits,
+    padding: &RuntimePadding,
+    children: &Vec<RuntimeAbsoluteChild>,
+    fuel: usize,
+) -> (out: RuntimeSize)
+    requires
+        limits.wf_spec(),
+        padding.wf_spec(),
+        fuel > 0,
+        forall|i: int| 0 <= i < children@.len() ==> children@[i].x.wf_spec(),
+        forall|i: int| 0 <= i < children@.len() ==> children@[i].y.wf_spec(),
+        forall|i: int| 0 <= i < children@.len() ==>
+            (#[trigger] children@[i]).child.wf_spec((fuel - 1) as nat),
+    ensures
+        out.wf_spec(),
+        out@ == ({
+            let spec_ac = Seq::new(children@.len() as nat, |i: int| children@[i].model());
+            let inner = limits@.shrink(padding@.horizontal(), padding@.vertical());
+            let cs = measure_absolute_children(inner, spec_ac, (fuel - 1) as nat);
+            measure_absolute_result::<RationalModel>(limits@, padding@, spec_ac, cs)
+        }),
+    decreases fuel, 0nat,
+{
+    let ghost spec_ac: Seq<AbsoluteChild<RationalModel>> =
+        Seq::new(children@.len() as nat, |i: int| children@[i].model());
+
+    let pad_h = padding.horizontal_exec();
+    let pad_v = padding.vertical_exec();
+    let inner = limits.shrink_exec(&pad_h, &pad_v);
+    let n = children.len();
+
+    // Measure children
+    let mut child_sizes: Vec<RuntimeSize> = Vec::new();
+    let mut i: usize = 0;
+
+    while i < n
+        invariant
+            0 <= i <= n,
+            n == children@.len(),
+            spec_ac.len() == n as nat,
+            inner.wf_spec(),
+            inner@ == limits@.shrink(pad_h@, pad_v@),
+            fuel > 0,
+            child_sizes@.len() == i as int,
+            forall|j: int| 0 <= j < n ==>
+                spec_ac[j] == (#[trigger] children@[j]).model(),
+            forall|j: int| 0 <= j < children@.len() ==> children@[j].x.wf_spec(),
+            forall|j: int| 0 <= j < children@.len() ==> children@[j].y.wf_spec(),
+            forall|j: int| 0 <= j < children@.len() ==>
+                (#[trigger] children@[j]).child.wf_spec((fuel - 1) as nat),
+            forall|j: int| 0 <= j < i ==> {
+                &&& (#[trigger] child_sizes@[j]).wf_spec()
+                &&& child_sizes@[j]@ == measure_widget::<RationalModel>(
+                        inner@, spec_ac[j].child, (fuel - 1) as nat)
+            },
+        decreases n - i,
+    {
+        let cs = measure_widget_exec(&inner, &children[i].child, fuel - 1);
+        child_sizes.push(cs);
+        i = i + 1;
+    }
+
+    let ghost child_sizes_seq: Seq<Size<RationalModel>> =
+        Seq::new(child_sizes@.len() as nat, |j: int| child_sizes@[j]@);
+    let ghost spec_cs = measure_absolute_children(inner@, spec_ac, (fuel - 1) as nat);
+
+    proof {
+        assert(child_sizes_seq.len() == spec_cs.len());
+        assert forall|j: int| 0 <= j < child_sizes_seq.len() implies
+            child_sizes_seq[j] == spec_cs[j]
+        by {}
+        assert(child_sizes_seq =~= spec_cs);
+    }
+
+    // Compute bounding box
+    let mut max_right = RuntimeRational::from_int(0);
+    let mut max_bottom = RuntimeRational::from_int(0);
+
+    let ghost spec_data: Seq<(RationalModel, RationalModel, Size<RationalModel>)> =
+        Seq::new(n as nat, |i: int| (spec_ac[i].x, spec_ac[i].y, child_sizes_seq[i]));
+
+    let mut k: usize = 0;
+    while k < n
+        invariant
+            0 <= k <= n,
+            n == children@.len(),
+            n == children@.len(),
+            n == child_sizes@.len(),
+            max_right.wf_spec(),
+            max_bottom.wf_spec(),
+            max_right@ == absolute_max_right::<RationalModel>(spec_data, k as nat),
+            max_bottom@ == absolute_max_bottom::<RationalModel>(spec_data, k as nat),
+            forall|j: int| 0 <= j < n ==> (#[trigger] children@[j]).x.wf_spec(),
+            forall|j: int| 0 <= j < n ==> (#[trigger] children@[j]).y.wf_spec(),
+            forall|j: int| 0 <= j < n ==> (#[trigger] child_sizes@[j]).wf_spec(),
+            forall|j: int| 0 <= j < n ==> spec_data[j] ==
+                (spec_ac[j].x, spec_ac[j].y, child_sizes_seq[j]),
+            forall|j: int| 0 <= j < n ==> spec_ac[j] == children@[j].model(),
+            child_sizes_seq.len() == n as nat,
+            forall|j: int| 0 <= j < n ==> child_sizes_seq[j] == child_sizes@[j]@,
+        decreases n - k,
+    {
+        assert(children@[k as int].x.wf_spec());
+        assert(children@[k as int].y.wf_spec());
+        assert(child_sizes@[k as int].wf_spec());
+        let right = children[k].x.add(&child_sizes[k].width);
+        let bottom = children[k].y.add(&child_sizes[k].height);
+        max_right = max_right.max(&right);
+        max_bottom = max_bottom.max(&bottom);
+        k = k + 1;
+    }
+
+    let pad_h2 = padding.horizontal_exec();
+    let pad_v2 = padding.vertical_exec();
+    let tw = pad_h2.add(&max_right);
+    let th = pad_v2.add(&max_bottom);
+    limits.resolve_exec(RuntimeSize::new(tw, th))
 }
 
 // ── Content-size helpers per variant ──────────────────────────────

@@ -11,6 +11,7 @@ use crate::layout::stack::*;
 use crate::layout::flex::*;
 use crate::layout::grid::*;
 use crate::layout::wrap::*;
+use crate::layout::absolute::*;
 
 verus! {
 
@@ -24,6 +25,14 @@ pub enum FlexDirection {
 #[verifier::reject_recursive_types(T)]
 pub struct FlexItem<T: OrderedRing> {
     pub weight: T,
+    pub child: Widget<T>,
+}
+
+/// An absolutely-positioned child with explicit (x, y) offset.
+#[verifier::reject_recursive_types(T)]
+pub struct AbsoluteChild<T: OrderedRing> {
+    pub x: T,
+    pub y: T,
     pub child: Widget<T>,
 }
 
@@ -71,6 +80,14 @@ pub enum Widget<T: OrderedRing> {
         col_widths: Seq<Size<T>>,
         row_heights: Seq<Size<T>>,
         children: Seq<Widget<T>>,
+    },
+    Absolute {
+        padding: Padding<T>,
+        children: Seq<AbsoluteChild<T>>,
+    },
+    Margin {
+        margin: Padding<T>,
+        child: Box<Widget<T>>,
     },
 }
 
@@ -182,6 +199,21 @@ pub open spec fn layout_grid_body<T: OrderedField>(
     merge_layout(layout, child_nodes)
 }
 
+/// Absolute layout body: given pre-computed child nodes and offsets, run absolute_layout.
+/// No merge needed — absolute_layout positions children directly at their offsets.
+pub open spec fn layout_absolute_body<T: OrderedField>(
+    limits: Limits<T>,
+    padding: Padding<T>,
+    child_nodes: Seq<Node<T>>,
+    child_offsets: Seq<(T, T)>,
+) -> Node<T> {
+    let child_sizes = Seq::new(child_nodes.len(), |i: int| child_nodes[i].size);
+    let child_data = Seq::new(child_nodes.len(), |i: int|
+        (child_offsets[i].0, child_offsets[i].1, child_nodes[i].size));
+    let layout = absolute_layout(limits, padding, child_data);
+    merge_layout(layout, child_nodes)
+}
+
 /// Compute child nodes from children widgets at a given fuel.
 pub open spec fn widget_child_nodes<T: OrderedField>(
     inner_limits: Limits<T>,
@@ -255,6 +287,17 @@ pub open spec fn grid_widget_child_nodes<T: OrderedField>(
         };
         layout_widget(child_lim, children[i], fuel)
     })
+}
+
+/// Compute child nodes for absolute layout: each child uses the same inner limits.
+pub open spec fn absolute_widget_child_nodes<T: OrderedField>(
+    inner_limits: Limits<T>,
+    children: Seq<AbsoluteChild<T>>,
+    fuel: nat,
+) -> Seq<Node<T>>
+    decreases fuel, 1nat,
+{
+    Seq::new(children.len(), |i: int| layout_widget(inner_limits, children[i].child, fuel))
 }
 
 // ── Main layout function ───────────────────────────────────────────
@@ -348,6 +391,31 @@ pub open spec fn layout_widget<T: OrderedField>(
                     col_widths, row_heights, cn,
                 )
             },
+            Widget::Absolute { padding, children } => {
+                let inner = limits.shrink(padding.horizontal(), padding.vertical());
+                let cn = absolute_widget_child_nodes(inner, children, (fuel - 1) as nat);
+                let offsets = Seq::new(children.len(), |i: int|
+                    (children[i].x, children[i].y));
+                layout_absolute_body(limits, padding, cn, offsets)
+            },
+            Widget::Margin { margin, child } => {
+                let inner = limits.shrink(margin.horizontal(), margin.vertical());
+                let child_node = layout_widget(inner, *child, (fuel - 1) as nat);
+                let total_w = margin.horizontal().add(child_node.size.width);
+                let total_h = margin.vertical().add(child_node.size.height);
+                let parent_size = limits.resolve(Size::new(total_w, total_h));
+                Node {
+                    x: T::zero(),
+                    y: T::zero(),
+                    size: parent_size,
+                    children: Seq::empty().push(Node {
+                        x: margin.left,
+                        y: margin.top,
+                        size: child_node.size,
+                        children: child_node.children,
+                    }),
+                }
+            },
         }
     }
 }
@@ -396,6 +464,9 @@ pub open spec fn get_children<T: OrderedRing>(widget: Widget<T>) -> Seq<Widget<T
         Widget::Flex { children, .. } =>
             Seq::new(children.len(), |i: int| children[i].child),
         Widget::Grid { children, .. } => children,
+        Widget::Absolute { children, .. } =>
+            Seq::new(children.len(), |i: int| children[i].child),
+        Widget::Margin { child, .. } => Seq::empty().push(*child),
     }
 }
 
@@ -532,6 +603,30 @@ proof fn lemma_flex_row_child_nodes_fuel_monotone<T: OrderedField>(
             max: Size::new(main_alloc, inner.max.height),
         };
         lemma_layout_widget_fuel_monotone(child_lim, children[i].child, fuel);
+    }
+    assert(old_cn =~= new_cn);
+}
+
+/// Absolute child nodes are fuel-monotone.
+proof fn lemma_absolute_child_nodes_fuel_monotone<T: OrderedField>(
+    inner_limits: Limits<T>,
+    children: Seq<AbsoluteChild<T>>,
+    fuel: nat,
+)
+    requires
+        forall|i: int| 0 <= i < children.len() ==>
+            widget_converged(children[i].child, fuel),
+    ensures
+        absolute_widget_child_nodes(inner_limits, children, fuel)
+            == absolute_widget_child_nodes(inner_limits, children, fuel + 1),
+    decreases fuel, 1nat,
+{
+    let ghost old_cn = absolute_widget_child_nodes(inner_limits, children, fuel);
+    let ghost new_cn = absolute_widget_child_nodes(inner_limits, children, fuel + 1);
+    assert forall|i: int| 0 <= i < children.len() implies
+        #[trigger] old_cn[i] == #[trigger] new_cn[i]
+    by {
+        lemma_layout_widget_fuel_monotone(inner_limits, children[i].child, fuel);
     }
     assert(old_cn =~= new_cn);
 }
@@ -708,6 +803,37 @@ pub proof fn lemma_layout_widget_fuel_monotone<T: OrderedField>(
             assert(cn =~= grid_widget_child_nodes(
                 inner, col_widths, row_heights, children,
                 col_widths.len(), fuel));
+        },
+        Widget::Absolute { padding, children } => {
+            let gc = get_children(widget);
+            assert(gc =~= Seq::new(children.len(), |i: int| children[i].child));
+            assert forall|i: int| 0 <= i < children.len() implies
+                widget_converged(#[trigger] children[i].child, (fuel - 1) as nat)
+            by {
+                assert(gc[i] == children[i].child);
+            }
+            let inner = limits.shrink(padding.horizontal(), padding.vertical());
+            if children.len() > 0 {
+                lemma_absolute_child_nodes_fuel_monotone(inner, children, (fuel - 1) as nat);
+            }
+            let cn = absolute_widget_child_nodes(inner, children, (fuel - 1) as nat);
+            assert(cn =~= absolute_widget_child_nodes(inner, children, fuel));
+            let offsets = Seq::new(children.len(), |i: int|
+                (children[i].x, children[i].y));
+            assert(layout_widget(limits, widget, fuel)
+                == layout_absolute_body(limits, padding, cn, offsets));
+            assert(layout_widget(limits, widget, fuel + 1)
+                == layout_absolute_body(limits, padding,
+                    absolute_widget_child_nodes(inner, children, fuel), offsets));
+        },
+        Widget::Margin { margin, child } => {
+            let gc = get_children(widget);
+            assert(gc =~= Seq::empty().push(*child));
+            assert(widget_converged(*child, (fuel - 1) as nat)) by {
+                assert(gc[0] == *child);
+            }
+            let inner = limits.shrink(margin.horizontal(), margin.vertical());
+            lemma_layout_widget_fuel_monotone(inner, *child, (fuel - 1) as nat);
         },
     }
 }

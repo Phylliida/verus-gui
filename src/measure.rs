@@ -11,10 +11,22 @@ use crate::layout::stack::*;
 use crate::layout::flex::*;
 use crate::layout::grid::*;
 use crate::layout::wrap::*;
+use crate::layout::absolute::*;
 
 verus! {
 
 // ── Measure spec functions ─────────────────────────────────────────
+
+/// Measure absolute children: recursively compute each child's preferred size.
+pub open spec fn measure_absolute_children<T: OrderedField>(
+    inner_limits: Limits<T>,
+    children: Seq<AbsoluteChild<T>>,
+    fuel: nat,
+) -> Seq<Size<T>>
+    decreases fuel, 1nat,
+{
+    Seq::new(children.len(), |i: int| measure_widget(inner_limits, children[i].child, fuel))
+}
 
 /// Measure child sizes: recursively compute each child's preferred size.
 pub open spec fn measure_children<T: OrderedField>(
@@ -89,6 +101,23 @@ pub open spec fn measure_widget<T: OrderedField>(
                 let content_h = grid_content_height(row_heights, v_spacing);
                 let tw = padding.horizontal().add(content_w);
                 let th = padding.vertical().add(content_h);
+                limits.resolve(Size::new(tw, th))
+            },
+            Widget::Absolute { padding, children } => {
+                let inner = limits.shrink(padding.horizontal(), padding.vertical());
+                let child_sizes = measure_absolute_children(inner, children, (fuel - 1) as nat);
+                let child_data = Seq::new(children.len(), |i: int|
+                    (children[i].x, children[i].y, child_sizes[i]));
+                let content = absolute_content_size(child_data);
+                let tw = padding.horizontal().add(content.width);
+                let th = padding.vertical().add(content.height);
+                limits.resolve(Size::new(tw, th))
+            },
+            Widget::Margin { margin, child } => {
+                let inner = limits.shrink(margin.horizontal(), margin.vertical());
+                let child_size = measure_widget(inner, *child, (fuel - 1) as nat);
+                let tw = margin.horizontal().add(child_size.width);
+                let th = margin.vertical().add(child_size.height);
                 limits.resolve(Size::new(tw, th))
             },
         }
@@ -171,6 +200,32 @@ pub open spec fn measure_wrap_result<T: OrderedField>(
     limits.resolve(Size::new(total_width, total_height))
 }
 
+/// Absolute container size from pre-measured child sizes and offsets.
+pub open spec fn measure_absolute_result<T: OrderedField>(
+    limits: Limits<T>,
+    padding: Padding<T>,
+    children: Seq<AbsoluteChild<T>>,
+    child_sizes: Seq<Size<T>>,
+) -> Size<T> {
+    let child_data = Seq::new(children.len(), |i: int|
+        (children[i].x, children[i].y, child_sizes[i]));
+    let content = absolute_content_size(child_data);
+    let tw = padding.horizontal().add(content.width);
+    let th = padding.vertical().add(content.height);
+    limits.resolve(Size::new(tw, th))
+}
+
+/// Margin container size from pre-measured child size.
+pub open spec fn measure_margin_result<T: OrderedField>(
+    limits: Limits<T>,
+    margin: Padding<T>,
+    child_size: Size<T>,
+) -> Size<T> {
+    let tw = margin.horizontal().add(child_size.width);
+    let th = margin.vertical().add(child_size.height);
+    limits.resolve(Size::new(tw, th))
+}
+
 // ── Equivalence proof: measure == layout.size ──────────────────────
 
 /// Helper: measure_children matches the sizes of widget_child_nodes.
@@ -198,6 +253,30 @@ proof fn lemma_measure_children_match<T: OrderedField>(
         mc[i] == cn[i].size
     by {
         lemma_measure_is_layout_size(inner_limits, children[i], fuel);
+    }
+}
+
+/// Helper: measure_absolute_children matches the sizes of absolute_widget_child_nodes.
+proof fn lemma_measure_absolute_children_match<T: OrderedField>(
+    inner_limits: Limits<T>,
+    children: Seq<AbsoluteChild<T>>,
+    fuel: nat,
+)
+    ensures
+        measure_absolute_children(inner_limits, children, fuel)
+            =~= Seq::new(
+                absolute_widget_child_nodes(inner_limits, children, fuel).len(),
+                |i: int| absolute_widget_child_nodes(inner_limits, children, fuel)[i].size,
+            ),
+    decreases fuel, 1nat,
+{
+    let mc = measure_absolute_children(inner_limits, children, fuel);
+    let cn = absolute_widget_child_nodes(inner_limits, children, fuel);
+    assert(mc.len() == cn.len());
+    assert forall|i: int| 0 <= i < children.len() implies
+        mc[i] == cn[i].size
+    by {
+        lemma_measure_is_layout_size(inner_limits, children[i].child, fuel);
     }
 }
 
@@ -332,6 +411,36 @@ pub proof fn lemma_measure_is_layout_size<T: OrderedField>(
                     limits, padding, h_spacing, v_spacing, h_align, v_align,
                     col_widths, row_heights, cs_2d);
                 assert(merge_layout(layout, cn).size == layout.size);
+            },
+            Widget::Absolute { padding, children } => {
+                let inner = limits.shrink(padding.horizontal(), padding.vertical());
+                lemma_measure_absolute_children_match(inner, children, (fuel - 1) as nat);
+
+                let m_sizes = measure_absolute_children(inner, children, (fuel - 1) as nat);
+                let cn = absolute_widget_child_nodes(inner, children, (fuel - 1) as nat);
+                let l_sizes = Seq::new(cn.len(), |i: int| cn[i].size);
+                assert(m_sizes =~= l_sizes);
+
+                // measure computes child_data from m_sizes
+                let m_data = Seq::new(children.len(), |i: int|
+                    (children[i].x, children[i].y, m_sizes[i]));
+
+                // layout_absolute_body computes child_data from cn
+                let offsets = Seq::new(children.len(), |i: int|
+                    (children[i].x, children[i].y));
+                let body_data = Seq::new(cn.len(), |i: int|
+                    (offsets[i].0, offsets[i].1, cn[i].size));
+                assert(m_data =~= body_data);
+
+                let layout = absolute_layout(limits, padding, body_data);
+                assert(merge_layout(layout, cn).size == layout.size);
+            },
+            Widget::Margin { margin, child } => {
+                let inner = limits.shrink(margin.horizontal(), margin.vertical());
+                lemma_measure_is_layout_size(inner, *child, (fuel - 1) as nat);
+                // measure returns limits.resolve(Size::new(tw, th))
+                // layout returns Node { size: limits.resolve(Size::new(tw, th)), ... }
+                // where tw/th are the same in both cases
             },
         }
     }
