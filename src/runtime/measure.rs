@@ -8,6 +8,8 @@ use crate::runtime::padding::RuntimePadding;
 use crate::runtime::widget::{RuntimeWidget, RuntimeAbsoluteChild, ContainerKind};
 use crate::runtime::grid::{grid_content_width_exec, grid_content_height_exec};
 use crate::size::Size;
+use crate::limits::Limits;
+use verus_algebra::traits::field::Field;
 use crate::widget::Widget;
 use crate::widget::AbsoluteChild;
 use crate::measure::*;
@@ -134,6 +136,68 @@ pub fn measure_widget_exec(
                 let tw = pad_h2.add(&child_size.width);
                 let th = pad_v2.add(&child_size.height);
                 limits.resolve_exec(RuntimeSize::new(tw, th))
+            },
+            RuntimeWidget::Conditional { visible, child, model } => {
+                if *visible {
+                    proof {
+                        assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
+                        assert(child.wf_spec((fuel - 1) as nat)) by {
+                            assert(child.wf_spec((fuel as nat - 1) as nat));
+                        }
+                    }
+                    let child_size = measure_widget_exec(limits, child, fuel - 1);
+                    limits.resolve_exec(child_size)
+                } else {
+                    limits.resolve_exec(RuntimeSize::zero_exec())
+                }
+            },
+            RuntimeWidget::SizedBox { inner_limits: il, child, model } => {
+                proof {
+                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
+                    assert(child.wf_spec((fuel - 1) as nat)) by {
+                        assert(child.wf_spec((fuel as nat - 1) as nat));
+                    }
+                }
+                let effective = limits.intersect_exec(il);
+                let child_size = measure_widget_exec(&effective, child, fuel - 1);
+                limits.resolve_exec(child_size)
+            },
+            RuntimeWidget::AspectRatio { ratio, child, model } => {
+                proof {
+                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
+                    assert(child.wf_spec((fuel - 1) as nat)) by {
+                        assert(child.wf_spec((fuel as nat - 1) as nat));
+                    }
+                }
+                let w1 = copy_rational(&limits.max.width);
+                let h1 = w1.div(ratio);
+                let child_size = if h1.le(&limits.max.height) {
+                    let eff_max = RuntimeSize::new(
+                        copy_rational(&limits.max.width), h1);
+                    let eff = RuntimeLimits {
+                        min: limits.min.copy_size(),
+                        max: eff_max,
+                        model: Ghost(Limits {
+                            min: limits@.min,
+                            max: Size::new(limits@.max.width, limits@.max.width.div(ratio@)),
+                        }),
+                    };
+                    measure_widget_exec(&eff, child, fuel - 1)
+                } else {
+                    let h2 = copy_rational(&limits.max.height);
+                    let w2 = h2.mul(ratio);
+                    let eff_max = RuntimeSize::new(w2, copy_rational(&limits.max.height));
+                    let eff = RuntimeLimits {
+                        min: limits.min.copy_size(),
+                        max: eff_max,
+                        model: Ghost(Limits {
+                            min: limits@.min,
+                            max: Size::new(limits@.max.height.mul_spec(ratio@), limits@.max.height),
+                        }),
+                    };
+                    measure_widget_exec(&eff, child, fuel - 1)
+                };
+                limits.resolve_exec(child_size)
             },
         }
     }

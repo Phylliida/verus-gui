@@ -263,4 +263,241 @@ pub proof fn lemma_stack_child_within_bounds<T: OrderedField>(
     );
 }
 
+// ── Stack size commutativity ─────────────────────────────────────
+
+/// Swap two elements in a sequence.
+pub open spec fn swap_seq<A>(s: Seq<A>, i: nat, j: nat) -> Seq<A> {
+    s.update(i as int, s[j as int]).update(j as int, s[i as int])
+}
+
+/// max_width(sizes, n) <= bound when every element width <= bound.
+proof fn lemma_max_width_upper_bound<T: OrderedRing>(
+    sizes: Seq<Size<T>>,
+    n: nat,
+    bound: T,
+)
+    requires
+        n <= sizes.len(),
+        T::zero().le(bound),
+        forall|k: int| 0 <= k < n ==> sizes[k].width.le(bound),
+    ensures
+        max_width(sizes, n).le(bound),
+    decreases n,
+{
+    if n == 0 {
+    } else {
+        lemma_max_width_upper_bound(sizes, (n - 1) as nat, bound);
+        // max_width(n) = max(max_width(n-1), sizes[n-1].width)
+        // max_width(n-1) <= bound, sizes[n-1].width <= bound
+        // max(a, b) <= c when a <= c and b <= c
+        T::axiom_le_total(max_width(sizes, (n - 1) as nat), sizes[(n - 1) as int].width);
+        if max_width(sizes, (n - 1) as nat).le(sizes[(n - 1) as int].width) {
+            // max = sizes[n-1].width <= bound
+        } else {
+            // max = max_width(n-1) <= bound
+        }
+    }
+}
+
+/// Every element of swap_seq is bounded by max_width of the original.
+proof fn lemma_swap_elements_bounded_by_max_width<T: OrderedRing>(
+    sizes: Seq<Size<T>>,
+    i: nat,
+    j: nat,
+)
+    requires
+        i < sizes.len(),
+        j < sizes.len(),
+        forall|k: int| 0 <= k < sizes.len() ==> T::zero().le(sizes[k].width),
+    ensures
+        forall|k: int| 0 <= k < sizes.len() as int ==>
+            swap_seq(sizes, i, j)[k].width.le(
+                max_width(sizes, sizes.len() as nat)),
+{
+    let n = sizes.len() as nat;
+    let t = swap_seq(sizes, i, j);
+    assert forall|k: int| 0 <= k < sizes.len() as int implies
+        t[k].width.le(max_width(sizes, n))
+    by {
+        if k == j as int {
+            // t[j] = sizes[i]
+            lemma_max_width_bounds_child(sizes, i);
+        } else if k == i as int {
+            // t[i] = sizes[j]
+            lemma_max_width_bounds_child(sizes, j);
+        } else {
+            // t[k] = sizes[k]
+            lemma_max_width_bounds_child(sizes, k as nat);
+        }
+    }
+}
+
+/// Swapping two children doesn't change max_width.
+pub proof fn lemma_max_width_swap<T: OrderedRing>(
+    sizes: Seq<Size<T>>,
+    i: nat,
+    j: nat,
+)
+    requires
+        i < sizes.len(),
+        j < sizes.len(),
+        forall|k: int| 0 <= k < sizes.len() ==> T::zero().le(sizes[k].width),
+    ensures
+        max_width(swap_seq(sizes, i, j), sizes.len() as nat).eqv(
+            max_width(sizes, sizes.len() as nat)),
+{
+    let n = sizes.len() as nat;
+    let t = swap_seq(sizes, i, j);
+
+    // Nonneg bounds for upper_bound preconditions
+    lemma_max_width_nonneg(sizes, n);
+    // t has same elements, so nonneg widths carry over
+    assert forall|k: int| 0 <= k < t.len() implies T::zero().le(t[k].width) by {
+        if k == i as int { } else if k == j as int { } else { }
+    }
+    lemma_max_width_nonneg(t, n);
+
+    // Direction 1: max_width(t, n) <= max_width(s, n)
+    lemma_swap_elements_bounded_by_max_width(sizes, i, j);
+    lemma_max_width_upper_bound(t, n, max_width(sizes, n));
+
+    // Direction 2: max_width(s, n) <= max_width(t, n)
+    assert forall|k: int| 0 <= k < n as int implies
+        sizes[k].width.le(max_width(t, n))
+    by {
+        if k == i as int {
+            lemma_max_width_bounds_child(t, j);
+        } else if k == j as int {
+            lemma_max_width_bounds_child(t, i);
+        } else {
+            lemma_max_width_bounds_child(t, k as nat);
+        }
+    }
+    lemma_max_width_upper_bound(sizes, n, max_width(t, n));
+
+    T::axiom_le_antisymmetric(
+        max_width(t, n),
+        max_width(sizes, n),
+    );
+}
+
+/// Every element of swap_seq is bounded by max_height of the original.
+proof fn lemma_swap_elements_bounded_by_max_height<T: OrderedRing>(
+    sizes: Seq<Size<T>>,
+    i: nat,
+    j: nat,
+)
+    requires
+        i < sizes.len(),
+        j < sizes.len(),
+        forall|k: int| 0 <= k < sizes.len() ==> T::zero().le(sizes[k].height),
+    ensures
+        forall|k: int| 0 <= k < sizes.len() as int ==>
+            swap_seq(sizes, i, j)[k].height.le(
+                max_height(sizes, sizes.len() as nat)),
+{
+    let n = sizes.len() as nat;
+    let t = swap_seq(sizes, i, j);
+    assert forall|k: int| 0 <= k < sizes.len() as int implies
+        t[k].height.le(max_height(sizes, n))
+    by {
+        if k == j as int {
+            lemma_max_height_bounds_child(sizes, i);
+        } else if k == i as int {
+            lemma_max_height_bounds_child(sizes, j);
+        } else {
+            lemma_max_height_bounds_child(sizes, k as nat);
+        }
+    }
+}
+
+/// max_height(sizes, n) <= bound when every element height <= bound.
+proof fn lemma_max_height_upper_bound<T: OrderedRing>(
+    sizes: Seq<Size<T>>,
+    n: nat,
+    bound: T,
+)
+    requires
+        n <= sizes.len(),
+        T::zero().le(bound),
+        forall|k: int| 0 <= k < n ==> sizes[k].height.le(bound),
+    ensures
+        max_height(sizes, n).le(bound),
+    decreases n,
+{
+    if n == 0 {
+    } else {
+        lemma_max_height_upper_bound(sizes, (n - 1) as nat, bound);
+        T::axiom_le_total(max_height(sizes, (n - 1) as nat), sizes[(n - 1) as int].height);
+    }
+}
+
+/// Swapping two children doesn't change max_height.
+pub proof fn lemma_max_height_swap<T: OrderedRing>(
+    sizes: Seq<Size<T>>,
+    i: nat,
+    j: nat,
+)
+    requires
+        i < sizes.len(),
+        j < sizes.len(),
+        forall|k: int| 0 <= k < sizes.len() ==> T::zero().le(sizes[k].height),
+    ensures
+        max_height(swap_seq(sizes, i, j), sizes.len() as nat).eqv(
+            max_height(sizes, sizes.len() as nat)),
+{
+    let n = sizes.len() as nat;
+    let t = swap_seq(sizes, i, j);
+
+    // Nonneg bounds for upper_bound preconditions
+    lemma_max_height_nonneg(sizes, n);
+    assert forall|k: int| 0 <= k < t.len() implies T::zero().le(t[k].height) by {
+        if k == i as int { } else if k == j as int { } else { }
+    }
+    lemma_max_height_nonneg(t, n);
+
+    // Direction 1: max_height(t, n) <= max_height(s, n)
+    lemma_swap_elements_bounded_by_max_height(sizes, i, j);
+    lemma_max_height_upper_bound(t, n, max_height(sizes, n));
+
+    // Direction 2: max_height(s, n) <= max_height(t, n)
+    assert forall|k: int| 0 <= k < n as int implies
+        sizes[k].height.le(max_height(t, n))
+    by {
+        if k == i as int {
+            lemma_max_height_bounds_child(t, j);
+        } else if k == j as int {
+            lemma_max_height_bounds_child(t, i);
+        } else {
+            lemma_max_height_bounds_child(t, k as nat);
+        }
+    }
+    lemma_max_height_upper_bound(sizes, n, max_height(t, n));
+
+    T::axiom_le_antisymmetric(
+        max_height(t, n),
+        max_height(sizes, n),
+    );
+}
+
+/// Stack parent size is invariant under swapping two children.
+pub proof fn lemma_stack_content_size_swap<T: OrderedRing>(
+    sizes: Seq<Size<T>>,
+    i: nat,
+    j: nat,
+)
+    requires
+        i < sizes.len(),
+        j < sizes.len(),
+        forall|k: int| 0 <= k < sizes.len() ==> sizes[k].is_nonneg(),
+    ensures
+        stack_content_size(swap_seq(sizes, i, j)).width.eqv(
+            stack_content_size(sizes).width),
+        stack_content_size(swap_seq(sizes, i, j)).height.eqv(
+            stack_content_size(sizes).height),
+{
+    lemma_max_width_swap(sizes, i, j);
+    lemma_max_height_swap(sizes, i, j);
+}
+
 } // verus!

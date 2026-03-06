@@ -29,6 +29,17 @@ impl<T: OrderedRing> Node<T> {
     pub open spec fn bottom(self) -> T {
         self.y.add(self.size.height)
     }
+
+    /// Whether all children are positioned within the parent's bounds.
+    /// child.x >= 0, child.y >= 0, child.right() <= width, child.bottom() <= height.
+    pub open spec fn children_within_bounds(self) -> bool {
+        forall|i: int| 0 <= i < self.children.len() ==> {
+            &&& T::zero().le(self.children[i].x)
+            &&& T::zero().le(self.children[i].y)
+            &&& self.children[i].right().le(self.size.width)
+            &&& self.children[i].bottom().le(self.size.height)
+        }
+    }
 }
 
 } // verus!

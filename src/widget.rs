@@ -89,6 +89,40 @@ pub enum Widget<T: OrderedRing> {
         margin: Padding<T>,
         child: Box<Widget<T>>,
     },
+    Conditional {
+        visible: bool,
+        child: Box<Widget<T>>,
+    },
+    SizedBox {
+        inner_limits: Limits<T>,
+        child: Box<Widget<T>>,
+    },
+    AspectRatio {
+        ratio: T,
+        child: Box<Widget<T>>,
+    },
+}
+
+// ── Convenience constructors ──────────────────────────────────────
+
+/// Center a single child (stack with center alignment, no padding).
+pub open spec fn center_widget<T: OrderedRing>(child: Widget<T>) -> Widget<T> {
+    Widget::Stack {
+        padding: Padding { top: T::zero(), right: T::zero(), bottom: T::zero(), left: T::zero() },
+        h_align: Alignment::Center,
+        v_align: Alignment::Center,
+        children: Seq::empty().push(child),
+    }
+}
+
+/// Align a single child with explicit h/v alignment (stack wrapper).
+pub open spec fn align_widget<T: OrderedRing>(h: Alignment, v: Alignment, child: Widget<T>) -> Widget<T> {
+    Widget::Stack {
+        padding: Padding { top: T::zero(), right: T::zero(), bottom: T::zero(), left: T::zero() },
+        h_align: h,
+        v_align: v,
+        children: Seq::empty().push(child),
+    }
 }
 
 // ── Variant body helpers ───────────────────────────────────────────
@@ -416,6 +450,69 @@ pub open spec fn layout_widget<T: OrderedField>(
                     }),
                 }
             },
+            Widget::Conditional { visible, child } => {
+                if visible {
+                    let child_node = layout_widget(limits, *child, (fuel - 1) as nat);
+                    Node {
+                        x: T::zero(),
+                        y: T::zero(),
+                        size: limits.resolve(child_node.size),
+                        children: child_node.children,
+                    }
+                } else {
+                    Node {
+                        x: T::zero(),
+                        y: T::zero(),
+                        size: limits.resolve(Size::zero_size()),
+                        children: Seq::empty(),
+                    }
+                }
+            },
+            Widget::SizedBox { inner_limits, child } => {
+                let effective = limits.intersect(inner_limits);
+                let child_node = layout_widget(effective, *child, (fuel - 1) as nat);
+                Node {
+                    x: T::zero(),
+                    y: T::zero(),
+                    size: limits.resolve(child_node.size),
+                    children: Seq::empty().push(Node {
+                        x: T::zero(),
+                        y: T::zero(),
+                        size: child_node.size,
+                        children: child_node.children,
+                    }),
+                }
+            },
+            Widget::AspectRatio { ratio, child } => {
+                let w1 = limits.max.width;
+                let h1 = w1.div(ratio);
+                let child_node = if h1.le(limits.max.height) {
+                    let eff = Limits {
+                        min: limits.min,
+                        max: Size::new(w1, h1),
+                    };
+                    layout_widget(eff, *child, (fuel - 1) as nat)
+                } else {
+                    let h2 = limits.max.height;
+                    let w2 = h2.mul(ratio);
+                    let eff = Limits {
+                        min: limits.min,
+                        max: Size::new(w2, h2),
+                    };
+                    layout_widget(eff, *child, (fuel - 1) as nat)
+                };
+                Node {
+                    x: T::zero(),
+                    y: T::zero(),
+                    size: limits.resolve(child_node.size),
+                    children: Seq::empty().push(Node {
+                        x: T::zero(),
+                        y: T::zero(),
+                        size: child_node.size,
+                        children: child_node.children,
+                    }),
+                }
+            },
         }
     }
 }
@@ -440,19 +537,6 @@ pub open spec fn merge_layout<T: OrderedRing>(
 
 // ── Widget depth and canonical entry point ─────────────────────────
 
-/// Maximum of a sequence of natural numbers.
-pub open spec fn seq_max_nat(s: Seq<nat>) -> nat
-    decreases s.len(),
-{
-    if s.len() == 0 {
-        0
-    } else {
-        let rest = seq_max_nat(s.drop_last());
-        let last = s.last();
-        if last >= rest { last } else { rest }
-    }
-}
-
 /// Extract the children sequence from any Widget variant.
 pub open spec fn get_children<T: OrderedRing>(widget: Widget<T>) -> Seq<Widget<T>> {
     match widget {
@@ -467,12 +551,32 @@ pub open spec fn get_children<T: OrderedRing>(widget: Widget<T>) -> Seq<Widget<T
         Widget::Absolute { children, .. } =>
             Seq::new(children.len(), |i: int| children[i].child),
         Widget::Margin { child, .. } => Seq::empty().push(*child),
+        Widget::Conditional { child, .. } => Seq::empty().push(*child),
+        Widget::SizedBox { child, .. } => Seq::empty().push(*child),
+        Widget::AspectRatio { child, .. } => Seq::empty().push(*child),
+    }
+}
+
+/// Max widget_depth across children[0..count].
+pub open spec fn max_child_widget_depth<T: OrderedRing>(
+    children: Seq<Widget<T>>,
+    fuel: nat,
+    count: nat,
+) -> nat
+    decreases fuel, count,
+{
+    if count == 0 {
+        0
+    } else {
+        let prev = max_child_widget_depth(children, fuel, (count - 1) as nat);
+        let cur = widget_depth(children[(count - 1) as int], fuel);
+        if cur >= prev { cur } else { prev }
     }
 }
 
 /// Compute the depth of a widget tree (fuel-bounded).
 pub open spec fn widget_depth<T: OrderedRing>(widget: Widget<T>, fuel: nat) -> nat
-    decreases fuel,
+    decreases fuel, 0nat,
 {
     if fuel == 0 {
         0
@@ -481,9 +585,7 @@ pub open spec fn widget_depth<T: OrderedRing>(widget: Widget<T>, fuel: nat) -> n
         if children.len() == 0 {
             0
         } else {
-            1 + seq_max_nat(Seq::new(children.len(), |i: int|
-                widget_depth(children[i], (fuel - 1) as nat)
-            ))
+            1 + max_child_widget_depth(children, (fuel - 1) as nat, children.len())
         }
     }
 }
@@ -835,6 +937,145 @@ pub proof fn lemma_layout_widget_fuel_monotone<T: OrderedField>(
             let inner = limits.shrink(margin.horizontal(), margin.vertical());
             lemma_layout_widget_fuel_monotone(inner, *child, (fuel - 1) as nat);
         },
+        Widget::Conditional { visible, child } => {
+            if visible {
+                let gc = get_children(widget);
+                assert(gc =~= Seq::empty().push(*child));
+                assert(widget_converged(*child, (fuel - 1) as nat)) by {
+                    assert(gc[0] == *child);
+                }
+                lemma_layout_widget_fuel_monotone(limits, *child, (fuel - 1) as nat);
+            } else {
+                // !visible: no recursion, both fuel levels produce same zero-size leaf
+            }
+        },
+        Widget::SizedBox { inner_limits, child } => {
+            let gc = get_children(widget);
+            assert(gc =~= Seq::empty().push(*child));
+            assert(widget_converged(*child, (fuel - 1) as nat)) by {
+                assert(gc[0] == *child);
+            }
+            let effective = limits.intersect(inner_limits);
+            lemma_layout_widget_fuel_monotone(effective, *child, (fuel - 1) as nat);
+        },
+        Widget::AspectRatio { ratio, child } => {
+            let gc = get_children(widget);
+            assert(gc =~= Seq::empty().push(*child));
+            assert(widget_converged(*child, (fuel - 1) as nat)) by {
+                assert(gc[0] == *child);
+            }
+            let w1 = limits.max.width;
+            let h1 = w1.div(ratio);
+            if h1.le(limits.max.height) {
+                let eff = Limits {
+                    min: limits.min,
+                    max: Size::new(w1, h1),
+                };
+                lemma_layout_widget_fuel_monotone(eff, *child, (fuel - 1) as nat);
+            } else {
+                let h2 = limits.max.height;
+                let w2 = h2.mul(ratio);
+                let eff = Limits {
+                    min: limits.min,
+                    max: Size::new(w2, h2),
+                };
+                lemma_layout_widget_fuel_monotone(eff, *child, (fuel - 1) as nat);
+            }
+        },
+    }
+}
+
+// ── Idempotence completion ─────────────────────────────────────────
+
+/// Convergence is monotone in fuel: if converged at fuel1, then converged at fuel2 >= fuel1.
+pub proof fn lemma_widget_converged_monotone<T: OrderedRing>(
+    widget: Widget<T>,
+    fuel1: nat,
+    fuel2: nat,
+)
+    requires
+        widget_converged(widget, fuel1),
+        fuel2 >= fuel1,
+    ensures
+        widget_converged(widget, fuel2),
+    decreases fuel2,
+{
+    if fuel2 == fuel1 {
+        // trivial
+    } else {
+        // fuel2 > fuel1 >= 1 (since widget_converged(_, 0) is false, fuel1 >= 1)
+        assert(fuel1 >= 1nat);
+        assert(fuel2 >= 2nat);
+        let children = get_children(widget);
+        if children.len() == 0 {
+            // widget_converged(widget, fuel2) is trivially true for leaflike widgets
+        } else {
+            // Need: forall|i| widget_converged(children[i], (fuel2 - 1))
+            // We have: forall|i| widget_converged(children[i], (fuel1 - 1))
+            assert forall|i: int| 0 <= i < children.len() implies
+                widget_converged(children[i], (fuel2 - 1) as nat)
+            by {
+                // children[i] is converged at (fuel1 - 1)
+                assert(widget_converged(children[i], (fuel1 - 1) as nat));
+                // By induction: converged at (fuel2 - 1) >= (fuel1 - 1)
+                lemma_widget_converged_monotone(children[i], (fuel1 - 1) as nat, (fuel2 - 1) as nat);
+            }
+        }
+    }
+}
+
+/// Helper: max_child_widget_depth bounds each child's depth.
+proof fn lemma_max_child_depth_bounds<T: OrderedRing>(
+    children: Seq<Widget<T>>,
+    fuel: nat,
+    count: nat,
+    i: int,
+)
+    requires
+        0 <= i < count,
+        count <= children.len(),
+    ensures
+        widget_depth(children[i], fuel) <= max_child_widget_depth(children, fuel, count),
+    decreases count,
+{
+    if i == count - 1 {
+        // cur = widget_depth(children[count-1], fuel), max = if cur >= prev { cur } else { prev } >= cur
+    } else {
+        lemma_max_child_depth_bounds::<T>(children, fuel, (count - 1) as nat, i);
+    }
+}
+
+/// Sufficient fuel implies convergence.
+/// If fuel exceeds the estimated depth, the widget has converged.
+pub proof fn lemma_sufficient_fuel_converges<T: OrderedRing>(
+    widget: Widget<T>,
+    fuel: nat,
+)
+    requires
+        fuel > widget_depth(widget, fuel),
+    ensures
+        widget_converged(widget, fuel),
+    decreases fuel,
+{
+    let children = get_children(widget);
+    if fuel == 0 {
+        // widget_depth(widget, 0) = 0, so fuel > 0 contradicts fuel == 0
+    } else if children.len() == 0 {
+        // fuel >= 1, widget_converged(leaflike, fuel) = true
+    } else {
+        // fuel > 0, children.len() > 0
+        // widget_depth(widget, fuel) = 1 + max_child_widget_depth(children, fuel-1, children.len())
+        // So fuel > 1 + max_child_widget_depth(...)
+        // For each child i:
+        //   widget_depth(children[i], fuel-1) <= max_child_widget_depth(children, fuel-1, children.len())
+        //   So fuel - 1 > widget_depth(children[i], fuel-1)
+        // By induction: widget_converged(children[i], fuel-1)
+        assert forall|i: int| 0 <= i < children.len() implies
+            widget_converged(children[i], (fuel - 1) as nat)
+        by {
+            lemma_max_child_depth_bounds::<T>(children, (fuel - 1) as nat, children.len(), i);
+            lemma_sufficient_fuel_converges::<T>(children[i], (fuel - 1) as nat);
+        }
     }
 }
 

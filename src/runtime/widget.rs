@@ -1,6 +1,9 @@
 use vstd::prelude::*;
 use vstd::arithmetic::div_mod::lemma_fundamental_div_mod;
 use verus_rational::RuntimeRational;
+use verus_algebra::traits::field::Field;
+use verus_algebra::traits::partial_order::PartialOrder;
+use verus_algebra::traits::ring::Ring;
 use crate::runtime::RationalModel;
 use crate::runtime::copy_rational;
 use crate::runtime::size::RuntimeSize;
@@ -109,6 +112,21 @@ pub enum RuntimeWidget {
         child: Box<RuntimeWidget>,
         model: Ghost<Widget<RationalModel>>,
     },
+    Conditional {
+        visible: bool,
+        child: Box<RuntimeWidget>,
+        model: Ghost<Widget<RationalModel>>,
+    },
+    SizedBox {
+        inner_limits: RuntimeLimits,
+        child: Box<RuntimeWidget>,
+        model: Ghost<Widget<RationalModel>>,
+    },
+    AspectRatio {
+        ratio: RuntimeRational,
+        child: Box<RuntimeWidget>,
+        model: Ghost<Widget<RationalModel>>,
+    },
 }
 
 impl RuntimeFlexItem {
@@ -136,6 +154,9 @@ impl RuntimeWidget {
             RuntimeWidget::Grid { model, .. } => model@,
             RuntimeWidget::Absolute { model, .. } => model@,
             RuntimeWidget::Margin { model, .. } => model@,
+            RuntimeWidget::Conditional { model, .. } => model@,
+            RuntimeWidget::SizedBox { model, .. } => model@,
+            RuntimeWidget::AspectRatio { model, .. } => model@,
         }
     }
 
@@ -237,6 +258,27 @@ impl RuntimeWidget {
                     child: Box::new(child.model()),
                 }
             },
+            RuntimeWidget::Conditional { visible, child, model } => {
+                model@ == Widget::Conditional {
+                    visible: *visible,
+                    child: Box::new(child.model()),
+                }
+            },
+            RuntimeWidget::SizedBox { inner_limits, child, model } => {
+                &&& inner_limits.wf_spec()
+                &&& model@ == Widget::SizedBox {
+                    inner_limits: inner_limits@,
+                    child: Box::new(child.model()),
+                }
+            },
+            RuntimeWidget::AspectRatio { ratio, child, model } => {
+                &&& ratio.wf_spec()
+                &&& !ratio@.eqv_spec(RationalModel::from_int_spec(0))
+                &&& model@ == Widget::AspectRatio {
+                    ratio: ratio@,
+                    child: Box::new(child.model()),
+                }
+            },
         }
     }
 
@@ -279,6 +321,15 @@ impl RuntimeWidget {
                         (#[trigger] children@[i]).child.wf_spec((fuel - 1) as nat)
                 },
                 RuntimeWidget::Margin { child, .. } => {
+                    child.wf_spec((fuel - 1) as nat)
+                },
+                RuntimeWidget::Conditional { child, .. } => {
+                    child.wf_spec((fuel - 1) as nat)
+                },
+                RuntimeWidget::SizedBox { child, .. } => {
+                    child.wf_spec((fuel - 1) as nat)
+                },
+                RuntimeWidget::AspectRatio { child, .. } => {
                     child.wf_spec((fuel - 1) as nat)
                 },
             }
@@ -414,6 +465,55 @@ pub fn layout_widget_exec(
                     }
                 }
                 layout_margin_widget_exec(limits, margin, child, fuel)
+            },
+            RuntimeWidget::Conditional { visible, child, model } => {
+                if *visible {
+                    proof {
+                        assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
+                        assert(child.wf_spec((fuel - 1) as nat)) by {
+                            assert(child.wf_spec((fuel as nat - 1) as nat));
+                        }
+                    }
+                    let child_node = layout_widget_exec(limits, child, fuel - 1);
+                    let resolved = limits.resolve_exec(child_node.size.copy_size());
+                    let x = RuntimeRational::from_int(0);
+                    let y = RuntimeRational::from_int(0);
+                    let ghost parent_model = layout_widget::<RationalModel>(
+                        limits@,
+                        Widget::Conditional { visible: true, child: Box::new(child.model()) },
+                        fuel as nat,
+                    );
+                    RuntimeNode {
+                        x,
+                        y,
+                        size: resolved,
+                        children: child_node.children,
+                        model: Ghost(parent_model),
+                    }
+                } else {
+                    let resolved = limits.resolve_exec(RuntimeSize::zero_exec());
+                    let x = RuntimeRational::from_int(0);
+                    let y = RuntimeRational::from_int(0);
+                    RuntimeNode::leaf_exec(x, y, resolved)
+                }
+            },
+            RuntimeWidget::SizedBox { inner_limits: il, child, model } => {
+                proof {
+                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
+                    assert(child.wf_spec((fuel - 1) as nat)) by {
+                        assert(child.wf_spec((fuel as nat - 1) as nat));
+                    }
+                }
+                layout_sized_box_widget_exec(limits, il, child, fuel)
+            },
+            RuntimeWidget::AspectRatio { ratio, child, model } => {
+                proof {
+                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
+                    assert(child.wf_spec((fuel - 1) as nat)) by {
+                        assert(child.wf_spec((fuel as nat - 1) as nat));
+                    }
+                }
+                layout_aspect_ratio_widget_exec(limits, ratio, child, fuel)
             },
         }
     }
@@ -1590,6 +1690,200 @@ fn layout_margin_widget_exec(
     proof {
         // Show out@ == parent_model
         // parent_model.children == Seq::empty().push(Node { x: margin.left, y: margin.top, ... })
+        assert(parent_model.children.len() == 1);
+        assert(out.children@.len() == 1);
+        assert(out@.children.len() == 1);
+        assert(out.children@[0].wf_shallow());
+        assert(out.children@[0]@ == out@.children[0]);
+    }
+
+    out
+}
+
+// ── SizedBox widget exec ─────────────────────────────────────────
+
+/// Layout a sized box widget: intersect limits, layout child, wrap result.
+fn layout_sized_box_widget_exec(
+    limits: &RuntimeLimits,
+    inner_limits: &RuntimeLimits,
+    child: &Box<RuntimeWidget>,
+    fuel: usize,
+) -> (out: RuntimeNode)
+    requires
+        limits.wf_spec(),
+        inner_limits.wf_spec(),
+        fuel > 0,
+        child.wf_spec((fuel - 1) as nat),
+    ensures
+        out.wf_spec(),
+        out@ == ({
+            let spec_w = Widget::SizedBox {
+                inner_limits: inner_limits@,
+                child: Box::new(child.model()),
+            };
+            layout_widget::<RationalModel>(limits@, spec_w, fuel as nat)
+        }),
+    decreases fuel, 0nat,
+{
+    let effective = limits.intersect_exec(inner_limits);
+    let child_node = layout_widget_exec(&effective, child, fuel - 1);
+    let resolved = limits.resolve_exec(child_node.size.copy_size());
+    let x = RuntimeRational::from_int(0);
+    let y = RuntimeRational::from_int(0);
+    let cx = RuntimeRational::from_int(0);
+    let cy = RuntimeRational::from_int(0);
+    let child_size = child_node.size.copy_size();
+
+    let ghost child_spec = layout_widget::<RationalModel>(
+        effective@, child.model(), (fuel - 1) as nat);
+
+    let positioned_child = RuntimeNode {
+        x: cx,
+        y: cy,
+        size: child_size,
+        children: child_node.children,
+        model: Ghost(Node::<RationalModel> {
+            x: RationalModel::from_int_spec(0),
+            y: RationalModel::from_int_spec(0),
+            size: child_spec.size,
+            children: child_spec.children,
+        }),
+    };
+
+    let ghost parent_model = layout_widget::<RationalModel>(
+        limits@,
+        Widget::SizedBox { inner_limits: inner_limits@, child: Box::new(child.model()) },
+        fuel as nat,
+    );
+
+    let mut result_children: Vec<RuntimeNode> = Vec::new();
+    result_children.push(positioned_child);
+
+    let out = RuntimeNode {
+        x,
+        y,
+        size: resolved,
+        children: result_children,
+        model: Ghost(parent_model),
+    };
+
+    proof {
+        assert(parent_model.children.len() == 1);
+        assert(out.children@.len() == 1);
+        assert(out@.children.len() == 1);
+        assert(out.children@[0].wf_shallow());
+        assert(out.children@[0]@ == out@.children[0]);
+    }
+
+    out
+}
+
+// ── AspectRatio layout exec ─────────────────────────────────────
+
+fn layout_aspect_ratio_widget_exec(
+    limits: &RuntimeLimits,
+    ratio: &RuntimeRational,
+    child: &Box<RuntimeWidget>,
+    fuel: usize,
+) -> (out: RuntimeNode)
+    requires
+        limits.wf_spec(),
+        ratio.wf_spec(),
+        !ratio@.eqv_spec(RationalModel::from_int_spec(0)),
+        fuel > 0,
+        child.wf_spec((fuel - 1) as nat),
+    ensures
+        out.wf_spec(),
+        out@ == ({
+            let spec_w = Widget::AspectRatio {
+                ratio: ratio@,
+                child: Box::new(child.model()),
+            };
+            layout_widget::<RationalModel>(limits@, spec_w, fuel as nat)
+        }),
+    decreases fuel, 0nat,
+{
+    let w1 = copy_rational(&limits.max.width);
+    let h1 = w1.div(ratio);
+
+    let child_node = if h1.le(&limits.max.height) {
+        let eff_max = RuntimeSize::new(copy_rational(&limits.max.width), h1);
+        let eff = RuntimeLimits {
+            min: limits.min.copy_size(),
+            max: eff_max,
+            model: Ghost(Limits {
+                min: limits@.min,
+                max: Size::new(limits@.max.width, limits@.max.width.div(ratio@)),
+            }),
+        };
+        layout_widget_exec(&eff, child, fuel - 1)
+    } else {
+        let h2 = copy_rational(&limits.max.height);
+        let w2 = h2.mul(ratio);
+        let eff_max = RuntimeSize::new(w2, copy_rational(&limits.max.height));
+        let eff = RuntimeLimits {
+            min: limits.min.copy_size(),
+            max: eff_max,
+            model: Ghost(Limits {
+                min: limits@.min,
+                max: Size::new(limits@.max.height.mul_spec(ratio@), limits@.max.height),
+            }),
+        };
+        layout_widget_exec(&eff, child, fuel - 1)
+    };
+
+    let resolved = limits.resolve_exec(child_node.size.copy_size());
+    let x = RuntimeRational::from_int(0);
+    let y = RuntimeRational::from_int(0);
+    let cx = RuntimeRational::from_int(0);
+    let cy = RuntimeRational::from_int(0);
+    let child_size = child_node.size.copy_size();
+
+    let ghost child_spec = if limits@.max.width.div(ratio@).le(limits@.max.height) {
+        let eff = Limits {
+            min: limits@.min,
+            max: Size::new(limits@.max.width, limits@.max.width.div(ratio@)),
+        };
+        layout_widget::<RationalModel>(eff, child.model(), (fuel - 1) as nat)
+    } else {
+        let eff = Limits {
+            min: limits@.min,
+            max: Size::new(limits@.max.height.mul_spec(ratio@), limits@.max.height),
+        };
+        layout_widget::<RationalModel>(eff, child.model(), (fuel - 1) as nat)
+    };
+
+    let positioned_child = RuntimeNode {
+        x: cx,
+        y: cy,
+        size: child_size,
+        children: child_node.children,
+        model: Ghost(Node::<RationalModel> {
+            x: RationalModel::from_int_spec(0),
+            y: RationalModel::from_int_spec(0),
+            size: child_spec.size,
+            children: child_spec.children,
+        }),
+    };
+
+    let ghost parent_model = layout_widget::<RationalModel>(
+        limits@,
+        Widget::AspectRatio { ratio: ratio@, child: Box::new(child.model()) },
+        fuel as nat,
+    );
+
+    let mut result_children: Vec<RuntimeNode> = Vec::new();
+    result_children.push(positioned_child);
+
+    let out = RuntimeNode {
+        x,
+        y,
+        size: resolved,
+        children: result_children,
+        model: Ghost(parent_model),
+    };
+
+    proof {
         assert(parent_model.children.len() == 1);
         assert(out.children@.len() == 1);
         assert(out@.children.len() == 1);

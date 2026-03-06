@@ -22,6 +22,8 @@ pub mod wrap;
 pub mod absolute;
 pub mod widget;
 pub mod measure;
+pub mod hit_test;
+pub mod diff;
 
 verus! {
 

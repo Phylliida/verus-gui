@@ -23,4 +23,10 @@ pub mod widget;
 pub mod measure;
 
 #[cfg(verus_keep_ghost)]
+pub mod hit_test;
+
+#[cfg(verus_keep_ghost)]
+pub mod diff;
+
+#[cfg(verus_keep_ghost)]
 pub mod runtime;

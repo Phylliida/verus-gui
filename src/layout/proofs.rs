@@ -5,9 +5,16 @@ use verus_algebra::convex::{two, lemma_two_nonzero};
 use verus_algebra::min_max::*;
 use crate::size::Size;
 use crate::limits::Limits;
+use crate::node::Node;
 use crate::layout::*;
+use crate::layout::stack::*;
+use crate::layout::flex::*;
+use crate::layout::grid::*;
+use crate::layout::wrap::*;
+use crate::layout::absolute::*;
 use crate::padding::Padding;
 use crate::alignment::{Alignment, align_offset};
+use crate::widget::*;
 
 verus! {
 
@@ -1765,6 +1772,484 @@ pub proof fn lemma_row_content_width_monotone<T: OrderedRing>(
         assert(row_content_width(ext, spacing) ==
             sum_widths(ext, (n + 1) as nat).add(repeated_add(spacing, n as nat)));
     }
+}
+
+// ── Layout respects limits ──────────────────────────────────────────
+
+/// Master theorem: layout_widget always produces a size within [limits.min, limits.max].
+///
+/// Every variant ends with limits.resolve(something), and resolve clamps to bounds.
+/// Conditional(visible) is the only variant that doesn't resolve — it passes through
+/// the child result, but uses the same limits, so induction applies.
+pub proof fn lemma_layout_respects_limits<T: OrderedField>(
+    limits: Limits<T>,
+    widget: Widget<T>,
+    fuel: nat,
+)
+    requires
+        limits.wf(),
+        fuel > 0,
+    ensures
+        limits.min.le(layout_widget(limits, widget, fuel).size),
+        layout_widget(limits, widget, fuel).size.le(limits.max),
+    decreases fuel, 0nat,
+{
+    match widget {
+        Widget::Leaf { size } => {
+            lemma_resolve_bounds(limits, size);
+        },
+        Widget::Column { padding, spacing, alignment, children } => {
+            let inner = limits.shrink(padding.horizontal(), padding.vertical());
+            let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
+            let child_sizes = Seq::new(cn.len(), |i: int| cn[i].size);
+            let layout = column_layout(limits, padding, spacing, alignment, child_sizes);
+            // merge preserves size
+            assert(merge_layout(layout, cn).size == layout.size);
+            // column_layout.size = limits.resolve(...)
+            let content_height = column_content_height(child_sizes, spacing);
+            let total_height = padding.vertical().add(content_height);
+            lemma_resolve_bounds(limits, Size::new(limits.max.width, total_height));
+        },
+        Widget::Row { padding, spacing, alignment, children } => {
+            let inner = limits.shrink(padding.horizontal(), padding.vertical());
+            let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
+            let child_sizes = Seq::new(cn.len(), |i: int| cn[i].size);
+            let layout = row_layout(limits, padding, spacing, alignment, child_sizes);
+            assert(merge_layout(layout, cn).size == layout.size);
+            let content_width = row_content_width(child_sizes, spacing);
+            let total_width = padding.horizontal().add(content_width);
+            lemma_resolve_bounds(limits, Size::new(total_width, limits.max.height));
+        },
+        Widget::Stack { padding, h_align, v_align, children } => {
+            let inner = limits.shrink(padding.horizontal(), padding.vertical());
+            let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
+            let child_sizes = Seq::new(cn.len(), |i: int| cn[i].size);
+            let layout = stack_layout(limits, padding, h_align, v_align, child_sizes);
+            assert(merge_layout(layout, cn).size == layout.size);
+            let content = stack_content_size(child_sizes);
+            let tw = padding.horizontal().add(content.width);
+            let th = padding.vertical().add(content.height);
+            lemma_resolve_bounds(limits, Size::new(tw, th));
+        },
+        Widget::Wrap { padding, h_spacing, v_spacing, children } => {
+            let inner = limits.shrink(padding.horizontal(), padding.vertical());
+            let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
+            let child_sizes = Seq::new(cn.len(), |i: int| cn[i].size);
+            let layout = wrap_layout(limits, padding, h_spacing, v_spacing, child_sizes);
+            assert(merge_layout(layout, cn).size == layout.size);
+            let available_width = limits.max.width.sub(padding.horizontal());
+            let content = wrap_content_size(child_sizes, h_spacing, v_spacing, available_width);
+            let tw = padding.horizontal().add(content.width);
+            let th = padding.vertical().add(content.height);
+            lemma_resolve_bounds(limits, Size::new(tw, th));
+        },
+        Widget::Flex { padding, spacing, alignment, direction, children } => {
+            lemma_resolve_bounds(limits, limits.max);
+        },
+        Widget::Grid { padding, h_spacing, v_spacing, h_align, v_align,
+                       col_widths, row_heights, children } => {
+            let content_w = grid_content_width(col_widths, h_spacing);
+            let content_h = grid_content_height(row_heights, v_spacing);
+            let tw = padding.horizontal().add(content_w);
+            let th = padding.vertical().add(content_h);
+            lemma_resolve_bounds(limits, Size::new(tw, th));
+        },
+        Widget::Absolute { padding, children } => {
+            let inner = limits.shrink(padding.horizontal(), padding.vertical());
+            let cn = absolute_widget_child_nodes(inner, children, (fuel - 1) as nat);
+            let offsets = Seq::new(children.len(), |i: int|
+                (children[i].x, children[i].y));
+            let child_sizes = Seq::new(cn.len(), |i: int| cn[i].size);
+            let child_data = Seq::new(cn.len(), |i: int|
+                (offsets[i].0, offsets[i].1, cn[i].size));
+            let content = absolute_content_size(child_data);
+            let tw = padding.horizontal().add(content.width);
+            let th = padding.vertical().add(content.height);
+            lemma_resolve_bounds(limits, Size::new(tw, th));
+        },
+        Widget::Margin { margin, child } => {
+            let inner = limits.shrink(margin.horizontal(), margin.vertical());
+            let child_node = layout_widget(inner, *child, (fuel - 1) as nat);
+            let tw = margin.horizontal().add(child_node.size.width);
+            let th = margin.vertical().add(child_node.size.height);
+            lemma_resolve_bounds(limits, Size::new(tw, th));
+        },
+        Widget::Conditional { visible, child } => {
+            if visible {
+                let child_node = layout_widget(limits, *child, (fuel - 1) as nat);
+                lemma_resolve_bounds(limits, child_node.size);
+            } else {
+                lemma_resolve_bounds(limits, Size::zero_size());
+            }
+        },
+        Widget::SizedBox { inner_limits, child } => {
+            let effective = limits.intersect(inner_limits);
+            let child_node = layout_widget(effective, *child, (fuel - 1) as nat);
+            lemma_resolve_bounds(limits, child_node.size);
+        },
+        Widget::AspectRatio { ratio, child } => {
+            let w1 = limits.max.width;
+            let h1 = w1.div(ratio);
+            let child_node = if h1.le(limits.max.height) {
+                let eff = Limits {
+                    min: limits.min,
+                    max: Size::new(w1, h1),
+                };
+                layout_widget(eff, *child, (fuel - 1) as nat)
+            } else {
+                let h2 = limits.max.height;
+                let w2 = h2.mul(ratio);
+                let eff = Limits {
+                    min: limits.min,
+                    max: Size::new(w2, h2),
+                };
+                layout_widget(eff, *child, (fuel - 1) as nat)
+            };
+            lemma_resolve_bounds(limits, child_node.size);
+        },
+    }
+}
+
+// ── Clamp / Resolve foundation lemmas ────────────────────────────
+
+/// val <= clamp(val, lo, hi) when val <= hi and lo <= hi.
+/// Since val <= hi, min(val, hi) = val, so clamp = max(lo, val) >= val.
+pub proof fn lemma_val_le_clamp<T: OrderedRing>(val: T, lo: T, hi: T)
+    requires
+        lo.le(hi),
+        val.le(hi),
+    ensures
+        val.le(Limits::clamp(val, lo, hi)),
+{
+    // min(val, hi) = val since val.le(hi), so clamp = max(lo, val)
+    lemma_max_ge_right::<T>(lo, min::<T>(val, hi));
+}
+
+/// max(c, a) <= max(c, b) when a <= b.
+proof fn lemma_max_monotone_right<T: OrderedRing>(a: T, b: T, c: T)
+    requires
+        a.le(b),
+    ensures
+        max::<T>(c, a).le(max::<T>(c, b)),
+{
+    T::axiom_le_total(c, a);
+    if c.le(a) {
+        // max(c,a) = a. c <= a <= b so c <= b, hence max(c,b) = b.
+        T::axiom_le_transitive(c, a, b);
+        // Now max(c,a) = a, max(c,b) = b, need a.le(b) ✓
+    } else {
+        // a < c, so max(c,a) = c. Need c <= max(c,b).
+        lemma_max_ge_left::<T>(c, b);
+    }
+}
+
+/// Clamp is monotone in the upper bound:
+/// clamp(v, lo, hi1) <= clamp(v, lo, hi2) when lo <= hi1 <= hi2.
+pub proof fn lemma_clamp_monotone_hi<T: OrderedRing>(v: T, lo: T, hi1: T, hi2: T)
+    requires
+        lo.le(hi1),
+        hi1.le(hi2),
+    ensures
+        Limits::clamp(v, lo, hi1).le(Limits::clamp(v, lo, hi2)),
+{
+    // clamp(v, lo, hi_k) = max(lo, min(v, hi_k))
+    // Show min(v, hi1) <= min(v, hi2), then use max_monotone_right.
+    T::axiom_le_total(v, hi1);
+    if v.le(hi1) {
+        // min(v, hi1) = v. Also v <= hi1 <= hi2 so v <= hi2, min(v, hi2) = v.
+        T::axiom_le_transitive(v, hi1, hi2);
+        // Both clamps = max(lo, v).
+        T::axiom_le_reflexive(max::<T>(lo, v));
+    } else {
+        // hi1 < v, so min(v, hi1) = hi1.
+        T::axiom_le_total(v, hi2);
+        if v.le(hi2) {
+            // min(v, hi2) = v. Need max(lo, hi1) <= max(lo, v).
+            // hi1 <= v (from hi1 < v via total order: NOT v.le(hi1) means hi1.le(v) by totality...
+            // actually axiom_le_total gives v.le(hi1) || hi1.le(v), and we're in the !v.le(hi1) branch)
+            lemma_max_monotone_right::<T>(hi1, v, lo);
+        } else {
+            // hi2 < v, so min(v, hi2) = hi2. Need max(lo, hi1) <= max(lo, hi2).
+            lemma_max_monotone_right::<T>(hi1, hi2, lo);
+        }
+    }
+}
+
+/// resolve(size) >= size component-wise when size <= limits.max.
+pub proof fn lemma_resolve_ge_input<T: OrderedRing>(limits: Limits<T>, size: Size<T>)
+    requires
+        limits.wf(),
+        size.le(limits.max),
+    ensures
+        size.le(limits.resolve(size)),
+{
+    lemma_val_le_clamp::<T>(size.width, limits.min.width, limits.max.width);
+    lemma_val_le_clamp::<T>(size.height, limits.min.height, limits.max.height);
+}
+
+// ── Resolve monotonicity ─────────────────────────────────────────
+
+/// max(a1, b).eqv(max(a2, b)) when a1.eqv(a2).
+proof fn lemma_max_congruence_left<T: OrderedRing>(a1: T, a2: T, b: T)
+    requires
+        a1.eqv(a2),
+    ensures
+        max::<T>(a1, b).eqv(max::<T>(a2, b)),
+{
+    // Case split on a1.le(b)
+    T::axiom_le_total(a1, b);
+    if a1.le(b) {
+        // max(a1, b) = b.
+        // a1.eqv(a2) and a1.le(b) => a2.le(b) by le_congruence
+        T::axiom_eqv_reflexive(b);
+        T::axiom_le_congruence(a1, a2, b, b);
+        // max(a2, b) = b. So both are b.
+        T::axiom_eqv_reflexive(b);
+    } else {
+        // max(a1, b) = a1. And b < a1, so NOT b.le(a1)... wait, le_total says a1.le(b) || b.le(a1).
+        // We're in NOT a1.le(b), so b.le(a1) by totality... but wait, that's already from le_total above.
+        // Actually le_total gives a1.le(b) || b.le(a1), and we're in the else, so b.le(a1).
+        // But NOT a1.le(b) doesn't mean NOT a2.le(b) directly. Let me use le_congruence differently.
+        // We have: NOT a1.le(b). max(a1, b) = a1.
+        // Need to show NOT a2.le(b), i.e., max(a2, b) = a2.
+        // From NOT a1.le(b) and a1.eqv(a2): if a2.le(b), then by le_congruence(a2, a1, b, b),
+        // a1.le(b) — contradiction. So NOT a2.le(b).
+        T::axiom_eqv_symmetric(a1, a2);
+        T::axiom_eqv_reflexive(b);
+        T::axiom_le_total(a2, b);
+        if a2.le(b) {
+            T::axiom_le_congruence(a2, a1, b, b);
+            // contradiction: a1.le(b) in else branch
+        }
+        // max(a2, b) = a2. Need a1.eqv(a2).
+    }
+}
+
+/// Resolve is monotone in limits.max: widening max widens the result.
+pub proof fn lemma_resolve_monotone_max<T: OrderedRing>(
+    limits1: Limits<T>,
+    limits2: Limits<T>,
+    size: Size<T>,
+)
+    requires
+        limits1.wf(),
+        limits2.wf(),
+        limits1.min.width.eqv(limits2.min.width),
+        limits1.min.height.eqv(limits2.min.height),
+        limits1.max.le(limits2.max),
+    ensures
+        limits1.resolve(size).le(limits2.resolve(size)),
+{
+    // Width: clamp(v, min1.w, max1.w) <= clamp(v, min2.w, max2.w)
+    // Since min1.w.eqv(min2.w) and max1.w.le(max2.w):
+    // Step 1: clamp(v, min1.w, max1.w) <= clamp(v, min1.w, max2.w)  [clamp_monotone_hi]
+    lemma_clamp_monotone_hi::<T>(
+        size.width, limits1.min.width, limits1.max.width, limits2.max.width,
+    );
+    // Step 2: clamp(v, min1.w, max2.w) eqv clamp(v, min2.w, max2.w)  [min eqv => max eqv]
+    // clamp(v, lo, hi) = max(lo, min(v, hi))
+    lemma_max_congruence_left::<T>(
+        limits1.min.width, limits2.min.width,
+        min::<T>(size.width, limits2.max.width),
+    );
+    // Step 3: le + eqv => le
+    verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_right::<T>(
+        limits1.resolve(size).width,
+        Limits::clamp(size.width, limits1.min.width, limits2.max.width),
+        limits2.resolve(size).width,
+    );
+
+    // Height: symmetric
+    lemma_clamp_monotone_hi::<T>(
+        size.height, limits1.min.height, limits1.max.height, limits2.max.height,
+    );
+    lemma_max_congruence_left::<T>(
+        limits1.min.height, limits2.min.height,
+        min::<T>(size.height, limits2.max.height),
+    );
+    verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_right::<T>(
+        limits1.resolve(size).height,
+        Limits::clamp(size.height, limits1.min.height, limits2.max.height),
+        limits2.resolve(size).height,
+    );
+}
+
+/// Leaf layout is monotone in limits.max: widening max widens the leaf size.
+pub proof fn lemma_layout_leaf_monotone<T: OrderedField>(
+    limits1: Limits<T>,
+    limits2: Limits<T>,
+    size: Size<T>,
+    fuel: nat,
+)
+    requires
+        limits1.wf(),
+        limits2.wf(),
+        limits1.min.width.eqv(limits2.min.width),
+        limits1.min.height.eqv(limits2.min.height),
+        limits1.max.le(limits2.max),
+        fuel > 0,
+    ensures
+        layout_widget(limits1, Widget::Leaf { size }, fuel).size.le(
+            layout_widget(limits2, Widget::Leaf { size }, fuel).size),
+{
+    // layout_widget for Leaf = limits.resolve(size)
+    lemma_resolve_monotone_max(limits1, limits2, size);
+}
+
+// ── Children-within-parent bounds ─────────────────────────────────
+
+/// Layout of a Leaf widget has no children, so children_within_bounds is trivially true.
+pub proof fn lemma_leaf_children_within_bounds<T: OrderedField>(
+    limits: Limits<T>,
+    size: Size<T>,
+)
+    requires limits.wf(),
+    ensures
+        layout_widget(limits, Widget::Leaf { size }, 1).children_within_bounds(),
+{
+}
+
+/// Layout of a Conditional(!visible) widget has no children.
+pub proof fn lemma_conditional_hidden_children_within_bounds<T: OrderedField>(
+    limits: Limits<T>,
+    child: Widget<T>,
+    fuel: nat,
+)
+    requires
+        limits.wf(),
+        fuel > 0,
+    ensures
+        layout_widget(limits, Widget::Conditional { visible: false, child: Box::new(child) }, fuel)
+            .children_within_bounds(),
+{
+}
+
+/// At fuel=0, layout produces a zero-size leaf, so children_within_bounds holds.
+pub proof fn lemma_zero_fuel_children_within_bounds<T: OrderedField>(
+    limits: Limits<T>,
+    widget: Widget<T>,
+)
+    ensures
+        layout_widget(limits, widget, 0).children_within_bounds(),
+{
+}
+
+/// limits.intersect(other).wf() whenever limits.wf().
+/// The intersect construction guarantees min <= max and non-negativity.
+proof fn lemma_intersect_wf<T: OrderedRing>(limits: Limits<T>, other: Limits<T>)
+    requires
+        limits.wf(),
+    ensures
+        limits.intersect(other).wf(),
+{
+    let eff = limits.intersect(other);
+    // min is non-negative: new_min = max(limits.min, other.min) >= limits.min >= 0
+    lemma_max_ge_left::<T>(limits.min.width, other.min.width);
+    T::axiom_le_transitive(T::zero(), limits.min.width, eff.min.width);
+    lemma_max_ge_left::<T>(limits.min.height, other.min.height);
+    T::axiom_le_transitive(T::zero(), limits.min.height, eff.min.height);
+    // max >= min by construction: max = max(new_min, min(...)) >= new_min
+    lemma_max_ge_left::<T>(eff.min.width, min::<T>(limits.max.width, other.max.width));
+    lemma_max_ge_left::<T>(eff.min.height, min::<T>(limits.max.height, other.max.height));
+    // max is non-negative: max >= min >= 0
+    T::axiom_le_transitive(T::zero(), eff.min.width, eff.max.width);
+    T::axiom_le_transitive(T::zero(), eff.min.height, eff.max.height);
+}
+
+/// limits.intersect(other).max <= limits.max when inner_limits.min <= limits.max.
+proof fn lemma_intersect_max_le<T: OrderedRing>(limits: Limits<T>, other: Limits<T>)
+    requires
+        limits.wf(),
+        other.min.width.le(limits.max.width),
+        other.min.height.le(limits.max.height),
+    ensures
+        limits.intersect(other).max.le(limits.max),
+{
+    let eff = limits.intersect(other);
+    // Width: eff.max.width = max(new_min_w, min(limits.max.width, other.max.width))
+    // min(...) <= limits.max.width by lemma_min_le_left
+    lemma_min_le_left::<T>(limits.max.width, other.max.width);
+    // new_min_w = max(limits.min.width, other.min.width)
+    // Both <= limits.max.width, so max <= limits.max.width (case split)
+    let new_min_w = max::<T>(limits.min.width, other.min.width);
+    T::axiom_le_total(limits.min.width, other.min.width);
+    if limits.min.width.le(other.min.width) {
+        // new_min_w = other.min.width <= limits.max.width
+    } else {
+        // new_min_w = limits.min.width <= limits.max.width (by wf)
+    }
+    // Now both sides of outer max <= limits.max.width
+    let inner_w = min::<T>(limits.max.width, other.max.width);
+    T::axiom_le_total(new_min_w, inner_w);
+    // max(new_min_w, inner_w) is whichever is larger, both <= limits.max.width
+
+    // Height: symmetric
+    lemma_min_le_left::<T>(limits.max.height, other.max.height);
+    let new_min_h = max::<T>(limits.min.height, other.min.height);
+    T::axiom_le_total(limits.min.height, other.min.height);
+    let inner_h = min::<T>(limits.max.height, other.max.height);
+    T::axiom_le_total(new_min_h, inner_h);
+}
+
+/// SizedBox layout places its single child within the parent bounds.
+pub proof fn lemma_sized_box_children_within_bounds<T: OrderedField>(
+    limits: Limits<T>,
+    inner_limits: Limits<T>,
+    child: Widget<T>,
+    fuel: nat,
+)
+    requires
+        limits.wf(),
+        fuel > 1,
+        inner_limits.min.width.le(limits.max.width),
+        inner_limits.min.height.le(limits.max.height),
+    ensures
+        layout_widget(limits, Widget::SizedBox {
+            inner_limits, child: Box::new(child),
+        }, fuel).children_within_bounds(),
+{
+    let effective = limits.intersect(inner_limits);
+    let child_node = layout_widget(effective, child, (fuel - 1) as nat);
+    let parent = layout_widget(limits, Widget::SizedBox {
+        inner_limits, child: Box::new(child),
+    }, fuel);
+
+    // Step 1: effective.wf()
+    lemma_intersect_wf(limits, inner_limits);
+
+    // Step 2: child_node.size <= effective.max
+    lemma_layout_respects_limits(effective, child, (fuel - 1) as nat);
+
+    // Step 3: effective.max <= limits.max
+    lemma_intersect_max_le(limits, inner_limits);
+
+    // Step 4: child_node.size <= limits.max (by transitivity)
+    T::axiom_le_transitive(child_node.size.width, effective.max.width, limits.max.width);
+    T::axiom_le_transitive(child_node.size.height, effective.max.height, limits.max.height);
+
+    // Step 5: child_node.size <= limits.resolve(child_node.size)
+    lemma_resolve_ge_input(limits, child_node.size);
+
+    // Now prove children_within_bounds for the single child at (0, 0):
+    // x >= 0: trivial
+    T::axiom_le_reflexive(T::zero());
+    // right() = 0 + child_size.w <= resolve.w
+    // add_zero_left gives: zero.add(w).eqv(w). Need w.eqv(zero.add(w)).
+    verus_algebra::lemmas::additive_group_lemmas::lemma_add_zero_left::<T>(child_node.size.width);
+    T::axiom_eqv_symmetric(T::zero().add(child_node.size.width), child_node.size.width);
+    verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
+        child_node.size.width,
+        T::zero().add(child_node.size.width),
+        limits.resolve(child_node.size).width,
+    );
+    // bottom() = 0 + child_size.h <= resolve.h
+    verus_algebra::lemmas::additive_group_lemmas::lemma_add_zero_left::<T>(child_node.size.height);
+    T::axiom_eqv_symmetric(T::zero().add(child_node.size.height), child_node.size.height);
+    verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
+        child_node.size.height,
+        T::zero().add(child_node.size.height),
+        limits.resolve(child_node.size).height,
+    );
 }
 
 } // verus!

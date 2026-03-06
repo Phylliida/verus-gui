@@ -33,6 +33,19 @@ impl<T: OrderedRing> Limits<T> {
         }
     }
 
+    /// Intersect two limits: max-of-mins for min, clamp max to be >= the new min.
+    pub open spec fn intersect(self, other: Limits<T>) -> Limits<T> {
+        let new_min_w = max::<T>(self.min.width, other.min.width);
+        let new_min_h = max::<T>(self.min.height, other.min.height);
+        Limits {
+            min: Size { width: new_min_w, height: new_min_h },
+            max: Size {
+                width: max::<T>(new_min_w, min::<T>(self.max.width, other.max.width)),
+                height: max::<T>(new_min_h, min::<T>(self.max.height, other.max.height)),
+            },
+        }
+    }
+
     /// Shrink limits by subtracting padding from the max (keeping min unchanged).
     pub open spec fn shrink(self, width: T, height: T) -> Limits<T> {
         Limits {

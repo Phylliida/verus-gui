@@ -59,6 +59,24 @@ impl RuntimeLimits {
         RuntimeSize::new(w, h)
     }
 
+    /// Intersect two limits.
+    pub fn intersect_exec(&self, other: &RuntimeLimits) -> (out: Self)
+        requires
+            self.wf_spec(),
+            other.wf_spec(),
+        ensures
+            out.wf_spec(),
+            out@ == self@.intersect(other@),
+    {
+        let new_min_w = self.min.width.max(&other.min.width);
+        let new_min_h = self.min.height.max(&other.min.height);
+        let new_max_w = new_min_w.max(&self.max.width.min(&other.max.width));
+        let new_max_h = new_min_h.max(&self.max.height.min(&other.max.height));
+        let new_min = RuntimeSize::new(new_min_w, new_min_h);
+        let new_max = RuntimeSize::new(new_max_w, new_max_h);
+        RuntimeLimits::new(new_min, new_max)
+    }
+
     /// Shrink limits by subtracting padding from the max (min unchanged).
     pub fn shrink_exec(&self, pad_w: &RuntimeRational, pad_h: &RuntimeRational) -> (out: Self)
         requires

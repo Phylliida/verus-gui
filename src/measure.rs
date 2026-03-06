@@ -120,6 +120,39 @@ pub open spec fn measure_widget<T: OrderedField>(
                 let th = margin.vertical().add(child_size.height);
                 limits.resolve(Size::new(tw, th))
             },
+            Widget::Conditional { visible, child } => {
+                if visible {
+                    let child_size = measure_widget(limits, *child, (fuel - 1) as nat);
+                    limits.resolve(child_size)
+                } else {
+                    limits.resolve(Size::zero_size())
+                }
+            },
+            Widget::SizedBox { inner_limits, child } => {
+                let effective = limits.intersect(inner_limits);
+                let child_size = measure_widget(effective, *child, (fuel - 1) as nat);
+                limits.resolve(child_size)
+            },
+            Widget::AspectRatio { ratio, child } => {
+                let w1 = limits.max.width;
+                let h1 = w1.div(ratio);
+                let child_size = if h1.le(limits.max.height) {
+                    let eff = Limits {
+                        min: limits.min,
+                        max: Size::new(w1, h1),
+                    };
+                    measure_widget(eff, *child, (fuel - 1) as nat)
+                } else {
+                    let h2 = limits.max.height;
+                    let w2 = h2.mul(ratio);
+                    let eff = Limits {
+                        min: limits.min,
+                        max: Size::new(w2, h2),
+                    };
+                    measure_widget(eff, *child, (fuel - 1) as nat)
+                };
+                limits.resolve(child_size)
+            },
         }
     }
 }
@@ -441,6 +474,36 @@ pub proof fn lemma_measure_is_layout_size<T: OrderedField>(
                 // measure returns limits.resolve(Size::new(tw, th))
                 // layout returns Node { size: limits.resolve(Size::new(tw, th)), ... }
                 // where tw/th are the same in both cases
+            },
+            Widget::Conditional { visible, child } => {
+                if visible {
+                    lemma_measure_is_layout_size(limits, *child, (fuel - 1) as nat);
+                } else {
+                    // Both return limits.resolve(Size::zero_size())
+                }
+            },
+            Widget::SizedBox { inner_limits, child } => {
+                let effective = limits.intersect(inner_limits);
+                lemma_measure_is_layout_size(effective, *child, (fuel - 1) as nat);
+            },
+            Widget::AspectRatio { ratio, child } => {
+                let w1 = limits.max.width;
+                let h1 = w1.div(ratio);
+                if h1.le(limits.max.height) {
+                    let eff = Limits {
+                        min: limits.min,
+                        max: Size::new(w1, h1),
+                    };
+                    lemma_measure_is_layout_size(eff, *child, (fuel - 1) as nat);
+                } else {
+                    let h2 = limits.max.height;
+                    let w2 = h2.mul(ratio);
+                    let eff = Limits {
+                        min: limits.min,
+                        max: Size::new(w2, h2),
+                    };
+                    lemma_measure_is_layout_size(eff, *child, (fuel - 1) as nat);
+                }
             },
         }
     }

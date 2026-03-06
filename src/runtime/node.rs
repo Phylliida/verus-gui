@@ -42,6 +42,19 @@ impl RuntimeNode {
         }
     }
 
+    /// Deep well-formedness: recursively checks all children.
+    /// Required for operations that traverse the full tree (e.g., hit testing).
+    pub open spec fn wf_deep(&self, depth: nat) -> bool
+        decreases depth,
+    {
+        &&& self.wf_shallow()
+        &&& self.children@.len() == self@.children.len()
+        &&& (depth > 0 ==> forall|i: int| 0 <= i < self.children@.len() ==> {
+            &&& (#[trigger] self.children@[i]).wf_deep((depth - 1) as nat)
+            &&& self.children@[i]@ == self@.children[i]
+        })
+    }
+
     /// Shallow well-formedness: checks direct fields only, no recursive child check.
     pub open spec fn wf_shallow(&self) -> bool {
         &&& self.x.wf_spec()
