@@ -3774,8 +3774,13 @@ pub open spec fn widget_size_monotone_ok<T: OrderedRing>(
             Widget::AspectRatio { .. } => false,
             Widget::Leaf { .. } => true,
             Widget::Grid { .. } => true,
-            Widget::Column { children, .. } | Widget::Row { children, .. }
-            | Widget::Stack { children, .. } =>
+            Widget::Column { children, .. } =>
+                forall|i: int| 0 <= i < children.len() ==>
+                    widget_size_monotone_ok(children[i], (fuel - 1) as nat),
+            Widget::Row { children, .. } =>
+                forall|i: int| 0 <= i < children.len() ==>
+                    widget_size_monotone_ok(children[i], (fuel - 1) as nat),
+            Widget::Stack { children, .. } =>
                 forall|i: int| 0 <= i < children.len() ==>
                     widget_size_monotone_ok(children[i], (fuel - 1) as nat),
             Widget::Flex { children, .. } =>
@@ -3784,8 +3789,11 @@ pub open spec fn widget_size_monotone_ok<T: OrderedRing>(
             Widget::Absolute { children, .. } =>
                 forall|i: int| 0 <= i < children.len() ==>
                     widget_size_monotone_ok(children[i].child, (fuel - 1) as nat),
-            Widget::Margin { child, .. } | Widget::Conditional { child, .. }
-            | Widget::SizedBox { child, .. } =>
+            Widget::Margin { child, .. } =>
+                widget_size_monotone_ok(*child, (fuel - 1) as nat),
+            Widget::Conditional { child, .. } =>
+                widget_size_monotone_ok(*child, (fuel - 1) as nat),
+            Widget::SizedBox { child, .. } =>
                 widget_size_monotone_ok(*child, (fuel - 1) as nat),
         }
     }
@@ -4008,16 +4016,7 @@ pub proof fn lemma_layout_widget_monotone<T: OrderedField>(
             );
         },
         Widget::Flex { padding, spacing, alignment, direction, children } => {
-            // Flex output = limits.resolve(limits.max) = limits.max
-            // Trivially monotone: limits1.max ≤ limits2.max
-            lemma_resolve_monotone_max(limits1, limits2, limits1.max);
-            // resolve(limits1.max, limits1) ≤ resolve(limits1.max, limits2)
-            // But layout uses limits.resolve(limits.max) separately for each...
-            // Actually both resolve their own limits.max:
-            // size1 = limits1.resolve(limits1.max), size2 = limits2.resolve(limits2.max)
-            // = limits1.max, limits2.max (since min ≤ max)
-            // So size1 = limits1.max ≤ limits2.max = size2
-            // resolve(max, min, max) = clamp(max, min, max) = max since min ≤ max
+            // Flex output size = limits.resolve(limits.max) regardless of direction
             lemma_resolve_monotone_input_and_max(
                 limits1, limits2, limits1.max, limits2.max,
             );
@@ -4057,17 +4056,26 @@ pub proof fn lemma_layout_widget_monotone<T: OrderedField>(
                 (children[i].x, children[i].y, cn1[i].size));
             let cd2 = Seq::new(cn2.len(), |i: int|
                 (children[i].x, children[i].y, cn2[i].size));
+            // Bridge: cd matches what layout_absolute_body constructs
+            let offsets = Seq::new(children.len(), |i: int|
+                (children[i].x, children[i].y));
+            let body_cd1 = Seq::new(cn1.len(), |i: int|
+                (offsets[i].0, offsets[i].1, cn1[i].size));
+            let body_cd2 = Seq::new(cn2.len(), |i: int|
+                (offsets[i].0, offsets[i].1, cn2[i].size));
+            assert(cd1 =~= body_cd1);
+            assert(cd2 =~= body_cd2);
             lemma_absolute_content_monotone::<T>(cd1, cd2);
             let cont1 = absolute_content_size(cd1);
             let cont2 = absolute_content_size(cd2);
+            T::axiom_le_reflexive(h);
+            T::axiom_le_reflexive(v);
             verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_add_both::<T>(
                 h, h, cont1.width, cont2.width,
             );
-            T::axiom_le_reflexive(h);
             verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_add_both::<T>(
                 v, v, cont1.height, cont2.height,
             );
-            T::axiom_le_reflexive(v);
             lemma_resolve_monotone_input_and_max(
                 limits1, limits2,
                 Size::new(h.add(cont1.width), v.add(cont1.height)),
@@ -4075,10 +4083,13 @@ pub proof fn lemma_layout_widget_monotone<T: OrderedField>(
             );
         },
         Widget::Wrap { .. } => {
-            // Excluded by widget_size_monotone_ok
+            // Excluded by widget_size_monotone_ok (returns false)
+            // Precondition is vacuously false
+            assert(false);
         },
         Widget::AspectRatio { .. } => {
-            // Excluded by widget_size_monotone_ok
+            // Excluded by widget_size_monotone_ok (returns false)
+            assert(false);
         },
     }
 }

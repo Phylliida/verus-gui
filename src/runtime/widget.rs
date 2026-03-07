@@ -519,6 +519,32 @@ pub fn layout_widget_exec(
     }
 }
 
+/// Layout with verified children-within-bounds guarantee.
+/// Wraps `layout_widget_exec` and calls `lemma_layout_widget_cwb` in a proof block
+/// to establish that all children are positioned within the parent's bounds.
+pub fn layout_widget_checked(
+    limits: &RuntimeLimits,
+    widget: &RuntimeWidget,
+    fuel: usize,
+) -> (out: RuntimeNode)
+    requires
+        limits.wf_spec(),
+        limits@.wf(),
+        widget.wf_spec(fuel as nat),
+        fuel > 0,
+        widget_wf::<RationalModel>(limits@, widget.model(), fuel as nat),
+    ensures
+        out.wf_spec(),
+        out@ == layout_widget::<RationalModel>(limits@, widget.model(), fuel as nat),
+        out@.children_within_bounds(),
+{
+    let out = layout_widget_exec(limits, widget, fuel);
+    proof {
+        lemma_layout_widget_cwb::<RationalModel>(limits@, widget.model(), fuel as nat);
+    }
+    out
+}
+
 /// Which layout strategy to use.
 pub enum ContainerKind {
     Column,
