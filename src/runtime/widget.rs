@@ -1269,6 +1269,21 @@ fn layout_grid_widget_exec(
                 }
             }
 
+            // Establish snapshot preservation for old rows
+            assert forall|ri: int, ci: int|
+                0 <= ri < r as int && 0 <= ci < num_cols as int implies
+                #[trigger] child_nodes@[ri * (num_cols as int) + ci]
+                    == pre_inner_cn[ri * (num_cols as int) + ci]
+            by {
+                let idx = ri * (num_cols as int) + ci;
+                assert((ri + 1) * (num_cols as int) <= row_base) by(nonlinear_arith)
+                    requires ri + 1 <= (r as int), (num_cols as int) >= 0,
+                        row_base == (r as int) * (num_cols as int);
+                assert(idx < (ri + 1) * (num_cols as int)) by(nonlinear_arith)
+                    requires idx == ri * (num_cols as int) + ci,
+                        ci < (num_cols as int);
+            }
+
             // Reconstruct completed rows' layout_widget facts from snapshot
             assert forall|ri: int, ci: int|
                 0 <= ri < (r + 1) as int && 0 <= ci < num_cols as int implies
@@ -1278,20 +1293,12 @@ fn layout_grid_widget_exec(
                     children@[ri * num_cols as int + ci].model(),
                     (fuel - 1) as nat)
             by {
-                let idx = ri * (num_cols as int) + ci;
                 if ri < r as int {
-                    // idx < row_base: (ri+1)*nc <= r*nc and ri*nc+ci < (ri+1)*nc
-                    assert((ri + 1) * (num_cols as int) <= row_base) by(nonlinear_arith)
-                        requires ri + 1 <= (r as int), (num_cols as int) >= 0,
-                            row_base == (r as int) * (num_cols as int);
-                    assert(idx < (ri + 1) * (num_cols as int)) by(nonlinear_arith)
-                        requires idx == ri * (num_cols as int) + ci,
-                            ci < (num_cols as int);
-                    assert(child_nodes@[idx] == pre_inner_cn[idx]);
+                    assert(child_nodes@[ri * (num_cols as int) + ci]
+                        == pre_inner_cn[ri * (num_cols as int) + ci]);
                 } else {
-                    // ri == r: from inner loop facts about current row
                     assert(ri == r as int);
-                    assert(idx == row_base + ci);
+                    assert(ri * (num_cols as int) + ci == row_base + ci);
                 }
             }
 
@@ -1304,26 +1311,14 @@ fn layout_grid_widget_exec(
                 }
             } by {
                 if ri < r as int {
-                    // child_sizes_2d@[ri]@[ci]@ == pre_inner_cn[ri*nc+ci]@.size (inner loop invariant)
-                    // pre_inner_cn[ri*nc+ci] == child_nodes@[ri*nc+ci] (snapshot preserved)
-                    // So child_sizes_2d@[ri]@[ci]@ == child_nodes@[ri*nc+ci]@.size
                     assert forall|ci: int| 0 <= ci < num_cols as int implies {
                         &&& (#[trigger] child_sizes_2d@[ri]@[ci]).wf_spec()
                         &&& child_sizes_2d@[ri]@[ci]@ == child_nodes@[ri * num_cols as int + ci]@.size
                     } by {
-                        let idx = ri * (num_cols as int) + ci;
-                        assert((ri + 1) * (num_cols as int) <= row_base) by(nonlinear_arith)
-                            requires ri + 1 <= (r as int), (num_cols as int) >= 0,
-                                row_base == (r as int) * (num_cols as int);
-                        assert(idx < (ri + 1) * (num_cols as int)) by(nonlinear_arith)
-                            requires idx == ri * (num_cols as int) + ci,
-                                ci < (num_cols as int);
-                        assert(child_nodes@[idx] == pre_inner_cn[idx]);
-                        // Now: child_sizes_2d@[ri]@[ci]@ == pre_inner_cn[idx]@.size (inner loop inv)
-                        //   == child_nodes@[idx]@.size (from snapshot equality)
+                        assert(child_nodes@[ri * (num_cols as int) + ci]
+                            == pre_inner_cn[ri * (num_cols as int) + ci]);
                     }
                 } else {
-                    // ri == r: the pushed row
                     assert(ri == r as int);
                     assert(child_sizes_2d@[ri]@ =~= row_sizes_view);
                     assert(row_sizes_view.len() == num_cols as int);

@@ -3758,8 +3758,114 @@ pub proof fn lemma_layout_widget_cwb<T: OrderedField>(
 
 // ── Layout widget size monotonicity ─────────────────────────────────
 
-/// Predicate: widget tree contains no Wrap or AspectRatio nodes (for which
-/// pointwise-size monotonicity doesn't hold or is too complex).
+/// AspectRatio effective-limits monotonicity helper.
+///
+/// Given limits1.max ≤ limits2.max (same min) and 0 < ratio, the effective
+/// limits chosen by AspectRatio's branch logic satisfy eff1.max ≤ eff2.max.
+///
+/// 4 branch cases: (width-first, width-first), (hf, hf), (wf, hf), (hf, wf).
+proof fn lemma_aspect_ratio_eff_monotone<T: OrderedField>(
+    limits1: Limits<T>,
+    limits2: Limits<T>,
+    ratio: T,
+)
+    requires
+        limits1.wf(),
+        limits2.wf(),
+        limits1.min.width.eqv(limits2.min.width),
+        limits1.min.height.eqv(limits2.min.height),
+        limits1.max.le(limits2.max),
+        T::zero().lt(ratio),
+    ensures ({
+        let w1_1 = limits1.max.width;
+        let h1_1 = w1_1.div(ratio);
+        let eff1_max = if h1_1.le(limits1.max.height) {
+            Size::new(w1_1, h1_1)
+        } else {
+            Size::new(limits1.max.height.mul(ratio), limits1.max.height)
+        };
+        let w1_2 = limits2.max.width;
+        let h1_2 = w1_2.div(ratio);
+        let eff2_max = if h1_2.le(limits2.max.height) {
+            Size::new(w1_2, h1_2)
+        } else {
+            Size::new(limits2.max.height.mul(ratio), limits2.max.height)
+        };
+        eff1_max.le(eff2_max)
+    }),
+{
+    let w1 = limits1.max.width;
+    let w2 = limits2.max.width;
+    let h_max1 = limits1.max.height;
+    let h_max2 = limits2.max.height;
+    let h1 = w1.div(ratio);
+    let h2 = w2.div(ratio);
+
+    // 0 < ratio → 0 ≤ ratio
+    T::axiom_lt_iff_le_and_not_eqv(T::zero(), ratio);
+    // !zero.eqv(ratio)
+    T::axiom_eqv_symmetric(T::zero(), ratio);
+    // So !ratio.eqv(zero) — needed for div_mul_cancel
+
+    if h1.le(h_max1) {
+        if h2.le(h_max2) {
+            // Case WF→WF: eff1=(w1, w1/r), eff2=(w2, w2/r)
+            // w1 ≤ w2 from limits
+            // w1/r ≤ w2/r by div monotone
+            verus_algebra::lemmas::ordered_field_lemmas::lemma_le_div_monotone::<T>(
+                w1, w2, ratio,
+            );
+        } else {
+            // Case WF→HF: eff1=(w1, w1/r), eff2=(h_max2*r, h_max2)
+            // w1/r ≤ h_max1 (branch cond) and h_max1 ≤ h_max2 (limits)
+            T::axiom_le_transitive(h1, h_max1, h_max2);
+            // So w1/r ≤ h_max2 ✓
+            // For w1 ≤ h_max2*r: multiply (w1/r ≤ h_max2) by r ≥ 0
+            T::axiom_le_mul_nonneg_monotone(h1, h_max2, ratio);
+            // gives (w1/r)*r ≤ h_max2*r
+            // (w1/r)*r ≡ w1 by div_mul_cancel
+            verus_algebra::lemmas::field_lemmas::lemma_div_mul_cancel::<T>(w1, ratio);
+            // w1 ≤ h_max2*r by congruence
+            T::axiom_eqv_reflexive(h_max2.mul(ratio));
+            T::axiom_le_congruence(
+                h1.mul(ratio), w1,
+                h_max2.mul(ratio), h_max2.mul(ratio),
+            );
+        }
+    } else {
+        // L1 takes height-first: ¬(w1/r ≤ h_max1) → h_max1 ≤ w1/r
+        T::axiom_le_total(h1, h_max1);
+        // h_max1.le(h1) = h_max1 ≤ w1/r
+
+        if h2.le(h_max2) {
+            // Case HF→WF: eff1=(h_max1*r, h_max1), eff2=(w2, w2/r)
+            // h_max1 ≤ w1/r ≤ w2/r (div monotone + transitive)
+            verus_algebra::lemmas::ordered_field_lemmas::lemma_le_div_monotone::<T>(
+                w1, w2, ratio,
+            );
+            T::axiom_le_transitive(h_max1, h1, h2);
+            // So h_max1 ≤ w2/r ✓
+            // For h_max1*r ≤ w2: multiply (h_max1 ≤ w1/r) by r ≥ 0
+            T::axiom_le_mul_nonneg_monotone(h_max1, h1, ratio);
+            // h_max1*r ≤ (w1/r)*r ≡ w1 ≤ w2
+            verus_algebra::lemmas::field_lemmas::lemma_div_mul_cancel::<T>(w1, ratio);
+            T::axiom_eqv_reflexive(h_max1.mul(ratio));
+            T::axiom_le_congruence(
+                h_max1.mul(ratio), h_max1.mul(ratio),
+                h1.mul(ratio), w1,
+            );
+            T::axiom_le_transitive(h_max1.mul(ratio), w1, w2);
+        } else {
+            // Case HF→HF: eff1=(h_max1*r, h_max1), eff2=(h_max2*r, h_max2)
+            // h_max1 ≤ h_max2 from limits
+            // h_max1*r ≤ h_max2*r by mul nonneg monotone
+            T::axiom_le_mul_nonneg_monotone(h_max1, h_max2, ratio);
+        }
+    }
+}
+
+/// Predicate: widget tree contains no Wrap nodes (for which pointwise-size
+/// monotonicity doesn't hold). AspectRatio requires ratio > 0.
 /// Grid children are excluded from the check because they use fixed cell limits.
 pub open spec fn widget_size_monotone_ok<T: OrderedRing>(
     widget: Widget<T>,
@@ -3771,7 +3877,9 @@ pub open spec fn widget_size_monotone_ok<T: OrderedRing>(
     else {
         match widget {
             Widget::Wrap { .. } => false,
-            Widget::AspectRatio { .. } => false,
+            Widget::AspectRatio { ratio, child } =>
+                T::zero().lt(ratio)
+                && widget_size_monotone_ok(*child, (fuel - 1) as nat),
             Widget::Leaf { .. } => true,
             Widget::Grid { .. } => true,
             Widget::Column { children, .. } =>
@@ -3799,6 +3907,77 @@ pub open spec fn widget_size_monotone_ok<T: OrderedRing>(
     }
 }
 
+/// Recursive well-formedness predicate for monotonicity proofs.
+///
+/// Tracks that AspectRatio effective limits are wf through the widget tree.
+/// For containers, recurses into children under the same inner limits that
+/// the monotonicity proof uses. For Flex/Grid/Leaf/Wrap, returns true
+/// (Flex/Grid don't recurse in the monotonicity proof, Leaf is trivial,
+/// Wrap is excluded by widget_size_monotone_ok).
+pub closed spec fn widget_monotone_wf<T: OrderedField>(
+    limits: Limits<T>,
+    widget: Widget<T>,
+    fuel: nat,
+) -> bool
+    decreases fuel,
+{
+    if fuel == 0 { true }
+    else {
+        match widget {
+            Widget::AspectRatio { ratio, child } => {
+                let w1 = limits.max.width;
+                let h1 = w1.div(ratio);
+                let eff = if h1.le(limits.max.height) {
+                    Limits { min: limits.min, max: Size::new(w1, h1) }
+                } else {
+                    let w2 = limits.max.height.mul(ratio);
+                    Limits { min: limits.min, max: Size::new(w2, limits.max.height) }
+                };
+                eff.wf() && widget_monotone_wf(eff, *child, (fuel - 1) as nat)
+            },
+            Widget::Column { padding, spacing, alignment, children } => {
+                let inner = limits.shrink(padding.horizontal(), padding.vertical());
+                forall|i: int| 0 <= i < children.len() ==>
+                    widget_monotone_wf(inner, children[i], (fuel - 1) as nat)
+            },
+            Widget::Row { padding, spacing, alignment, children } => {
+                let inner = limits.shrink(padding.horizontal(), padding.vertical());
+                forall|i: int| 0 <= i < children.len() ==>
+                    widget_monotone_wf(inner, children[i], (fuel - 1) as nat)
+            },
+            Widget::Stack { padding, h_align, v_align, children } => {
+                let inner = limits.shrink(padding.horizontal(), padding.vertical());
+                forall|i: int| 0 <= i < children.len() ==>
+                    widget_monotone_wf(inner, children[i], (fuel - 1) as nat)
+            },
+            Widget::Absolute { padding, children } => {
+                let inner = limits.shrink(padding.horizontal(), padding.vertical());
+                forall|i: int| 0 <= i < children.len() ==>
+                    widget_monotone_wf(inner, children[i].child, (fuel - 1) as nat)
+            },
+            Widget::Margin { margin, child } => {
+                let inner = limits.shrink(margin.horizontal(), margin.vertical());
+                widget_monotone_wf(inner, *child, (fuel - 1) as nat)
+            },
+            Widget::Conditional { visible, child } => {
+                if visible {
+                    widget_monotone_wf(limits, *child, (fuel - 1) as nat)
+                } else {
+                    true
+                }
+            },
+            Widget::SizedBox { inner_limits, child } => {
+                let eff = limits.intersect(inner_limits);
+                widget_monotone_wf(eff, *child, (fuel - 1) as nat)
+            },
+            Widget::Leaf { .. } => true,
+            Widget::Flex { .. } => true,
+            Widget::Grid { .. } => true,
+            Widget::Wrap { .. } => true,
+        }
+    }
+}
+
 /// Master monotonicity: widening limits.max (with same min) widens the output size.
 pub proof fn lemma_layout_widget_monotone<T: OrderedField>(
     limits1: Limits<T>,
@@ -3813,11 +3992,13 @@ pub proof fn lemma_layout_widget_monotone<T: OrderedField>(
         limits1.min.height.eqv(limits2.min.height),
         limits1.max.le(limits2.max),
         widget_size_monotone_ok(widget, fuel),
+        widget_monotone_wf(limits1, widget, fuel),
     ensures
         layout_widget(limits1, widget, fuel).size.le(
             layout_widget(limits2, widget, fuel).size),
     decreases fuel, 0nat,
 {
+    reveal(widget_monotone_wf);
     if fuel == 0 {
         // Both return zero node → trivially equal
         T::axiom_le_reflexive(T::zero());
@@ -4087,9 +4268,68 @@ pub proof fn lemma_layout_widget_monotone<T: OrderedField>(
             // Precondition is vacuously false
             assert(false);
         },
-        Widget::AspectRatio { .. } => {
-            // Excluded by widget_size_monotone_ok (returns false)
-            assert(false);
+        Widget::AspectRatio { ratio, child } => {
+            // Compute eff1 and eff2 (same branch logic as layout_widget)
+            let w1_1 = limits1.max.width;
+            let h1_1 = w1_1.div(ratio);
+            let eff1 = if h1_1.le(limits1.max.height) {
+                Limits { min: limits1.min, max: Size::new(w1_1, h1_1) }
+            } else {
+                let w2_1 = limits1.max.height.mul(ratio);
+                Limits { min: limits1.min, max: Size::new(w2_1, limits1.max.height) }
+            };
+            let w1_2 = limits2.max.width;
+            let h1_2 = w1_2.div(ratio);
+            let eff2 = if h1_2.le(limits2.max.height) {
+                Limits { min: limits2.min, max: Size::new(w1_2, h1_2) }
+            } else {
+                let w2_2 = limits2.max.height.mul(ratio);
+                Limits { min: limits2.min, max: Size::new(w2_2, limits2.max.height) }
+            };
+
+            // eff1.wf() from widget_monotone_wf
+            // eff1.max ≤ eff2.max from lemma_aspect_ratio_eff_monotone
+            lemma_aspect_ratio_eff_monotone(limits1, limits2, ratio);
+
+            // eff1.min ≡ eff2.min (both are limits.min, which are eqv)
+            // (eff1.min = limits1.min, eff2.min = limits2.min)
+
+            // Derive eff2.wf() from eff1.wf() + eff1.max ≤ eff2.max + same min
+            // min ≤ eff1.max (from eff1.wf) and eff1.max ≤ eff2.max → min ≤ eff2.max
+            T::axiom_le_transitive(
+                eff1.min.width, eff1.max.width, eff2.max.width,
+            );
+            T::axiom_le_transitive(
+                eff1.min.height, eff1.max.height, eff2.max.height,
+            );
+            // eff2.min = limits2.min, eff1.min = limits1.min, limits1.min ≡ limits2.min
+            // So eff1.min ≡ eff2.min → eff2.min ≤ eff2.max by congruence
+            T::axiom_eqv_reflexive(eff2.max.width);
+            T::axiom_eqv_reflexive(eff2.max.height);
+            T::axiom_le_congruence(
+                eff1.min.width, eff2.min.width,
+                eff2.max.width, eff2.max.width,
+            );
+            T::axiom_le_congruence(
+                eff1.min.height, eff2.min.height,
+                eff2.max.height, eff2.max.height,
+            );
+            // eff2.min nonneg: from limits2.wf()
+            // eff2.max nonneg: 0 ≤ eff2.min ≤ eff2.max
+            T::axiom_le_transitive(
+                T::zero(), eff2.min.width, eff2.max.width,
+            );
+            T::axiom_le_transitive(
+                T::zero(), eff2.min.height, eff2.max.height,
+            );
+
+            // Recursive call: child sizes monotone under eff1 vs eff2
+            lemma_layout_widget_monotone(eff1, eff2, *child, (fuel - 1) as nat);
+            let cs1 = layout_widget(eff1, *child, (fuel - 1) as nat).size;
+            let cs2 = layout_widget(eff2, *child, (fuel - 1) as nat).size;
+
+            // Output = limits.resolve(child_size), monotone in both limits.max and input
+            lemma_resolve_monotone_input_and_max(limits1, limits2, cs1, cs2);
         },
     }
 }
