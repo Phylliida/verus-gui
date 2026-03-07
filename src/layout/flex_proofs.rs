@@ -1068,4 +1068,406 @@ pub proof fn lemma_flex_column_children_within_bounds<T: OrderedField>(
     crate::layout::proofs::lemma_merge_layout_cwb(layout, cn);
 }
 
+// ── Flex row CWB ─────────────────────────────────────────────────
+
+/// Flex row layout has children_within_bounds.
+///
+/// Symmetric to column: main axis = width (X), cross axis = height (Y).
+pub proof fn lemma_flex_row_children_within_bounds<T: OrderedField>(
+    limits: crate::limits::Limits<T>,
+    padding: crate::padding::Padding<T>,
+    spacing: T,
+    alignment: crate::alignment::Alignment,
+    children: Seq<crate::widget::FlexItem<T>>,
+    fuel: nat,
+)
+    requires
+        limits.wf(),
+        fuel > 1,
+        padding.is_nonneg(),
+        T::zero().le(spacing),
+        padding.horizontal().add(limits.min.width).le(limits.max.width),
+        padding.vertical().add(limits.min.height).le(limits.max.height),
+        limits.min.width.eqv(T::zero()),
+        children.len() > 0,
+        forall|i: int| 0 <= i < children.len() ==>
+            T::zero().le(children[i].weight),
+        ({
+            let weights = Seq::new(children.len(), |i: int| children[i].weight);
+            T::zero().lt(sum_weights(weights, weights.len() as nat))
+        }),
+        ({
+            let h = padding.horizontal();
+            let total_spacing = repeated_add(spacing, (children.len() - 1) as nat);
+            h.add(total_spacing).le(limits.max.width)
+        }),
+    ensures
+        crate::widget::layout_widget(limits, crate::widget::Widget::Flex {
+            padding, spacing, alignment,
+            direction: crate::widget::FlexDirection::Row,
+            children,
+        }, fuel).children_within_bounds(),
+{
+    let h = padding.horizontal();
+    let v = padding.vertical();
+    let inner = limits.shrink(h, v);
+    let weights = Seq::new(children.len(), |i: int| children[i].weight);
+    let tw = sum_weights(weights, weights.len() as nat);
+    let total_spacing = repeated_add(spacing, (children.len() - 1) as nat);
+    let n = children.len() as nat;
+
+    // h >= 0, v >= 0
+    crate::layout::proofs::lemma_nonneg_sum(padding.left, padding.right);
+    crate::layout::proofs::lemma_nonneg_sum(padding.top, padding.bottom);
+
+    // inner.wf
+    crate::layout::proofs::lemma_shrink_wf(limits, h, v);
+    crate::layout::proofs::lemma_add_comm_le(h, limits.min.width, limits.max.width);
+    crate::layout::proofs::lemma_add_comm_le(v, limits.min.height, limits.max.height);
+
+    // min.w ≡ 0 → min.w.le(max.w - h), so inner.max.w = max.w - h
+    T::axiom_add_zero_right(h);
+    T::axiom_eqv_symmetric(h.add(T::zero()), h);
+    T::axiom_add_congruence_left(limits.min.width, T::zero(), h);
+    T::axiom_eqv_symmetric(limits.min.width.add(h), T::zero().add(h));
+    T::axiom_add_commutative(T::zero(), h);
+    T::axiom_eqv_transitive(limits.min.width.add(h), T::zero().add(h), h.add(T::zero()));
+    T::axiom_eqv_transitive(limits.min.width.add(h), h.add(T::zero()), h);
+    crate::layout::proofs::lemma_add_comm_le(h, limits.min.width, limits.max.width);
+    T::axiom_eqv_symmetric(limits.min.width.add(h), h);
+    verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
+        limits.min.width.add(h), h, limits.max.width,
+    );
+    // h.le(max.w)
+    verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_sub_monotone::<T>(
+        h, limits.max.width, h,
+    );
+    verus_algebra::lemmas::additive_group_lemmas::lemma_sub_self::<T>(h);
+    verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
+        h.sub(h), T::zero(), limits.max.width.sub(h),
+    );
+    // 0 <= max.w - h
+    T::axiom_eqv_symmetric(limits.min.width, T::zero());
+    verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
+        T::zero(), limits.min.width, limits.max.width.sub(h),
+    );
+    // min.w.le(max.w - h) → inner.max.w = max.w - h
+
+    // avail_w = inner.max.w - total_spacing, avail_h = inner.max.h
+    let avail_w = inner.max.width.sub(total_spacing);
+    let avail_h = limits.max.height.sub(v);
+
+    // avail_w >= 0: h + total_spacing <= max.w from precondition
+    assert(h.add(total_spacing).le(limits.max.width));
+    T::axiom_add_commutative(h, total_spacing);
+    verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
+        h.add(total_spacing), total_spacing.add(h), limits.max.width,
+    );
+    verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_sub_monotone::<T>(
+        total_spacing.add(h), limits.max.width, h,
+    );
+    verus_algebra::lemmas::additive_group_lemmas::lemma_add_then_sub_cancel::<T>(total_spacing, h);
+    verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
+        total_spacing.add(h).sub(h), total_spacing, limits.max.width.sub(h),
+    );
+    // total_spacing.le(max.w - h) = total_spacing.le(inner.max.w)
+
+    verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_sub_monotone::<T>(
+        total_spacing, limits.max.width.sub(h), total_spacing,
+    );
+    verus_algebra::lemmas::additive_group_lemmas::lemma_sub_self::<T>(total_spacing);
+    verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
+        total_spacing.sub(total_spacing), T::zero(), limits.max.width.sub(h).sub(total_spacing),
+    );
+    // 0 <= avail_w
+
+    // tw > 0
+    T::axiom_lt_iff_le_and_not_eqv(T::zero(), tw);
+    assert(!tw.eqv(T::zero())) by {
+        if tw.eqv(T::zero()) { T::axiom_eqv_symmetric(tw, T::zero()); }
+    };
+
+    // shrink max bound (height side)
+    crate::layout::proofs::lemma_shrink_max_bound(limits, h, v);
+    verus_algebra::lemmas::additive_group_lemmas::lemma_sub_then_add_cancel::<T>(
+        limits.max.height, v,
+    );
+    T::axiom_eqv_symmetric(avail_h.add(v), limits.max.height);
+    verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_right::<T>(
+        inner.max.height.add(v), limits.max.height, avail_h.add(v),
+    );
+    crate::layout::proofs::lemma_le_add_cancel_right(inner.max.height, avail_h, v);
+    // inner.max.height.le(avail_h)
+
+    // cn = widget child nodes
+    let cn = crate::widget::flex_row_widget_child_nodes(
+        inner, children, weights, tw, avail_w, (fuel - 1) as nat,
+    );
+    let child_cross_sizes = Seq::new(cn.len(), |i: int| cn[i].size.height);
+
+    // Each child: bound on size
+    assert forall|k: int| 0 <= k < cn.len() implies
+        cn[k].size.height.le(avail_h)
+        && cn[k].size.width.le(
+            flex_child_main_size(weights[k], tw, avail_w))
+        && T::zero().le(cn[k].size.width)
+        && T::zero().le(cn[k].size.height)
+    by {
+        let main_alloc = flex_child_main_size(weights[k], tw, avail_w);
+        lemma_flex_child_main_size_nonneg(weights[k], tw, avail_w);
+        let child_lim = crate::limits::Limits {
+            min: inner.min,
+            max: crate::size::Size::new(main_alloc, inner.max.height),
+        };
+        // child_lim.wf: inner.min.w ≡ 0 <= main_alloc
+        T::axiom_eqv_symmetric(limits.min.width, T::zero());
+        verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
+            T::zero(), limits.min.width, main_alloc,
+        );
+        T::axiom_le_transitive(T::zero(), inner.min.height, inner.max.height);
+        crate::layout::proofs::lemma_layout_respects_limits(
+            child_lim, children[k].child, (fuel - 1) as nat,
+        );
+        T::axiom_le_transitive(cn[k].size.height, inner.max.height, avail_h);
+        T::axiom_le_transitive(T::zero(), inner.min.width, cn[k].size.width);
+        T::axiom_le_transitive(T::zero(), inner.min.height, cn[k].size.height);
+    };
+
+    // top + avail_h <= max.h
+    crate::layout::proofs::lemma_le_add_nonneg(padding.top, padding.bottom);
+    T::axiom_le_add_monotone(padding.top, v, avail_h);
+    T::axiom_add_commutative(v, limits.max.height.sub(v));
+    verus_algebra::lemmas::additive_group_lemmas::lemma_sub_then_add_cancel::<T>(
+        limits.max.height, v,
+    );
+    T::axiom_eqv_transitive(
+        v.add(inner.max.height),
+        limits.max.height.sub(v).add(v),
+        limits.max.height,
+    );
+    T::axiom_add_commutative(padding.top, padding.bottom);
+    verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_right::<T>(
+        padding.top.add(inner.max.height), v.add(inner.max.height), limits.max.height,
+    );
+    // padding.top.add(inner.max.height).le(limits.max.height)
+
+    // left + avail_w + total_spacing <= max.w:
+    verus_algebra::lemmas::additive_group_lemmas::lemma_sub_then_add_cancel::<T>(
+        inner.max.width, total_spacing,
+    );
+    // avail_w.add(total_spacing).eqv(inner.max.width)
+    crate::layout::proofs::lemma_le_add_nonneg(padding.left, padding.right);
+    T::axiom_le_add_monotone(padding.left, h, inner.max.width);
+    // left.add(inner.max.w).le(h.add(inner.max.w))
+    // h + inner.max.w = h + (max.w - h) ≡ max.w
+    verus_algebra::lemmas::additive_group_lemmas::lemma_sub_then_add_cancel::<T>(
+        limits.max.width, h,
+    );
+    T::axiom_add_commutative(h, limits.max.width.sub(h));
+    T::axiom_eqv_transitive(
+        h.add(inner.max.width),
+        limits.max.width.sub(h).add(h),
+        limits.max.width,
+    );
+    verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_right::<T>(
+        padding.left.add(inner.max.width), h.add(inner.max.width), limits.max.width,
+    );
+    // padding.left.add(inner.max.width).le(limits.max.width)
+
+    // Layout children structure
+    lemma_flex_row_children_len(
+        padding, spacing, alignment, weights, child_cross_sizes,
+        tw, avail_w, avail_h, 0,
+    );
+
+    let layout = flex_row_layout(
+        limits, padding, spacing, alignment, weights, child_cross_sizes,
+    );
+
+    // Per-child bounds
+    assert forall|i: int| 0 <= i < cn.len() implies
+        T::zero().le(layout.children[i].x)
+        && T::zero().le(layout.children[i].y)
+        && layout.children[i].x.add(cn[i].size.width).le(layout.size.width)
+        && layout.children[i].y.add(cn[i].size.height).le(layout.size.height)
+    by {
+        lemma_flex_row_children_element(
+            padding, spacing, alignment, weights, child_cross_sizes,
+            tw, avail_w, avail_h, i as nat,
+        );
+
+        // Y lower: top <= top + align_offset, 0 <= top
+        crate::layout::proofs::lemma_row_child_y_lower_bound(
+            padding.top, alignment, avail_h, child_cross_sizes[i],
+        );
+        T::axiom_le_transitive(T::zero(), padding.top, layout.children[i].y);
+
+        // Y upper: top + align_offset + h <= top + avail_h <= max.h
+        crate::layout::proofs::lemma_row_child_y_upper_bound(
+            padding.top, alignment, avail_h, child_cross_sizes[i],
+        );
+        T::axiom_le_transitive(
+            layout.children[i].y.add(cn[i].size.height),
+            padding.top.add(avail_h),
+            limits.max.height,
+        );
+
+        // X lower: 0 <= left (nonneg padding), flex_main_sum >= 0, repeated_add >= 0
+        lemma_flex_main_sum_nonneg(weights, tw, avail_w, i as nat);
+        crate::layout::proofs::lemma_repeated_add_nonneg(spacing, i as nat);
+        crate::layout::proofs::lemma_nonneg_sum(
+            padding.left,
+            flex_main_sum(weights, tw, avail_w, i as nat),
+        );
+        crate::layout::proofs::lemma_nonneg_sum(
+            padding.left.add(flex_main_sum(weights, tw, avail_w, i as nat)),
+            repeated_add(spacing, i as nat),
+        );
+        // 0 <= x_i
+
+        // X upper bound: x_i + cn[i].size.width <= max.w
+        let fms_i = flex_child_main_size(weights[i], tw, avail_w);
+        let sum_i = flex_main_sum(weights, tw, avail_w, i as nat);
+        let sum_i1 = flex_main_sum(weights, tw, avail_w, (i + 1) as nat);
+        let sum_n = flex_main_sum(weights, tw, avail_w, n);
+        let rep_i = repeated_add(spacing, i as nat);
+
+        // Step 1: x_i + cn[i].size.width <= x_i + fms_i
+        T::axiom_le_add_monotone(cn[i].size.width, fms_i, layout.children[i].x);
+        T::axiom_add_commutative(cn[i].size.width, layout.children[i].x);
+        T::axiom_add_commutative(fms_i, layout.children[i].x);
+        T::axiom_le_congruence(
+            cn[i].size.width.add(layout.children[i].x),
+            layout.children[i].x.add(cn[i].size.width),
+            fms_i.add(layout.children[i].x),
+            layout.children[i].x.add(fms_i),
+        );
+
+        // Step 2: x_i + fms_i ≡ left + sum(i+1) + rep(i)
+        let xi_fms = layout.children[i].x.add(fms_i);
+        T::axiom_add_associative(padding.left.add(sum_i), rep_i, fms_i);
+        T::axiom_add_commutative(rep_i, fms_i);
+        T::axiom_eqv_reflexive(padding.left.add(sum_i));
+        verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence::<T>(
+            padding.left.add(sum_i), padding.left.add(sum_i),
+            rep_i.add(fms_i), fms_i.add(rep_i),
+        );
+        T::axiom_eqv_transitive(
+            xi_fms,
+            padding.left.add(sum_i).add(rep_i.add(fms_i)),
+            padding.left.add(sum_i).add(fms_i.add(rep_i)),
+        );
+        T::axiom_add_associative(padding.left.add(sum_i), fms_i, rep_i);
+        T::axiom_eqv_symmetric(
+            padding.left.add(sum_i).add(fms_i).add(rep_i),
+            padding.left.add(sum_i).add(fms_i.add(rep_i)),
+        );
+        T::axiom_eqv_transitive(
+            xi_fms,
+            padding.left.add(sum_i).add(fms_i.add(rep_i)),
+            padding.left.add(sum_i).add(fms_i).add(rep_i),
+        );
+        T::axiom_add_associative(padding.left, sum_i, fms_i);
+        T::axiom_add_congruence_left(
+            padding.left.add(sum_i).add(fms_i), padding.left.add(sum_i1), rep_i,
+        );
+        T::axiom_eqv_transitive(
+            xi_fms,
+            padding.left.add(sum_i).add(fms_i).add(rep_i),
+            padding.left.add(sum_i1).add(rep_i),
+        );
+
+        // Step 3: left + sum(i+1) + rep(i) <= left + sum(n) + total_spacing
+        lemma_flex_main_sum_monotone(weights, tw, avail_w, (i + 1) as nat, n);
+        crate::layout::proofs::lemma_repeated_add_monotone(spacing, i as nat, (n - 1) as nat);
+        verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_add_both::<T>(
+            sum_i1, sum_n, rep_i, total_spacing,
+        );
+        T::axiom_le_add_monotone(
+            sum_i1.add(rep_i), sum_n.add(total_spacing), padding.left,
+        );
+        T::axiom_add_commutative(sum_i1.add(rep_i), padding.left);
+        T::axiom_add_commutative(sum_n.add(total_spacing), padding.left);
+        T::axiom_le_congruence(
+            sum_i1.add(rep_i).add(padding.left), padding.left.add(sum_i1.add(rep_i)),
+            sum_n.add(total_spacing).add(padding.left), padding.left.add(sum_n.add(total_spacing)),
+        );
+        T::axiom_add_associative(padding.left, sum_i1, rep_i);
+        T::axiom_eqv_symmetric(
+            padding.left.add(sum_i1).add(rep_i),
+            padding.left.add(sum_i1.add(rep_i)),
+        );
+        verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
+            padding.left.add(sum_i1.add(rep_i)),
+            padding.left.add(sum_i1).add(rep_i),
+            padding.left.add(sum_n.add(total_spacing)),
+        );
+        T::axiom_add_associative(padding.left, sum_n, total_spacing);
+        T::axiom_eqv_symmetric(
+            padding.left.add(sum_n).add(total_spacing),
+            padding.left.add(sum_n.add(total_spacing)),
+        );
+        verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_right::<T>(
+            padding.left.add(sum_i1).add(rep_i),
+            padding.left.add(sum_n.add(total_spacing)),
+            padding.left.add(sum_n).add(total_spacing),
+        );
+
+        // Step 4: sum_n ≡ avail_w → left + sum_n + ts ≡ left + avail_w + ts
+        lemma_flex_sizes_sum_to_available(weights, avail_w);
+        T::axiom_eqv_reflexive(padding.left);
+        verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence::<T>(
+            padding.left, padding.left, sum_n, avail_w,
+        );
+        T::axiom_add_congruence_left(
+            padding.left.add(sum_n), padding.left.add(avail_w), total_spacing,
+        );
+        verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_right::<T>(
+            padding.left.add(sum_i1).add(rep_i),
+            padding.left.add(sum_n).add(total_spacing),
+            padding.left.add(avail_w).add(total_spacing),
+        );
+
+        // Step 5: left + avail_w + ts ≡ left + inner.max.w <= max.w
+        T::axiom_eqv_reflexive(padding.left);
+        verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence::<T>(
+            padding.left, padding.left,
+            avail_w.add(total_spacing), inner.max.width,
+        );
+        T::axiom_add_associative(padding.left, avail_w, total_spacing);
+        T::axiom_eqv_transitive(
+            padding.left.add(avail_w).add(total_spacing),
+            padding.left.add(avail_w.add(total_spacing)),
+            padding.left.add(inner.max.width),
+        );
+        verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_right::<T>(
+            padding.left.add(sum_i1).add(rep_i),
+            padding.left.add(avail_w).add(total_spacing),
+            padding.left.add(inner.max.width),
+        );
+
+        // Full chain: x_i + w <= xi_fms ≡ left+sum_i1+rep_i <= left+inner.max.w <= max.w
+        T::axiom_eqv_symmetric(xi_fms, padding.left.add(sum_i1).add(rep_i));
+        verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
+            padding.left.add(sum_i1).add(rep_i), xi_fms,
+            padding.left.add(inner.max.width),
+        );
+        T::axiom_le_transitive(
+            layout.children[i].x.add(cn[i].size.width),
+            xi_fms,
+            padding.left.add(inner.max.width),
+        );
+        T::axiom_le_transitive(
+            layout.children[i].x.add(cn[i].size.width),
+            padding.left.add(inner.max.width),
+            limits.max.width,
+        );
+
+        // Connect cn[i].size to child_cross_sizes[i]
+        assert(child_cross_sizes[i] === cn[i].size.height);
+    };
+
+    crate::layout::proofs::lemma_merge_layout_cwb(layout, cn);
+}
+
 } // verus!
