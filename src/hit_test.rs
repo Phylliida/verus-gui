@@ -1,6 +1,7 @@
 use vstd::prelude::*;
 use verus_algebra::traits::ordered_ring::OrderedRing;
 use crate::node::Node;
+use crate::size::Size;
 
 verus! {
 
@@ -218,6 +219,144 @@ pub proof fn lemma_hit_test_path_valid<T: OrderedRing>(
         path_valid(node, hit_test(node, px, py, fuel).unwrap()),
 {
     lemma_hit_test_inner_path_valid(node, px, py, fuel);
+}
+
+// ── ScrollView clipping ───────────────────────────────────────────
+
+/// Construct a ScrollView-shaped node: viewport at (0,0) with size (vw, vh),
+/// containing a single child offset by (-scroll_x, -scroll_y).
+pub open spec fn scrollview_node<T: OrderedRing>(
+    viewport_w: T,
+    viewport_h: T,
+    scroll_x: T,
+    scroll_y: T,
+    child: Node<T>,
+) -> Node<T> {
+    Node {
+        x: T::zero(),
+        y: T::zero(),
+        size: Size::new(viewport_w, viewport_h),
+        children: Seq::empty().push(Node {
+            x: scroll_x.neg(),
+            y: scroll_y.neg(),
+            size: child.size,
+            children: child.children,
+        }),
+    }
+}
+
+/// If hit_test on a ScrollView returns Some, the point is inside the viewport.
+pub proof fn lemma_scrollview_clips<T: OrderedRing>(
+    viewport_w: T,
+    viewport_h: T,
+    scroll_x: T,
+    scroll_y: T,
+    child: Node<T>,
+    px: T,
+    py: T,
+    fuel: nat,
+)
+    requires
+        hit_test(
+            scrollview_node(viewport_w, viewport_h, scroll_x, scroll_y, child),
+            px, py, fuel,
+        ).is_Some(),
+    ensures
+        T::zero().le(px) && px.le(viewport_w),
+        T::zero().le(py) && py.le(viewport_h),
+{
+    let sv = scrollview_node(viewport_w, viewport_h, scroll_x, scroll_y, child);
+    lemma_hit_test_point_in_node(sv, px, py, fuel);
+    // point_in_node checks 0 <= px <= size.width = viewport_w
+}
+
+/// If the point is outside the viewport, hit_test on a ScrollView returns None.
+pub proof fn lemma_scrollview_rejects_outside<T: OrderedRing>(
+    viewport_w: T,
+    viewport_h: T,
+    scroll_x: T,
+    scroll_y: T,
+    child: Node<T>,
+    px: T,
+    py: T,
+    fuel: nat,
+)
+    requires
+        !point_in_node(
+            scrollview_node(viewport_w, viewport_h, scroll_x, scroll_y, child),
+            px, py,
+        ),
+    ensures
+        hit_test(
+            scrollview_node(viewport_w, viewport_h, scroll_x, scroll_y, child),
+            px, py, fuel,
+        ) == None::<Seq<nat>>,
+{
+    let sv = scrollview_node(viewport_w, viewport_h, scroll_x, scroll_y, child);
+    lemma_hit_test_none_outside(sv, px, py, fuel);
+}
+
+/// When hit_test on a single-child node returns a path through the child,
+/// the child was hit-tested at local coordinates (px - child.x, py - child.y).
+///
+/// For a ScrollView with child at (-scroll_x, -scroll_y), the local coords
+/// are (px + scroll_x, py + scroll_y).
+pub proof fn lemma_hit_test_child_offset<T: OrderedRing>(
+    node: Node<T>,
+    px: T,
+    py: T,
+    fuel: nat,
+)
+    requires
+        fuel > 0,
+        node.children.len() == 1,
+        hit_test(node, px, py, fuel).is_Some(),
+        hit_test(node, px, py, fuel).unwrap().len() > 0,
+    ensures
+        ({
+            let path = hit_test(node, px, py, fuel).unwrap();
+            let child = node.children[0];
+            let local_x = px.sub(child.x);
+            let local_y = py.sub(child.y);
+            // The child index is 0, and the rest of the path comes from
+            // hit_test_inner on the child at local coords
+            &&& path[0] == 0nat
+            &&& hit_test_inner(child, local_x, local_y, (fuel - 1) as nat).is_Some()
+            &&& path.subrange(1, path.len() as int)
+                === hit_test_inner(child, local_x, local_y, (fuel - 1) as nat).unwrap()
+        }),
+{
+    lemma_hit_test_point_in_node(node, px, py, fuel);
+    let child = node.children[0];
+    let local_x = px.sub(child.x);
+    let local_y = py.sub(child.y);
+    let child_result = hit_test_inner(child, local_x, local_y, (fuel - 1) as nat);
+
+    // Explicit unfolding: hit_test_scan(node, px, py, 0, fuel) == None
+    assert(hit_test_scan(node, px, py, 0, fuel) == None::<Seq<nat>>);
+
+    // hit_test_scan(node, px, py, 1, fuel) depends on child_result
+    match child_result {
+        Some(sub_path) => {
+            // scan returns Some([0] ++ sub_path)
+            let full_path = Seq::empty().push(0nat).add(sub_path);
+            assert(hit_test_scan(node, px, py, 1, fuel) == Some(full_path));
+            // hit_test_inner(node) returns Some(full_path)
+            assert(hit_test(node, px, py, fuel) == Some(full_path));
+            let path = hit_test(node, px, py, fuel).unwrap();
+            assert(path =~= full_path);
+            assert(path[0] == 0nat);
+            assert(path.subrange(1, path.len() as int) =~= sub_path);
+        },
+        None => {
+            // scan falls through: hit_test_scan(node, px, py, 0, fuel) = None
+            assert(hit_test_scan(node, px, py, 1, fuel) == None::<Seq<nat>>);
+            // hit_test_inner returns Some(Seq::empty())
+            assert(hit_test(node, px, py, fuel) == Some(Seq::<nat>::empty()));
+            // Contradicts path.len() > 0
+            assert(false);
+        },
+    }
 }
 
 } // verus!

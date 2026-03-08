@@ -1907,6 +1907,9 @@ pub proof fn lemma_layout_respects_limits<T: OrderedField>(
             };
             lemma_resolve_bounds(limits, child_node.size);
         },
+        Widget::ScrollView { viewport, scroll_x, scroll_y, child } => {
+            lemma_resolve_bounds(limits, viewport);
+        },
     }
 }
 
@@ -1990,7 +1993,7 @@ pub proof fn lemma_resolve_ge_input<T: OrderedRing>(limits: Limits<T>, size: Siz
 // ── Resolve monotonicity ─────────────────────────────────────────
 
 /// max(a1, b).eqv(max(a2, b)) when a1.eqv(a2).
-proof fn lemma_max_congruence_left<T: OrderedRing>(a1: T, a2: T, b: T)
+pub proof fn lemma_max_congruence_left<T: OrderedRing>(a1: T, a2: T, b: T)
     requires
         a1.eqv(a2),
     ensures
@@ -3234,7 +3237,7 @@ pub proof fn lemma_row_children_within_bounds<T: OrderedField>(
 // ── Content-size monotonicity helpers ───────────────────────────────
 
 /// sum_heights is monotone in pointwise-larger sizes.
-proof fn lemma_sum_heights_pointwise_monotone<T: OrderedRing>(
+pub proof fn lemma_sum_heights_pointwise_monotone<T: OrderedRing>(
     sizes1: Seq<Size<T>>,
     sizes2: Seq<Size<T>>,
     count: nat,
@@ -3657,6 +3660,55 @@ pub open spec fn widget_wf<T: OrderedField>(
                         limits.min.width.le(w2) && T::zero().le(w2)
                     }
                 }),
+            // ScrollView intentionally breaks CWB (child at negative offsets),
+            // so widget_wf is never required for ScrollView — guarded by widget_cwb_ok.
+            Widget::ScrollView { viewport, scroll_x, scroll_y, child } =>
+                viewport.is_nonneg()
+                && T::zero().le(scroll_x)
+                && T::zero().le(scroll_y),
+        }
+    }
+}
+
+/// Predicate: widget tree supports children-within-bounds.
+/// Returns false for ScrollView (child can be at negative offsets).
+pub open spec fn widget_cwb_ok<T: OrderedRing>(widget: Widget<T>, fuel: nat) -> bool
+    decreases fuel,
+{
+    if fuel == 0 { true }
+    else {
+        match widget {
+            Widget::ScrollView { .. } => false,
+            Widget::Leaf { .. } => true,
+            Widget::Column { children, .. } =>
+                forall|i: int| 0 <= i < children.len() ==>
+                    widget_cwb_ok(children[i], (fuel - 1) as nat),
+            Widget::Row { children, .. } =>
+                forall|i: int| 0 <= i < children.len() ==>
+                    widget_cwb_ok(children[i], (fuel - 1) as nat),
+            Widget::Stack { children, .. } =>
+                forall|i: int| 0 <= i < children.len() ==>
+                    widget_cwb_ok(children[i], (fuel - 1) as nat),
+            Widget::Wrap { children, .. } =>
+                forall|i: int| 0 <= i < children.len() ==>
+                    widget_cwb_ok(children[i], (fuel - 1) as nat),
+            Widget::Flex { children, .. } =>
+                forall|i: int| 0 <= i < children.len() ==>
+                    widget_cwb_ok(children[i].child, (fuel - 1) as nat),
+            Widget::Grid { children, .. } =>
+                forall|i: int| 0 <= i < children.len() ==>
+                    widget_cwb_ok(children[i], (fuel - 1) as nat),
+            Widget::Absolute { children, .. } =>
+                forall|i: int| 0 <= i < children.len() ==>
+                    widget_cwb_ok(children[i].child, (fuel - 1) as nat),
+            Widget::Margin { child, .. } =>
+                widget_cwb_ok(*child, (fuel - 1) as nat),
+            Widget::Conditional { child, .. } =>
+                widget_cwb_ok(*child, (fuel - 1) as nat),
+            Widget::SizedBox { child, .. } =>
+                widget_cwb_ok(*child, (fuel - 1) as nat),
+            Widget::AspectRatio { child, .. } =>
+                widget_cwb_ok(*child, (fuel - 1) as nat),
         }
     }
 }
@@ -3675,6 +3727,7 @@ pub proof fn lemma_layout_widget_cwb<T: OrderedField>(
         limits.wf(),
         fuel > 0,
         widget_wf(limits, widget, fuel),
+        widget_cwb_ok(widget, fuel),
     ensures
         layout_widget(limits, widget, fuel).children_within_bounds(),
     decreases fuel,
@@ -3752,6 +3805,10 @@ pub proof fn lemma_layout_widget_cwb<T: OrderedField>(
         },
         Widget::AspectRatio { ratio, child } => {
             lemma_aspect_ratio_children_within_bounds(limits, ratio, *child, fuel);
+        },
+        Widget::ScrollView { .. } => {
+            // Excluded by widget_cwb_ok (returns false for ScrollView)
+            assert(false);
         },
     }
 }
@@ -3903,6 +3960,7 @@ pub open spec fn widget_size_monotone_ok<T: OrderedRing>(
                 widget_size_monotone_ok(*child, (fuel - 1) as nat),
             Widget::SizedBox { child, .. } =>
                 widget_size_monotone_ok(*child, (fuel - 1) as nat),
+            Widget::ScrollView { .. } => true,
         }
     }
 }
@@ -3974,6 +4032,7 @@ pub closed spec fn widget_monotone_wf<T: OrderedField>(
             Widget::Flex { .. } => true,
             Widget::Grid { .. } => true,
             Widget::Wrap { .. } => true,
+            Widget::ScrollView { .. } => true,
         }
     }
 }
@@ -4330,6 +4389,11 @@ pub proof fn lemma_layout_widget_monotone<T: OrderedField>(
 
             // Output = limits.resolve(child_size), monotone in both limits.max and input
             lemma_resolve_monotone_input_and_max(limits1, limits2, cs1, cs2);
+        },
+        Widget::ScrollView { viewport, scroll_x, scroll_y, child } => {
+            // Output = limits.resolve(viewport), same viewport for both.
+            // Monotone in limits.max only.
+            lemma_resolve_monotone_max(limits1, limits2, viewport);
         },
     }
 }

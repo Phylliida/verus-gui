@@ -912,4 +912,468 @@ pub proof fn lemma_wrap_children_within_bounds<T: OrderedField>(
     crate::layout::proofs::lemma_merge_layout_cwb(layout, cn);
 }
 
+// ── Uniform height lemmas ─────────────────────────────────────────
+
+/// With uniform-height children, every line has the same line_height.
+pub proof fn lemma_uniform_line_height<T: OrderedRing>(
+    child_sizes: Seq<Size<T>>,
+    h_spacing: T,
+    v_spacing: T,
+    available_width: T,
+    count: nat,
+    h: T,
+)
+    requires
+        count > 0,
+        count <= child_sizes.len(),
+        wrap_uniform_height(child_sizes),
+        h.eqv(child_sizes[0].height),
+        T::zero().le(h_spacing),
+        T::zero().le(v_spacing),
+        forall|i: int| 0 <= i < child_sizes.len() ==> {
+            &&& T::zero().le(child_sizes[i].width)
+            &&& T::zero().le(child_sizes[i].height)
+        },
+    ensures
+        wrap_cursor(child_sizes, h_spacing, v_spacing, available_width, count)
+            .line_height.eqv(h),
+    decreases count,
+{
+    let cursor = wrap_cursor(child_sizes, h_spacing, v_spacing, available_width, count);
+    let child = child_sizes[(count - 1) as int];
+    if count == 1 {
+        // prev = wrap_cursor(0) = {x:zero, y:zero, lh:zero, cw:zero}
+        // wrap_needs_break(zero, child[0].w, aw) = !zero.le(zero) && ... = false
+        T::axiom_le_reflexive(T::zero());
+        let prev = wrap_cursor(child_sizes, h_spacing, v_spacing, available_width, 0 as nat);
+        assert(!wrap_needs_break(prev.x, child.width, available_width));
+        // Same line: lh = max(zero, child_sizes[0].height)
+        // zero.le(child_sizes[0].height) from requires → max = child_sizes[0].height
+        assert(max::<T>(T::zero(), child_sizes[0].height) == child_sizes[0].height);
+        // h ≡ child_sizes[0].height → child_sizes[0].height ≡ h
+        T::axiom_eqv_symmetric(h, child_sizes[0].height);
+    } else {
+        // IH: cursor(count-1).line_height ≡ h
+        lemma_uniform_line_height(
+            child_sizes, h_spacing, v_spacing, available_width,
+            (count - 1) as nat, h,
+        );
+        let prev = wrap_cursor(
+            child_sizes, h_spacing, v_spacing, available_width, (count - 1) as nat,
+        );
+        if wrap_needs_break(prev.x, child.width, available_width) {
+            // New line: line_height = child.height ≡ h
+            T::axiom_eqv_symmetric(h, child_sizes[0].height);
+            // h.eqv(child_sizes[0].height) reversed
+            // child_sizes[0].height.eqv(child.height) from uniform
+            T::axiom_eqv_transitive(
+                child.height,
+                child_sizes[0].height,
+                h,
+            );
+            T::axiom_eqv_symmetric(child.height, h);
+        } else {
+            // Same line: line_height = max(prev.lh, child.height)
+            // prev.lh ≡ h, child.height ≡ h
+            // max(h, h) ≡ h
+            // First show child.height ≡ h
+            T::axiom_eqv_symmetric(h, child_sizes[0].height);
+            T::axiom_eqv_transitive(child.height, child_sizes[0].height, h);
+            T::axiom_eqv_symmetric(child.height, h);
+            // child.height ≡ h (reversed: h ≡ child.height)
+
+            // max(prev.lh, child.height) ≡ max(h, h) via congruence
+            // First: max(prev.lh, child.height) ≡ max(h, child.height)
+            crate::layout::proofs::lemma_max_congruence_left(prev.line_height, h, child.height);
+            T::axiom_eqv_symmetric(
+                max::<T>(prev.line_height, child.height),
+                max::<T>(h, child.height),
+            );
+            // Then: max(h, child.height) ≡ max(h, h) (child.height ≡ h)
+            T::axiom_eqv_symmetric(child.height, h);
+            crate::layout::proofs::lemma_max_congruence_left(child.height, h, h);
+            // max(child.height, h) ≡ max(h, h)
+            use verus_algebra::min_max::lemma_max_commutative;
+            lemma_max_commutative::<T>(h, child.height);
+            lemma_max_commutative::<T>(child.height, h);
+            // max(h, child.height) ≡ max(child.height, h)
+            T::axiom_eqv_transitive(
+                max::<T>(h, child.height),
+                max::<T>(child.height, h),
+                max::<T>(h, h),
+            );
+
+            use verus_algebra::min_max::lemma_max_self;
+            lemma_max_self::<T>(h);
+            // max(h, h) ≡ h
+
+            // Chain: cursor.lh = max(prev.lh, child.h) ≡ max(h, child.h) ≡ max(h,h) ≡ h
+            T::axiom_eqv_transitive(
+                max::<T>(prev.line_height, child.height),
+                max::<T>(h, child.height),
+                max::<T>(h, h),
+            );
+            T::axiom_eqv_transitive(
+                max::<T>(prev.line_height, child.height),
+                max::<T>(h, h),
+                h,
+            );
+        }
+    }
+}
+
+/// Wider available width means at least as few line breaks.
+///
+/// Key insight: when a child triggers a break under aw1, it may NOT trigger
+/// under aw2 (wider). But the reverse can't happen when all child widths ≤ aw1.
+pub proof fn lemma_wider_fewer_breaks<T: OrderedRing>(
+    child_sizes: Seq<Size<T>>,
+    h_spacing: T,
+    v_spacing: T,
+    aw1: T,
+    aw2: T,
+    count: nat,
+)
+    requires
+        count <= child_sizes.len(),
+        aw1.le(aw2),
+        T::zero().le(h_spacing),
+        T::zero().le(v_spacing),
+        forall|i: int| 0 <= i < child_sizes.len() ==> {
+            &&& T::zero().le(child_sizes[i].width)
+            &&& T::zero().le(child_sizes[i].height)
+        },
+        // Each child must fit on a line in the narrower width
+        forall|i: int| 0 <= i < child_sizes.len() ==>
+            child_sizes[i].width.le(aw1),
+    ensures
+        wrap_break_count(child_sizes, h_spacing, v_spacing, aw2, count)
+            <= wrap_break_count(child_sizes, h_spacing, v_spacing, aw1, count),
+        // Auxiliary: when break counts match, wider width has ≤ x
+        // (narrower width broke earlier, accumulated more x since last break)
+        (wrap_break_count(child_sizes, h_spacing, v_spacing, aw2, count)
+            == wrap_break_count(child_sizes, h_spacing, v_spacing, aw1, count)
+        ==>
+            wrap_cursor(child_sizes, h_spacing, v_spacing, aw2, count).x.le(
+                wrap_cursor(child_sizes, h_spacing, v_spacing, aw1, count).x)
+        ),
+        // Both cursors have nonneg x
+        T::zero().le(wrap_cursor(child_sizes, h_spacing, v_spacing, aw1, count).x),
+        T::zero().le(wrap_cursor(child_sizes, h_spacing, v_spacing, aw2, count).x),
+    decreases count,
+{
+    if count == 0 {
+        T::axiom_le_reflexive(T::zero());
+    } else {
+        // IH
+        lemma_wider_fewer_breaks(
+            child_sizes, h_spacing, v_spacing, aw1, aw2, (count - 1) as nat,
+        );
+        let c1 = wrap_cursor(child_sizes, h_spacing, v_spacing, aw1, (count - 1) as nat);
+        let c2 = wrap_cursor(child_sizes, h_spacing, v_spacing, aw2, (count - 1) as nat);
+        let child = child_sizes[(count - 1) as int];
+        let b1 = wrap_needs_break(c1.x, child.width, aw1);
+        let b2 = wrap_needs_break(c2.x, child.width, aw2);
+        let bc1 = wrap_break_count(child_sizes, h_spacing, v_spacing, aw1, (count - 1) as nat);
+        let bc2 = wrap_break_count(child_sizes, h_spacing, v_spacing, aw2, (count - 1) as nat);
+
+        if b1 && b2 {
+            // Both break: x resets to child.w + h_sp for both → equal
+            T::axiom_le_reflexive(child.width.add(h_spacing));
+            // x_new nonneg
+            lemma_nonneg_add::<T>(child.width, h_spacing);
+        } else if !b1 && !b2 {
+            // Neither breaks: break_counts unchanged
+            // x_new = prev.x + child.w + h_sp
+            if bc1 == bc2 {
+                // IH gives c2.x ≤ c1.x → new x2 ≤ new x1
+                T::axiom_le_add_monotone(c2.x, c1.x, child.width);
+                T::axiom_le_add_monotone(
+                    c2.x.add(child.width), c1.x.add(child.width), h_spacing,
+                );
+            }
+            // x_new nonneg for aw1
+            lemma_nonneg_add::<T>(c1.x, child.width);
+            lemma_nonneg_add::<T>(c1.x.add(child.width), h_spacing);
+            // x_new nonneg for aw2
+            lemma_nonneg_add::<T>(c2.x, child.width);
+            lemma_nonneg_add::<T>(c2.x.add(child.width), h_spacing);
+        } else if b1 && !b2 {
+            // Only aw1 breaks: bc1 → bc1+1, bc2 stays
+            // bc2 ≤ bc1 → bc2 < bc1+1 → bc2 ≤ bc1+1 ✓
+            // bc2 ≤ bc1 also means bc2 < bc1+1, so bc2 != bc1+1 unless bc2==bc1,
+            // but bc2==bc1+1 requires bc2>bc1, contradicting IH. So x aux N/A.
+            // x_new nonneg
+            lemma_nonneg_add::<T>(child.width, h_spacing);
+            lemma_nonneg_add::<T>(c2.x, child.width);
+            lemma_nonneg_add::<T>(c2.x.add(child.width), h_spacing);
+        } else {
+            // !b1 && b2: aw1 doesn't break, aw2 does.
+            // Need: bc2+1 ≤ bc1, i.e., bc2 < bc1 (strict).
+            // Prove bc1 == bc2 is impossible:
+            if bc1 == bc2 {
+                // IH gives c2.x ≤ c1.x.
+                // b2: ¬c2.x.le(zero) ∧ ¬(c2.x + w).le(aw2)
+                // !b1: c1.x.le(zero) ∨ (c1.x + w).le(aw1)
+                if c1.x.le(T::zero()) {
+                    // c2.x ≤ c1.x ≤ 0 contradicts ¬c2.x.le(0)
+                    T::axiom_le_transitive(c2.x, c1.x, T::zero());
+                    assert(false);
+                } else {
+                    // c1.x > 0, so !b1 requires (c1.x + w).le(aw1)
+                    assert(c1.x.add(child.width).le(aw1));
+                    // c2.x + w ≤ c1.x + w (from c2.x ≤ c1.x)
+                    T::axiom_le_add_monotone(c2.x, c1.x, child.width);
+                    // c2.x + w ≤ c1.x + w ≤ aw1 ≤ aw2
+                    T::axiom_le_transitive(
+                        c2.x.add(child.width), c1.x.add(child.width), aw1,
+                    );
+                    T::axiom_le_transitive(c2.x.add(child.width), aw1, aw2);
+                    // contradicts ¬(c2.x + w).le(aw2)
+                    assert(false);
+                }
+            }
+            // bc2 < bc1 (strict), so bc2 + 1 ≤ bc1 = new_bc1. ✓
+
+            // x auxiliary: if new bc2+1 == new bc1 (i.e., bc2+1 == bc1):
+            // c2 broke → x2_new = child.w + h_sp
+            // c1 didn't → x1_new = c1.x + child.w + h_sp
+            // Need: x2_new ≤ x1_new, i.e., child.w+h_sp ≤ c1.x+child.w+h_sp
+            if bc2 + 1 == bc1 {
+                // 0 ≤ c1.x from IH
+                T::axiom_le_add_monotone(T::zero(), c1.x, child.width);
+                T::axiom_le_add_monotone(
+                    T::zero().add(child.width), c1.x.add(child.width), h_spacing,
+                );
+                // zero.add(cw).add(hs) ≤ c1.x.add(cw).add(hs)
+                // Bridge: zero.add(cw) ≡ cw
+                use verus_algebra::lemmas::additive_group_lemmas::lemma_add_zero_left;
+                lemma_add_zero_left::<T>(child.width);
+                T::axiom_add_congruence_left(
+                    T::zero().add(child.width), child.width, h_spacing,
+                );
+                // zero.add(cw).add(hs) ≡ cw.add(hs)
+                T::axiom_eqv_symmetric(
+                    T::zero().add(child.width).add(h_spacing),
+                    child.width.add(h_spacing),
+                );
+                T::axiom_eqv_reflexive(c1.x.add(child.width).add(h_spacing));
+                T::axiom_le_congruence(
+                    T::zero().add(child.width).add(h_spacing),
+                    child.width.add(h_spacing),
+                    c1.x.add(child.width).add(h_spacing),
+                    c1.x.add(child.width).add(h_spacing),
+                );
+            }
+            // x_new nonneg
+            lemma_nonneg_add::<T>(c1.x, child.width);
+            lemma_nonneg_add::<T>(c1.x.add(child.width), h_spacing);
+            lemma_nonneg_add::<T>(child.width, h_spacing);
+        }
+    }
+}
+
+/// When all children fit on one line, content height equals the max child height.
+pub proof fn lemma_wrap_single_line_height<T: OrderedRing>(
+    child_sizes: Seq<Size<T>>,
+    h_spacing: T,
+    v_spacing: T,
+    available_width: T,
+)
+    requires
+        child_sizes.len() > 0,
+        T::zero().le(h_spacing),
+        T::zero().le(v_spacing),
+        forall|i: int| 0 <= i < child_sizes.len() ==> {
+            &&& T::zero().le(child_sizes[i].width)
+            &&& T::zero().le(child_sizes[i].height)
+        },
+        // All children fit on one line: no breaks
+        wrap_break_count(child_sizes, h_spacing, v_spacing, available_width,
+            child_sizes.len() as nat) == 0,
+    ensures
+        // Content height = cursor.y + cursor.line_height.
+        // With no breaks, cursor.y = 0, so content_height = line_height.
+        wrap_content_size(child_sizes, h_spacing, v_spacing, available_width)
+            .height.eqv(
+                wrap_cursor(child_sizes, h_spacing, v_spacing, available_width,
+                    child_sizes.len() as nat).line_height
+            ),
+{
+    // With no breaks, cursor.y stays 0 throughout
+    lemma_no_breaks_y_zero(
+        child_sizes, h_spacing, v_spacing, available_width, child_sizes.len() as nat,
+    );
+    // cursor.y ≡ 0, so content_height = y + line_height ≡ 0 + line_height ≡ line_height
+    let cursor = wrap_cursor(
+        child_sizes, h_spacing, v_spacing, available_width, child_sizes.len() as nat,
+    );
+    use verus_algebra::lemmas::additive_group_lemmas::lemma_add_zero_left;
+    lemma_add_zero_left::<T>(cursor.line_height);
+    T::axiom_eqv_symmetric(cursor.y, T::zero());
+    T::axiom_add_congruence_left(cursor.y, T::zero(), cursor.line_height);
+    T::axiom_eqv_transitive(
+        cursor.y.add(cursor.line_height),
+        T::zero().add(cursor.line_height),
+        cursor.line_height,
+    );
+}
+
+/// Helper: if break_count is 0, cursor.y is zero.
+proof fn lemma_no_breaks_y_zero<T: OrderedRing>(
+    child_sizes: Seq<Size<T>>,
+    h_spacing: T,
+    v_spacing: T,
+    available_width: T,
+    count: nat,
+)
+    requires
+        count <= child_sizes.len(),
+        T::zero().le(h_spacing),
+        T::zero().le(v_spacing),
+        forall|i: int| 0 <= i < child_sizes.len() ==> {
+            &&& T::zero().le(child_sizes[i].width)
+            &&& T::zero().le(child_sizes[i].height)
+        },
+        wrap_break_count(child_sizes, h_spacing, v_spacing, available_width, count) == 0,
+    ensures
+        wrap_cursor(child_sizes, h_spacing, v_spacing, available_width, count)
+            .y.eqv(T::zero()),
+    decreases count,
+{
+    if count == 0 {
+        T::axiom_eqv_reflexive(T::zero());
+    } else {
+        // bc(count) = bc(count-1) + (1 if break else 0) = 0
+        // So bc(count-1) = 0 and no break at count-1
+        let prev_bc = wrap_break_count(
+            child_sizes, h_spacing, v_spacing, available_width, (count - 1) as nat,
+        );
+        let cursor_prev = wrap_cursor(
+            child_sizes, h_spacing, v_spacing, available_width, (count - 1) as nat,
+        );
+        let child = child_sizes[(count - 1) as int];
+        let needs_break = wrap_needs_break(cursor_prev.x, child.width, available_width);
+        // If break: bc(count) = prev_bc + 1 > 0 = impossible (bc(count) == 0)
+        // So !needs_break
+        assert(!needs_break);
+        // IH: cursor(count-1).y ≡ 0
+        lemma_no_breaks_y_zero(
+            child_sizes, h_spacing, v_spacing, available_width, (count - 1) as nat,
+        );
+        // No break: cursor(count).y = cursor(count-1).y ≡ 0 ✓
+    }
+}
+
+/// Wrap content height is monotone when all children fit on a single line.
+///
+/// When all children fit on one line for BOTH widths, content height is the
+/// same (max child height), hence trivially monotone.
+pub proof fn lemma_wrap_content_height_single_line_monotone<T: OrderedRing>(
+    child_sizes: Seq<Size<T>>,
+    h_spacing: T,
+    v_spacing: T,
+    aw1: T,
+    aw2: T,
+)
+    requires
+        child_sizes.len() > 0,
+        aw1.le(aw2),
+        T::zero().le(h_spacing),
+        T::zero().le(v_spacing),
+        forall|i: int| 0 <= i < child_sizes.len() ==> {
+            &&& T::zero().le(child_sizes[i].width)
+            &&& T::zero().le(child_sizes[i].height)
+        },
+        // Both widths fit all children on one line
+        wrap_break_count(child_sizes, h_spacing, v_spacing, aw1,
+            child_sizes.len() as nat) == 0,
+        wrap_break_count(child_sizes, h_spacing, v_spacing, aw2,
+            child_sizes.len() as nat) == 0,
+    ensures
+        wrap_content_size(child_sizes, h_spacing, v_spacing, aw2).height.le(
+            wrap_content_size(child_sizes, h_spacing, v_spacing, aw1).height,
+        ),
+{
+    // Both single-line → content_height = cursor.line_height in both cases
+    lemma_wrap_single_line_height(child_sizes, h_spacing, v_spacing, aw1);
+    lemma_wrap_single_line_height(child_sizes, h_spacing, v_spacing, aw2);
+
+    // Both line_heights equal the max child height built incrementally
+    // Since no breaks in either, both cursors process the same sequence of
+    // max(prev.lh, child.height), just with different x values.
+    // The line_height values are IDENTICAL because they don't depend on x.
+    lemma_no_breaks_same_line_height(
+        child_sizes, h_spacing, v_spacing, aw1, aw2, child_sizes.len() as nat,
+    );
+    // cursor(aw1).lh ≡ cursor(aw2).lh
+
+    let ch1 = wrap_content_size(child_sizes, h_spacing, v_spacing, aw1).height;
+    let ch2 = wrap_content_size(child_sizes, h_spacing, v_spacing, aw2).height;
+    let lh1 = wrap_cursor(child_sizes, h_spacing, v_spacing, aw1, child_sizes.len() as nat).line_height;
+    let lh2 = wrap_cursor(child_sizes, h_spacing, v_spacing, aw2, child_sizes.len() as nat).line_height;
+
+    // ch1 ≡ lh1 ≡ lh2 ≡ ch2 → ch1 ≡ ch2 → ch2 ≤ ch1
+    T::axiom_eqv_symmetric(ch2, lh2);
+    T::axiom_eqv_transitive(ch1, lh1, lh2);
+    T::axiom_eqv_transitive(ch1, lh2, ch2);
+    // ch1 ≡ ch2
+    T::axiom_eqv_symmetric(ch1, ch2);
+    T::axiom_eqv_reflexive(ch1);
+    T::axiom_le_reflexive(ch1);
+    T::axiom_le_congruence(ch1, ch2, ch1, ch1);
+}
+
+/// Helper: when both widths have no breaks, line_height is identical.
+proof fn lemma_no_breaks_same_line_height<T: OrderedRing>(
+    child_sizes: Seq<Size<T>>,
+    h_spacing: T,
+    v_spacing: T,
+    aw1: T,
+    aw2: T,
+    count: nat,
+)
+    requires
+        count <= child_sizes.len(),
+        T::zero().le(h_spacing),
+        T::zero().le(v_spacing),
+        forall|i: int| 0 <= i < child_sizes.len() ==> {
+            &&& T::zero().le(child_sizes[i].width)
+            &&& T::zero().le(child_sizes[i].height)
+        },
+        wrap_break_count(child_sizes, h_spacing, v_spacing, aw1, count) == 0,
+        wrap_break_count(child_sizes, h_spacing, v_spacing, aw2, count) == 0,
+    ensures
+        wrap_cursor(child_sizes, h_spacing, v_spacing, aw1, count).line_height.eqv(
+            wrap_cursor(child_sizes, h_spacing, v_spacing, aw2, count).line_height,
+        ),
+    decreases count,
+{
+    if count == 0 {
+        T::axiom_eqv_reflexive(T::zero());
+    } else {
+        let prev1 = wrap_cursor(child_sizes, h_spacing, v_spacing, aw1, (count - 1) as nat);
+        let prev2 = wrap_cursor(child_sizes, h_spacing, v_spacing, aw2, (count - 1) as nat);
+        let child = child_sizes[(count - 1) as int];
+
+        // No breaks at any step
+        let bc1_prev = wrap_break_count(child_sizes, h_spacing, v_spacing, aw1, (count - 1) as nat);
+        let bc2_prev = wrap_break_count(child_sizes, h_spacing, v_spacing, aw2, (count - 1) as nat);
+        assert(!wrap_needs_break(prev1.x, child.width, aw1));
+        assert(!wrap_needs_break(prev2.x, child.width, aw2));
+
+        // IH
+        lemma_no_breaks_same_line_height(
+            child_sizes, h_spacing, v_spacing, aw1, aw2, (count - 1) as nat,
+        );
+        // prev1.line_height ≡ prev2.line_height
+
+        // No break: new_lh = max(prev.lh, child.height) for both
+        // max(prev1.lh, child.h) ≡ max(prev2.lh, child.h) via congruence on first arg
+        crate::layout::proofs::lemma_max_congruence_left(
+            prev1.line_height, prev2.line_height, child.height,
+        );
+    }
+}
+
 } // verus!

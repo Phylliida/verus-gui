@@ -171,4 +171,44 @@ pub open spec fn wrap_layout<T: OrderedRing>(
     Node { x: T::zero(), y: T::zero(), size: parent_size, children }
 }
 
+// ── Uniform height predicate ──────────────────────────────────────
+
+/// Whether all children have the same height (up to equivalence).
+///
+/// Empty sequences are vacuously uniform.
+pub open spec fn wrap_uniform_height<T: OrderedRing>(child_sizes: Seq<Size<T>>) -> bool {
+    child_sizes.len() > 0 ==> forall|i: int, j: int|
+        0 <= i < child_sizes.len() && 0 <= j < child_sizes.len() ==>
+            child_sizes[i].height.eqv(child_sizes[j].height)
+}
+
+// ── Line break counting ──────────────────────────────────────────
+
+/// Count the number of line breaks in [0..count).
+///
+/// A line break occurs when `wrap_needs_break` is true for the cursor
+/// at that position.
+pub open spec fn wrap_break_count<T: OrderedRing>(
+    child_sizes: Seq<Size<T>>,
+    h_spacing: T,
+    v_spacing: T,
+    available_width: T,
+    count: nat,
+) -> nat
+    decreases count,
+{
+    if count == 0 {
+        0
+    } else {
+        let prev_breaks = wrap_break_count(child_sizes, h_spacing, v_spacing, available_width, (count - 1) as nat);
+        let cursor = wrap_cursor(child_sizes, h_spacing, v_spacing, available_width, (count - 1) as nat);
+        let child = child_sizes[(count - 1) as int];
+        if wrap_needs_break(cursor.x, child.width, available_width) {
+            prev_breaks + 1
+        } else {
+            prev_breaks
+        }
+    }
+}
+
 } // verus!

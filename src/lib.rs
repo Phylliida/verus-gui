@@ -29,4 +29,7 @@ pub mod hit_test;
 pub mod diff;
 
 #[cfg(verus_keep_ghost)]
+pub mod animation;
+
+#[cfg(verus_keep_ghost)]
 pub mod runtime;

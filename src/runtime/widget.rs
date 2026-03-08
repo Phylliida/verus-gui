@@ -127,6 +127,13 @@ pub enum RuntimeWidget {
         child: Box<RuntimeWidget>,
         model: Ghost<Widget<RationalModel>>,
     },
+    ScrollView {
+        viewport: RuntimeSize,
+        scroll_x: RuntimeRational,
+        scroll_y: RuntimeRational,
+        child: Box<RuntimeWidget>,
+        model: Ghost<Widget<RationalModel>>,
+    },
 }
 
 impl RuntimeFlexItem {
@@ -157,6 +164,7 @@ impl RuntimeWidget {
             RuntimeWidget::Conditional { model, .. } => model@,
             RuntimeWidget::SizedBox { model, .. } => model@,
             RuntimeWidget::AspectRatio { model, .. } => model@,
+            RuntimeWidget::ScrollView { model, .. } => model@,
         }
     }
 
@@ -279,6 +287,17 @@ impl RuntimeWidget {
                     child: Box::new(child.model()),
                 }
             },
+            RuntimeWidget::ScrollView { viewport, scroll_x, scroll_y, child, model } => {
+                &&& viewport.wf_spec()
+                &&& scroll_x.wf_spec()
+                &&& scroll_y.wf_spec()
+                &&& model@ == Widget::ScrollView {
+                    viewport: viewport@,
+                    scroll_x: scroll_x@,
+                    scroll_y: scroll_y@,
+                    child: Box::new(child.model()),
+                }
+            },
         }
     }
 
@@ -330,6 +349,9 @@ impl RuntimeWidget {
                     child.wf_spec((fuel - 1) as nat)
                 },
                 RuntimeWidget::AspectRatio { child, .. } => {
+                    child.wf_spec((fuel - 1) as nat)
+                },
+                RuntimeWidget::ScrollView { child, .. } => {
                     child.wf_spec((fuel - 1) as nat)
                 },
             }
@@ -515,6 +537,15 @@ pub fn layout_widget_exec(
                 }
                 layout_aspect_ratio_widget_exec(limits, ratio, child, fuel)
             },
+            RuntimeWidget::ScrollView { viewport, scroll_x, scroll_y, child, model } => {
+                proof {
+                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
+                    assert(child.wf_spec((fuel - 1) as nat)) by {
+                        assert(child.wf_spec((fuel as nat - 1) as nat));
+                    }
+                }
+                layout_scroll_view_exec(limits, viewport, scroll_x, scroll_y, child, fuel)
+            },
         }
     }
 }
@@ -533,6 +564,7 @@ pub fn layout_widget_checked(
         widget.wf_spec(fuel as nat),
         fuel > 0,
         widget_wf::<RationalModel>(limits@, widget.model(), fuel as nat),
+        widget_cwb_ok::<RationalModel>(widget.model(), fuel as nat),
     ensures
         out.wf_spec(),
         out@ == layout_widget::<RationalModel>(limits@, widget.model(), fuel as nat),
@@ -1890,6 +1922,104 @@ fn layout_aspect_ratio_widget_exec(
     let ghost parent_model = layout_widget::<RationalModel>(
         limits@,
         Widget::AspectRatio { ratio: ratio@, child: Box::new(child.model()) },
+        fuel as nat,
+    );
+
+    let mut result_children: Vec<RuntimeNode> = Vec::new();
+    result_children.push(positioned_child);
+
+    let out = RuntimeNode {
+        x,
+        y,
+        size: resolved,
+        children: result_children,
+        model: Ghost(parent_model),
+    };
+
+    proof {
+        assert(parent_model.children.len() == 1);
+        assert(out.children@.len() == 1);
+        assert(out@.children.len() == 1);
+        assert(out.children@[0].wf_shallow());
+        assert(out.children@[0]@ == out@.children[0]);
+    }
+
+    out
+}
+
+// ── ScrollView widget exec ───────────────────────────────────────
+
+/// Layout a scroll view widget: child at (-scroll_x, -scroll_y) with viewport limits.
+fn layout_scroll_view_exec(
+    limits: &RuntimeLimits,
+    viewport: &RuntimeSize,
+    scroll_x: &RuntimeRational,
+    scroll_y: &RuntimeRational,
+    child: &Box<RuntimeWidget>,
+    fuel: usize,
+) -> (out: RuntimeNode)
+    requires
+        limits.wf_spec(),
+        viewport.wf_spec(),
+        scroll_x.wf_spec(),
+        scroll_y.wf_spec(),
+        fuel > 0,
+        child.wf_spec((fuel - 1) as nat),
+    ensures
+        out.wf_spec(),
+        out@ == ({
+            let spec_w = Widget::ScrollView {
+                viewport: viewport@,
+                scroll_x: scroll_x@,
+                scroll_y: scroll_y@,
+                child: Box::new(child.model()),
+            };
+            layout_widget::<RationalModel>(limits@, spec_w, fuel as nat)
+        }),
+    decreases fuel, 0nat,
+{
+    // Child gets limits (zero_min, viewport)
+    let child_min = RuntimeSize::zero_exec();
+    let child_max = viewport.copy_size();
+    let child_limits = RuntimeLimits::new(child_min, child_max);
+    let child_node = layout_widget_exec(&child_limits, child, fuel - 1);
+
+    let resolved = limits.resolve_exec(viewport.copy_size());
+    let x = RuntimeRational::from_int(0);
+    let y = RuntimeRational::from_int(0);
+    let neg_sx = scroll_x.neg();
+    let neg_sy = scroll_y.neg();
+    let child_size = child_node.size.copy_size();
+
+    let ghost child_spec = {
+        let cl = Limits::<RationalModel> {
+            min: Size::zero_size(),
+            max: viewport@,
+        };
+        layout_widget::<RationalModel>(cl, child.model(), (fuel - 1) as nat)
+    };
+
+    let positioned_child = RuntimeNode {
+        x: neg_sx,
+        y: neg_sy,
+        size: child_size,
+        children: child_node.children,
+        model: Ghost(Node::<RationalModel> {
+            x: scroll_x@.neg_spec(),
+            y: scroll_y@.neg_spec(),
+            size: child_spec.size,
+            children: child_spec.children,
+        }),
+    };
+
+    let ghost parent_model = layout_widget::<RationalModel>(
+        limits@,
+        Widget::ScrollView {
+            viewport: viewport@,
+            scroll_x: scroll_x@,
+            scroll_y: scroll_y@,
+            child: Box::new(child.model()),
+        },
         fuel as nat,
     );
 

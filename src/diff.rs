@@ -286,4 +286,122 @@ pub proof fn lemma_deeply_eqv_transitive<T: OrderedRing>(
     }
 }
 
+// ── Diff Same symmetry ─────────────────────────────────────────
+
+/// If diff_nodes(a, b) is Same, then diff_nodes(b, a) is Same (symmetry).
+pub proof fn lemma_diff_symmetric_same<T: OrderedRing>(
+    a: Node<T>,
+    b: Node<T>,
+    fuel: nat,
+)
+    requires
+        fuel > 0,
+        diff_nodes::<T>(a, b, fuel) === DiffResult::<T>::Same,
+    ensures
+        diff_nodes::<T>(b, a, fuel) === DiffResult::<T>::Same,
+    decreases fuel, 0nat,
+{
+    lemma_diff_same_implies_children_eqv::<T>(a, b, fuel);
+    // a.x.eqv(b.x), etc. → reverse via symmetric
+    T::axiom_eqv_symmetric(a.x, b.x);
+    T::axiom_eqv_symmetric(a.y, b.y);
+    T::axiom_eqv_symmetric(a.size.width, b.size.width);
+    T::axiom_eqv_symmetric(a.size.height, b.size.height);
+    // Children: diff_nodes(a.children[i], b.children[i], fuel-1) === Same for all i
+    // Need: diff_children(b, a, len, fuel-1).len() == 0
+    lemma_diff_children_symmetric_same::<T>(a, b, a.children.len(), (fuel - 1) as nat);
+}
+
+/// Helper: if all children diffs a→b are Same, then all children diffs b→a are Same.
+proof fn lemma_diff_children_symmetric_same<T: OrderedRing>(
+    a: Node<T>,
+    b: Node<T>,
+    count: nat,
+    fuel: nat,
+)
+    requires
+        count <= a.children.len(),
+        a.children.len() == b.children.len(),
+        forall|i: int| 0 <= i < count ==>
+            diff_nodes::<T>(a.children[i], b.children[i], fuel) === DiffResult::<T>::Same,
+    ensures
+        diff_children::<T>(b, a, count, fuel).len() == 0,
+    decreases fuel, count,
+{
+    if count > 0 {
+        lemma_diff_children_symmetric_same::<T>(a, b, (count - 1) as nat, fuel);
+        if fuel > 0 {
+            lemma_diff_symmetric_same::<T>(
+                a.children[(count - 1) as int],
+                b.children[(count - 1) as int],
+                fuel,
+            );
+        }
+        // When fuel == 0, diff_nodes returns Same by definition
+    }
+}
+
+// ── Diff Same transitivity ────────────────────────────────────────
+
+/// If diff_nodes(a,b) and diff_nodes(b,c) are both Same, then diff_nodes(a,c) is Same.
+pub proof fn lemma_diff_transitive_same<T: OrderedRing>(
+    a: Node<T>,
+    b: Node<T>,
+    c: Node<T>,
+    fuel: nat,
+)
+    requires
+        fuel > 0,
+        diff_nodes::<T>(a, b, fuel) === DiffResult::<T>::Same,
+        diff_nodes::<T>(b, c, fuel) === DiffResult::<T>::Same,
+    ensures
+        diff_nodes::<T>(a, c, fuel) === DiffResult::<T>::Same,
+    decreases fuel, 0nat,
+{
+    lemma_diff_same_implies_children_eqv::<T>(a, b, fuel);
+    lemma_diff_same_implies_children_eqv::<T>(b, c, fuel);
+    // Transitivity on fields
+    T::axiom_eqv_transitive(a.x, b.x, c.x);
+    T::axiom_eqv_transitive(a.y, b.y, c.y);
+    T::axiom_eqv_transitive(a.size.width, b.size.width, c.size.width);
+    T::axiom_eqv_transitive(a.size.height, b.size.height, c.size.height);
+    // Children
+    lemma_diff_children_transitive_same::<T>(
+        a, b, c, a.children.len(), (fuel - 1) as nat,
+    );
+}
+
+/// Helper: transitive children Same.
+proof fn lemma_diff_children_transitive_same<T: OrderedRing>(
+    a: Node<T>,
+    b: Node<T>,
+    c: Node<T>,
+    count: nat,
+    fuel: nat,
+)
+    requires
+        count <= a.children.len(),
+        a.children.len() == b.children.len(),
+        b.children.len() == c.children.len(),
+        forall|i: int| 0 <= i < count ==>
+            diff_nodes::<T>(a.children[i], b.children[i], fuel) === DiffResult::<T>::Same,
+        forall|i: int| 0 <= i < count ==>
+            diff_nodes::<T>(b.children[i], c.children[i], fuel) === DiffResult::<T>::Same,
+    ensures
+        diff_children::<T>(a, c, count, fuel).len() == 0,
+    decreases fuel, count,
+{
+    if count > 0 {
+        lemma_diff_children_transitive_same::<T>(a, b, c, (count - 1) as nat, fuel);
+        if fuel > 0 {
+            lemma_diff_transitive_same::<T>(
+                a.children[(count - 1) as int],
+                b.children[(count - 1) as int],
+                c.children[(count - 1) as int],
+                fuel,
+            );
+        }
+    }
+}
+
 } // verus!

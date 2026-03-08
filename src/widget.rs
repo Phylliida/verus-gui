@@ -101,6 +101,14 @@ pub enum Widget<T: OrderedRing> {
         ratio: T,
         child: Box<Widget<T>>,
     },
+    /// Scrollable viewport: child laid out with fixed viewport-sized limits,
+    /// positioned at (-scroll_x, -scroll_y). Output size = limits.resolve(viewport).
+    ScrollView {
+        viewport: Size<T>,
+        scroll_x: T,
+        scroll_y: T,
+        child: Box<Widget<T>>,
+    },
 }
 
 // ── Convenience constructors ──────────────────────────────────────
@@ -513,6 +521,24 @@ pub open spec fn layout_widget<T: OrderedField>(
                     }),
                 }
             },
+            Widget::ScrollView { viewport, scroll_x, scroll_y, child } => {
+                let child_limits = Limits {
+                    min: Size::zero_size(),
+                    max: viewport,
+                };
+                let child_node = layout_widget(child_limits, *child, (fuel - 1) as nat);
+                Node {
+                    x: T::zero(),
+                    y: T::zero(),
+                    size: limits.resolve(viewport),
+                    children: Seq::empty().push(Node {
+                        x: scroll_x.neg(),
+                        y: scroll_y.neg(),
+                        size: child_node.size,
+                        children: child_node.children,
+                    }),
+                }
+            },
         }
     }
 }
@@ -554,6 +580,7 @@ pub open spec fn get_children<T: OrderedRing>(widget: Widget<T>) -> Seq<Widget<T
         Widget::Conditional { child, .. } => Seq::empty().push(*child),
         Widget::SizedBox { child, .. } => Seq::empty().push(*child),
         Widget::AspectRatio { child, .. } => Seq::empty().push(*child),
+        Widget::ScrollView { child, .. } => Seq::empty().push(*child),
     }
 }
 
@@ -981,6 +1008,18 @@ pub proof fn lemma_layout_widget_fuel_monotone<T: OrderedField>(
                 };
                 lemma_layout_widget_fuel_monotone(eff, *child, (fuel - 1) as nat);
             }
+        },
+        Widget::ScrollView { viewport, scroll_x, scroll_y, child } => {
+            let gc = get_children(widget);
+            assert(gc =~= Seq::empty().push(*child));
+            assert(widget_converged(*child, (fuel - 1) as nat)) by {
+                assert(gc[0] == *child);
+            }
+            let child_limits = Limits {
+                min: Size::zero_size(),
+                max: viewport,
+            };
+            lemma_layout_widget_fuel_monotone(child_limits, *child, (fuel - 1) as nat);
         },
     }
 }

@@ -24,6 +24,7 @@ pub mod widget;
 pub mod measure;
 pub mod hit_test;
 pub mod diff;
+pub mod animation;
 
 verus! {
 

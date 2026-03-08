@@ -199,6 +199,10 @@ pub fn measure_widget_exec(
                 };
                 limits.resolve_exec(child_size)
             },
+            RuntimeWidget::ScrollView { viewport, scroll_x, scroll_y, child, model } => {
+                // measure = limits.resolve(viewport), child doesn't affect output
+                limits.resolve_exec(viewport.copy_size())
+            },
         }
     }
 }

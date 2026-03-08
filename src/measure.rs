@@ -153,6 +153,9 @@ pub open spec fn measure_widget<T: OrderedField>(
                 };
                 limits.resolve(child_size)
             },
+            Widget::ScrollView { viewport, scroll_x, scroll_y, child } => {
+                limits.resolve(viewport)
+            },
         }
     }
 }
@@ -504,6 +507,10 @@ pub proof fn lemma_measure_is_layout_size<T: OrderedField>(
                     };
                     lemma_measure_is_layout_size(eff, *child, (fuel - 1) as nat);
                 }
+            },
+            Widget::ScrollView { viewport, scroll_x, scroll_y, child } => {
+                // measure = limits.resolve(viewport) = layout_widget(...).size
+                // No recursion needed — child doesn't affect output size
             },
         }
     }

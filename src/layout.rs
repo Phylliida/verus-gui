@@ -19,6 +19,7 @@ pub mod wrap;
 pub mod wrap_proofs;
 pub mod absolute;
 pub mod absolute_proofs;
+pub mod incremental_proofs;
 
 verus! {
 
