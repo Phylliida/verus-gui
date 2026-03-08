@@ -440,9 +440,7 @@ pub fn layout_widget_exec(
                     assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
                     assert forall|j: int| 0 <= j < children@.len() implies
                         (#[trigger] children@[j]).wf_spec((fuel - 1) as nat)
-                    by {
-                        assert(children@[j].wf_spec((fuel as nat - 1) as nat));
-                    }
+                    by { assert(children@[j].wf_spec((fuel as nat - 1) as nat)); }
                 }
                 let dummy_sp = RuntimeRational::from_int(0);
                 layout_container_exec(limits, padding, spacing, &Alignment::Start,
@@ -453,10 +451,7 @@ pub fn layout_widget_exec(
                     assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
                     assert forall|j: int| 0 <= j < children@.len() implies
                         (#[trigger] children@[j]).wf_spec((fuel - 1) as nat)
-                    by {
-                        assert(children@[j].wf_spec((fuel as nat - 1) as nat));
-                        assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
-                    }
+                    by { assert(children@[j].wf_spec((fuel as nat - 1) as nat)); }
                 }
                 let dummy_sp = RuntimeRational::from_int(0);
                 layout_container_exec(limits, padding, spacing, alignment,
@@ -467,10 +462,7 @@ pub fn layout_widget_exec(
                     assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
                     assert forall|j: int| 0 <= j < children@.len() implies
                         (#[trigger] children@[j]).wf_spec((fuel - 1) as nat)
-                    by {
-                        assert(children@[j].wf_spec((fuel as nat - 1) as nat));
-                        assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
-                    }
+                    by { assert(children@[j].wf_spec((fuel as nat - 1) as nat)); }
                 }
                 let zero_sp = RuntimeRational::from_int(0);
                 let dummy_sp = RuntimeRational::from_int(0);
@@ -482,10 +474,7 @@ pub fn layout_widget_exec(
                     assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
                     assert forall|j: int| 0 <= j < children@.len() implies
                         (#[trigger] children@[j]).wf_spec((fuel - 1) as nat)
-                    by {
-                        assert(children@[j].wf_spec((fuel as nat - 1) as nat));
-                        assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
-                    }
+                    by { assert(children@[j].wf_spec((fuel as nat - 1) as nat)); }
                 }
                 layout_container_exec(limits, padding, h_spacing, &Alignment::Start,
                     &Alignment::Start, v_spacing, children, fuel, ContainerKind::Wrap)
@@ -495,9 +484,7 @@ pub fn layout_widget_exec(
                     assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
                     assert forall|j: int| 0 <= j < children@.len() implies
                         (#[trigger] children@[j]).child.wf_spec((fuel - 1) as nat)
-                    by {
-                        assert(children@[j].child.wf_spec((fuel as nat - 1) as nat));
-                    }
+                    by { assert(children@[j].child.wf_spec((fuel as nat - 1) as nat)); }
                 }
                 layout_flex_widget_exec(limits, padding, spacing, alignment,
                     direction, children, fuel)
@@ -508,9 +495,7 @@ pub fn layout_widget_exec(
                     assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
                     assert forall|j: int| 0 <= j < children@.len() implies
                         (#[trigger] children@[j]).wf_spec((fuel - 1) as nat)
-                    by {
-                        assert(children@[j].wf_spec((fuel as nat - 1) as nat));
-                    }
+                    by { assert(children@[j].wf_spec((fuel as nat - 1) as nat)); }
                 }
                 layout_grid_widget_exec(limits, padding, h_spacing, v_spacing,
                     h_align, v_align, col_widths, row_heights, children, fuel)
@@ -520,9 +505,7 @@ pub fn layout_widget_exec(
                     assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
                     assert forall|j: int| 0 <= j < children@.len() implies
                         (#[trigger] children@[j]).child.wf_spec((fuel - 1) as nat)
-                    by {
-                        assert(children@[j].child.wf_spec((fuel as nat - 1) as nat));
-                    }
+                    by { assert(children@[j].child.wf_spec((fuel as nat - 1) as nat)); }
                 }
                 layout_absolute_widget_exec(limits, padding, children, fuel)
             },
@@ -947,57 +930,27 @@ fn layout_flex_widget_exec(
 
             // Connect merged result to spec layout_widget
             proof {
-                let inner_spec = limits@.shrink(padding@.horizontal(), padding@.vertical());
-                let spec_cn = flex_column_widget_child_nodes(
-                    inner_spec, spec_fi, spec_weights, total_weight@,
-                    avail_spec, (fuel - 1) as nat);
-
-                // 1. cn_models =~= spec_cn
-                assert(cn_models.len() == spec_cn.len());
-                assert forall|j: int| 0 <= j < cn_models.len() as int implies
-                    cn_models[j] == spec_cn[j]
-                by {
-                    let fi_j = spec_fi[j];
-                    assert(fi_j == children@[j].model());
-                    assert(fi_j.child == children@[j].child.model());
-                }
-                assert(cn_models =~= spec_cn);
-
-                // 2. Cross sizes view matches what layout_flex_column_body computes
                 let cross_view: Seq<RationalModel> =
                     Seq::new(cross_sizes@.len() as nat, |i: int| cross_sizes@[i]@);
-                let spec_cross: Seq<RationalModel> =
-                    Seq::new(spec_cn.len(), |i: int| spec_cn[i].size.width);
-                assert(cross_view =~= spec_cross) by {
-                    assert(cross_view.len() == spec_cross.len());
-                    assert forall|j: int| 0 <= j < cross_view.len() as int implies
-                        cross_view[j] == spec_cross[j]
-                    by {
-                        // cross_sizes@[j]@ == child_nodes@[j]@.size.width == cn_models[j].size.width == spec_cn[j].size.width
-                    }
+                let weight_view: Seq<RationalModel> =
+                    Seq::new(weights@.len() as nat, |i: int| weights@[i]@);
+                // Bridge: cn_models uses children@[j].child.model() == spec_fi[j].child
+                assert forall|j: int| 0 <= j < cn_models.len() as int implies
+                    cn_models[j] == layout_widget::<RationalModel>(
+                        Limits { min: limits@.shrink(padding@.horizontal(), padding@.vertical()).min,
+                            max: Size::new(limits@.shrink(padding@.horizontal(), padding@.vertical()).max.width,
+                                flex_child_main_size::<RationalModel>(spec_weights[j], total_weight@, avail_spec)) },
+                        spec_fi[j].child, (fuel - 1) as nat)
+                by {
+                    assert(spec_fi[j] == children@[j].model());
                 }
-
-                // 3. Weights from spec_fi match spec_weights
-                let spec_weights_fi: Seq<RationalModel> =
-                    Seq::new(spec_fi.len(), |i: int| spec_fi[i].weight);
-                assert(spec_weights_fi =~= spec_weights) by {
-                    assert forall|i: int| 0 <= i < spec_weights_fi.len() as int implies
-                        spec_weights_fi[i] == spec_weights[i]
-                    by {
-                        let fi_i = spec_fi[i];
-                        assert(fi_i == children@[i].model());
-                    }
-                }
-
-                // 4. merged@ == layout_flex_column_body(...)
-                //    layout_flex_column_body unfolds to:
-                //      merge_layout(flex_column_layout(limits@, padding@, spacing@, alignment, weights, cross_from_cn), cn)
-                //    And merged@ == merge_layout(layout_result@, cn_models)
-                //    where layout_result@ == flex_column_layout(limits@, padding@, spacing@, alignment, weight_view, cross_view)
-                //    Since weight_view =~= spec_weights =~= spec_weights_fi and cross_view =~= spec_cross
-                //    and cn_models =~= spec_cn, these are equal.
-                assert(merged@ == layout_flex_column_body::<RationalModel>(
-                    limits@, padding@, spacing@, *alignment, spec_weights_fi, spec_cn));
+                crate::runtime::widget_proofs::lemma_flex_column_spec_connection(
+                    limits@, padding@, spacing@, *alignment,
+                    spec_fi, spec_weights, total_weight@, avail_spec,
+                    cn_models, cross_view, weight_view, merged@, (fuel - 1) as nat);
+                // Bridge exec-side spec_weights to layout_widget's internal weights term
+                assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
+                assert(spec_weights =~= Seq::new(spec_fi.len(), |i: int| spec_fi[i].weight));
             }
 
             merged
@@ -1066,49 +1019,28 @@ fn layout_flex_widget_exec(
             let merged = merge_layout_exec(layout_result, child_nodes, Ghost(cn_models));
 
             proof {
-                let inner_spec = limits@.shrink(padding@.horizontal(), padding@.vertical());
-                let spec_cn = flex_row_widget_child_nodes(
-                    inner_spec, spec_fi, spec_weights, total_weight@,
-                    avail_spec, (fuel - 1) as nat);
-
-                // 1. cn_models =~= spec_cn
-                assert(cn_models.len() == spec_cn.len());
-                assert forall|j: int| 0 <= j < cn_models.len() as int implies
-                    cn_models[j] == spec_cn[j]
-                by {
-                    let fi_j = spec_fi[j];
-                    assert(fi_j == children@[j].model());
-                    assert(fi_j.child == children@[j].child.model());
-                }
-                assert(cn_models =~= spec_cn);
-
-                // 2. Cross sizes view matches
                 let cross_view: Seq<RationalModel> =
                     Seq::new(cross_sizes@.len() as nat, |i: int| cross_sizes@[i]@);
-                let spec_cross: Seq<RationalModel> =
-                    Seq::new(spec_cn.len(), |i: int| spec_cn[i].size.height);
-                assert(cross_view =~= spec_cross) by {
-                    assert(cross_view.len() == spec_cross.len());
-                    assert forall|j: int| 0 <= j < cross_view.len() as int implies
-                        cross_view[j] == spec_cross[j]
-                    by {}
+                let weight_view: Seq<RationalModel> =
+                    Seq::new(weights@.len() as nat, |i: int| weights@[i]@);
+                // Bridge: cn_models uses children@[j].child.model() == spec_fi[j].child
+                assert forall|j: int| 0 <= j < cn_models.len() as int implies
+                    cn_models[j] == layout_widget::<RationalModel>(
+                        Limits { min: limits@.shrink(padding@.horizontal(), padding@.vertical()).min,
+                            max: Size::new(
+                                flex_child_main_size::<RationalModel>(spec_weights[j], total_weight@, avail_spec),
+                                limits@.shrink(padding@.horizontal(), padding@.vertical()).max.height) },
+                        spec_fi[j].child, (fuel - 1) as nat)
+                by {
+                    assert(spec_fi[j] == children@[j].model());
                 }
-
-                // 3. Weights from spec_fi match
-                let spec_weights_fi: Seq<RationalModel> =
-                    Seq::new(spec_fi.len(), |i: int| spec_fi[i].weight);
-                assert(spec_weights_fi =~= spec_weights) by {
-                    assert forall|i: int| 0 <= i < spec_weights_fi.len() as int implies
-                        spec_weights_fi[i] == spec_weights[i]
-                    by {
-                        let fi_i = spec_fi[i];
-                        assert(fi_i == children@[i].model());
-                    }
-                }
-
-                // 4. merged@ == layout_flex_row_body(...)
-                assert(merged@ == layout_flex_row_body::<RationalModel>(
-                    limits@, padding@, spacing@, *alignment, spec_weights_fi, spec_cn));
+                crate::runtime::widget_proofs::lemma_flex_row_spec_connection(
+                    limits@, padding@, spacing@, *alignment,
+                    spec_fi, spec_weights, total_weight@, avail_spec,
+                    cn_models, cross_view, weight_view, merged@, (fuel - 1) as nat);
+                // Bridge exec-side spec_weights to layout_widget's internal weights term
+                assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
+                assert(spec_weights =~= Seq::new(spec_fi.len(), |i: int| spec_fi[i].weight));
             }
 
             merged
