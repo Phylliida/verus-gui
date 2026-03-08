@@ -25,6 +25,8 @@ pub mod measure;
 pub mod hit_test;
 pub mod diff;
 pub mod animation;
+pub mod scroll;
+pub mod event;
 
 verus! {
 

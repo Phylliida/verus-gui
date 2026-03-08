@@ -32,4 +32,10 @@ pub mod diff;
 pub mod animation;
 
 #[cfg(verus_keep_ghost)]
+pub mod scroll;
+
+#[cfg(verus_keep_ghost)]
+pub mod event;
+
+#[cfg(verus_keep_ghost)]
 pub mod runtime;

@@ -103,6 +103,7 @@ pub fn copy_node_deep_exec(a: &RuntimeNode, fuel: u64) -> (out: RuntimeNode)
 
 /// Runtime node lerp: recursive tree interpolation.
 /// Requires wf_deep(fuel) to enable recursive descent into children.
+/// Ensures wf_deep((fuel-1)) for full tree well-formedness.
 pub fn lerp_node_exec(
     a: &RuntimeNode,
     b: &RuntimeNode,
@@ -115,51 +116,13 @@ pub fn lerp_node_exec(
         t.wf_spec(),
         fuel > 0,
     ensures
-        out.wf_spec(),
+        out.wf_deep((fuel - 1) as nat),
         out@ == lerp_node::<RationalModel>(a@, b@, t@, fuel as nat),
     decreases fuel,
 {
     if a.children.len() != b.children.len() {
-        // Mismatch: lerp_node returns a. Build a shallow copy.
-        let x = copy_rational(&a.x);
-        let y = copy_rational(&a.y);
-        let size = a.size.copy_size();
-        let mut children: Vec<RuntimeNode> = Vec::new();
-        let mut idx: usize = 0;
-        while idx < a.children.len()
-            invariant
-                a.wf_deep(fuel as nat),
-                fuel > 0,
-                0 <= idx <= a.children.len(),
-                children@.len() == idx,
-                forall|j: int| 0 <= j < idx ==> {
-                    &&& (#[trigger] children@[j]).wf_shallow()
-                    &&& children@[j]@ == a@.children[j]
-                },
-            decreases a.children.len() - idx,
-        {
-            assert(a.children@[idx as int].wf_deep((fuel - 1) as nat));
-            assert(a.children@[idx as int].wf_shallow());
-            let child_x = copy_rational(&a.children[idx].x);
-            let child_y = copy_rational(&a.children[idx].y);
-            let child_size = a.children[idx].size.copy_size();
-            let child = RuntimeNode {
-                x: child_x,
-                y: child_y,
-                size: child_size,
-                children: Vec::new(),
-                model: Ghost(a@.children[idx as int]),
-            };
-            children.push(child);
-            idx = idx + 1;
-        }
-        RuntimeNode {
-            x,
-            y,
-            size,
-            children,
-            model: Ghost(a@),
-        }
+        // Mismatch: lerp_node returns a. Deep copy preserves wf_deep.
+        copy_node_deep_exec(a, fuel)
     } else {
         // Matching children: interpolate fields, recurse on children
         let t1 = copy_rational(t);
@@ -185,8 +148,9 @@ pub fn lerp_node_exec(
                 children@.len() == idx,
                 result_spec == lerp_node::<RationalModel>(a@, b@, t@, fuel as nat),
                 forall|j: int| 0 <= j < idx ==> {
-                    &&& (#[trigger] children@[j]).wf_shallow()
-                    &&& children@[j]@ == result_spec.children[j]
+                    &&& (#[trigger] children@[j])@ == result_spec.children[j]
+                    &&& (fuel > 1 ==> children@[j].wf_deep((fuel - 2) as nat))
+                    &&& (fuel == 1 ==> children@[j].wf_shallow())
                 },
             decreases a.children.len() - idx,
         {

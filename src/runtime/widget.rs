@@ -359,6 +359,53 @@ impl RuntimeWidget {
     }
 }
 
+// ── Conditional widget helper ────────────────────────────────────
+
+/// Layout a conditional widget: visible child or zero-sized leaf.
+fn layout_conditional_exec(
+    limits: &RuntimeLimits,
+    visible: bool,
+    child: &Box<RuntimeWidget>,
+    fuel: usize,
+) -> (out: RuntimeNode)
+    requires
+        limits.wf_spec(),
+        fuel > 0,
+        child.wf_spec((fuel - 1) as nat),
+    ensures
+        out.wf_spec(),
+        out@ == layout_widget::<RationalModel>(
+            limits@,
+            Widget::Conditional { visible, child: Box::new(child.model()) },
+            fuel as nat,
+        ),
+    decreases fuel, 0nat,
+{
+    if visible {
+        let child_node = layout_widget_exec(limits, child, fuel - 1);
+        let resolved = limits.resolve_exec(child_node.size.copy_size());
+        let x = RuntimeRational::from_int(0);
+        let y = RuntimeRational::from_int(0);
+        let ghost parent_model = layout_widget::<RationalModel>(
+            limits@,
+            Widget::Conditional { visible: true, child: Box::new(child.model()) },
+            fuel as nat,
+        );
+        RuntimeNode {
+            x,
+            y,
+            size: resolved,
+            children: child_node.children,
+            model: Ghost(parent_model),
+        }
+    } else {
+        let resolved = limits.resolve_exec(RuntimeSize::zero_exec());
+        let x = RuntimeRational::from_int(0);
+        let y = RuntimeRational::from_int(0);
+        RuntimeNode::leaf_exec(x, y, resolved)
+    }
+}
+
 // ── Layout widget exec ───────────────────────────────────────────
 
 /// Recursively lay out a RuntimeWidget tree.
@@ -489,35 +536,13 @@ pub fn layout_widget_exec(
                 layout_margin_widget_exec(limits, margin, child, fuel)
             },
             RuntimeWidget::Conditional { visible, child, model } => {
-                if *visible {
-                    proof {
-                        assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
-                        assert(child.wf_spec((fuel - 1) as nat)) by {
-                            assert(child.wf_spec((fuel as nat - 1) as nat));
-                        }
+                proof {
+                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
+                    assert(child.wf_spec((fuel - 1) as nat)) by {
+                        assert(child.wf_spec((fuel as nat - 1) as nat));
                     }
-                    let child_node = layout_widget_exec(limits, child, fuel - 1);
-                    let resolved = limits.resolve_exec(child_node.size.copy_size());
-                    let x = RuntimeRational::from_int(0);
-                    let y = RuntimeRational::from_int(0);
-                    let ghost parent_model = layout_widget::<RationalModel>(
-                        limits@,
-                        Widget::Conditional { visible: true, child: Box::new(child.model()) },
-                        fuel as nat,
-                    );
-                    RuntimeNode {
-                        x,
-                        y,
-                        size: resolved,
-                        children: child_node.children,
-                        model: Ghost(parent_model),
-                    }
-                } else {
-                    let resolved = limits.resolve_exec(RuntimeSize::zero_exec());
-                    let x = RuntimeRational::from_int(0);
-                    let y = RuntimeRational::from_int(0);
-                    RuntimeNode::leaf_exec(x, y, resolved)
                 }
+                layout_conditional_exec(limits, *visible, child, fuel)
             },
             RuntimeWidget::SizedBox { inner_limits: il, child, model } => {
                 proof {
