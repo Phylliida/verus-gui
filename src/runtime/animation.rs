@@ -52,6 +52,55 @@ pub fn lerp_size_exec(
     RuntimeSize::new(w, h)
 }
 
+/// Recursively deep-copy a RuntimeNode. At fuel=1, copies shallowly.
+/// At fuel>1, recurses into children.
+pub fn copy_node_deep_exec(a: &RuntimeNode, fuel: u64) -> (out: RuntimeNode)
+    requires a.wf_deep(fuel as nat), fuel > 0,
+    ensures
+        out.wf_deep((fuel - 1) as nat),
+        out@ == a@,
+    decreases fuel,
+{
+    let x = copy_rational(&a.x);
+    let y = copy_rational(&a.y);
+    let size = a.size.copy_size();
+    let mut children: Vec<RuntimeNode> = Vec::new();
+    let mut idx: usize = 0;
+    while idx < a.children.len()
+        invariant
+            a.wf_deep(fuel as nat),
+            fuel > 0,
+            0 <= idx <= a.children.len(),
+            children@.len() == idx,
+            forall|j: int| 0 <= j < idx ==> {
+                &&& (#[trigger] children@[j])@ == a@.children[j]
+                &&& (fuel > 1 ==> children@[j].wf_deep((fuel - 2) as nat))
+                &&& (fuel == 1 ==> children@[j].wf_shallow())
+            },
+        decreases a.children.len() - idx,
+    {
+        assert(a.children@[idx as int].wf_deep((fuel - 1) as nat));
+        assert(a.children@[idx as int].wf_shallow());
+        let child = if fuel > 1 {
+            copy_node_deep_exec(&a.children[idx], fuel - 1)
+        } else {
+            let cx = copy_rational(&a.children[idx].x);
+            let cy = copy_rational(&a.children[idx].y);
+            let cs = a.children[idx].size.copy_size();
+            RuntimeNode {
+                x: cx,
+                y: cy,
+                size: cs,
+                children: Vec::new(),
+                model: Ghost(a@.children[idx as int]),
+            }
+        };
+        children.push(child);
+        idx = idx + 1;
+    }
+    RuntimeNode { x, y, size, children, model: Ghost(a@) }
+}
+
 /// Runtime node lerp: recursive tree interpolation.
 /// Requires wf_deep(fuel) to enable recursive descent into children.
 pub fn lerp_node_exec(

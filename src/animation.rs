@@ -434,6 +434,258 @@ pub proof fn lemma_scalar_lerp_congruence_right<T: OrderedField>(
     );
 }
 
+// ── Scalar lerp monotonicity ─────────────────────────────────────
+
+/// Helper: scalar_lerp(a, b, t) ≡ a + t*(b-a).
+///
+/// Proof sketch: convex(b, a, t) = t*b + (1-t)*a
+///   = t*b + a - t*a  [distribute]  = a + t*b - t*a  [commute]
+///   = a + t*(b - a)  [factor]
+proof fn lemma_scalar_lerp_as_offset<T: OrderedField>(a: T, b: T, t: T)
+    ensures scalar_lerp(a, b, t).eqv(a.add(t.mul(b.sub(a)))),
+{
+    // scalar_lerp(a, b, t) = convex(b, a, t) = t.mul(b).add((1-t).mul(a))
+    // Goal: show t.mul(b).add((1-t).mul(a)) ≡ a.add(t.mul(b.sub(a)))
+
+    // Step 1: (1-t)*a ≡ a - t*a
+    // 1.sub(t) * a ≡ 1*a - t*a via lemma_mul_distributes_over_sub
+    use verus_algebra::lemmas::ring_lemmas::lemma_mul_distributes_over_sub;
+    // Need: (1-t)*a, but distributes_over_sub gives a*(b-c) ≡ a*b - a*c.
+    // Use commutativity: (1-t)*a ≡ a*(1-t) then a*(1-t) ≡ a*1 - a*t
+    T::axiom_mul_commutative(T::one().sub(t), a);
+    // (1-t)*a ≡ a*(1-t)
+    lemma_mul_distributes_over_sub::<T>(a, T::one(), t);
+    // a*(1-t) ≡ a*1 - a*t
+    T::axiom_eqv_transitive(
+        T::one().sub(t).mul(a), a.mul(T::one().sub(t)),
+        a.mul(T::one()).sub(a.mul(t)),
+    );
+    // (1-t)*a ≡ a*1 - a*t
+
+    // Step 2: a*1 ≡ a
+    T::axiom_mul_one_right(a);
+    // a.mul(1).eqv(a)
+
+    // Step 3: a*t ≡ t*a
+    T::axiom_mul_commutative(a, t);
+    // a.mul(t).eqv(t.mul(a))
+
+    // Step 4: a*1 - a*t ≡ a - t*a via sub congruence
+    use verus_algebra::lemmas::additive_group_lemmas::lemma_sub_congruence;
+    lemma_sub_congruence::<T>(a.mul(T::one()), a, a.mul(t), t.mul(a));
+    // a*1 - a*t ≡ a - t*a
+
+    // Step 5: (1-t)*a ≡ a - t*a via transitivity
+    T::axiom_eqv_transitive(
+        T::one().sub(t).mul(a),
+        a.mul(T::one()).sub(a.mul(t)),
+        a.sub(t.mul(a)),
+    );
+
+    // Step 6: t*b + (1-t)*a ≡ t*b + (a - t*a) via add congruence
+    T::axiom_eqv_reflexive(t.mul(b));
+    use verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence;
+    lemma_add_congruence::<T>(
+        t.mul(b), t.mul(b),
+        T::one().sub(t).mul(a), a.sub(t.mul(a)),
+    );
+    // t*b + (1-t)*a ≡ t*b + (a - t*a)
+
+    // Step 7: a - t*a ≡ a + (-(t*a)) via axiom_sub_is_add_neg
+    T::axiom_sub_is_add_neg(a, t.mul(a));
+
+    // Step 8: t*b + (a + (-(t*a))) via associativity & commutativity
+    // t*b + (a - t*a) → rewrite (a - t*a) as a + (-(t*a))
+    T::axiom_eqv_reflexive(t.mul(b));
+    lemma_add_congruence::<T>(
+        t.mul(b), t.mul(b),
+        a.sub(t.mul(a)), a.add(t.mul(a).neg()),
+    );
+    // t*b + (a - t*a) ≡ t*b + (a + (-(t*a)))
+    T::axiom_eqv_transitive(
+        t.mul(b).add(T::one().sub(t).mul(a)),
+        t.mul(b).add(a.sub(t.mul(a))),
+        t.mul(b).add(a.add(t.mul(a).neg())),
+    );
+
+    // Step 9: t*b + (a + (-(t*a))) ≡ (t*b + a) + (-(t*a)) via associativity
+    T::axiom_add_associative(t.mul(b), a, t.mul(a).neg());
+    T::axiom_eqv_symmetric(
+        t.mul(b).add(a).add(t.mul(a).neg()),
+        t.mul(b).add(a.add(t.mul(a).neg())),
+    );
+    // t*b + (a + (-(t*a))) ≡ (t*b + a) + (-(t*a))
+    T::axiom_eqv_transitive(
+        t.mul(b).add(T::one().sub(t).mul(a)),
+        t.mul(b).add(a.add(t.mul(a).neg())),
+        t.mul(b).add(a).add(t.mul(a).neg()),
+    );
+
+    // Step 10: (t*b + a) ≡ (a + t*b) via commutativity
+    T::axiom_add_commutative(t.mul(b), a);
+
+    // Step 11: (t*b + a) + (-(t*a)) ≡ (a + t*b) + (-(t*a))
+    T::axiom_eqv_reflexive(t.mul(a).neg());
+    lemma_add_congruence::<T>(
+        t.mul(b).add(a), a.add(t.mul(b)),
+        t.mul(a).neg(), t.mul(a).neg(),
+    );
+    T::axiom_eqv_transitive(
+        t.mul(b).add(T::one().sub(t).mul(a)),
+        t.mul(b).add(a).add(t.mul(a).neg()),
+        a.add(t.mul(b)).add(t.mul(a).neg()),
+    );
+
+    // Step 12: (a + t*b) + (-(t*a)) ≡ a + (t*b + (-(t*a))) via associativity
+    T::axiom_add_associative(a, t.mul(b), t.mul(a).neg());
+    T::axiom_eqv_transitive(
+        t.mul(b).add(T::one().sub(t).mul(a)),
+        a.add(t.mul(b)).add(t.mul(a).neg()),
+        a.add(t.mul(b).add(t.mul(a).neg())),
+    );
+
+    // Step 13: t*b + (-(t*a)) ≡ t*b - t*a via sub_is_add_neg (reverse)
+    T::axiom_sub_is_add_neg(t.mul(b), t.mul(a));
+    T::axiom_eqv_symmetric(t.mul(b).sub(t.mul(a)), t.mul(b).add(t.mul(a).neg()));
+
+    // Step 14: t*b - t*a ≡ t*(b-a) via distributes_over_sub (reverse)
+    lemma_mul_distributes_over_sub::<T>(t, b, a);
+    T::axiom_eqv_symmetric(t.mul(b.sub(a)), t.mul(b).sub(t.mul(a)));
+
+    // Step 15: chain: t*b + (-(t*a)) → t*b - t*a → t*(b-a)
+    T::axiom_eqv_transitive(
+        t.mul(b).add(t.mul(a).neg()),
+        t.mul(b).sub(t.mul(a)),
+        t.mul(b.sub(a)),
+    );
+
+    // Step 16: a + (t*b + (-(t*a))) ≡ a + t*(b-a)
+    T::axiom_eqv_reflexive(a);
+    lemma_add_congruence::<T>(
+        a, a,
+        t.mul(b).add(t.mul(a).neg()), t.mul(b.sub(a)),
+    );
+    // need to chain through the intermediate: t*b + (-(t*a)) → t*(b-a)
+    // first show a + (t*b + neg(t*a)) ≡ a + (t*b - t*a)
+    T::axiom_eqv_reflexive(a);
+    lemma_add_congruence::<T>(
+        a, a,
+        t.mul(b).add(t.mul(a).neg()), t.mul(b).sub(t.mul(a)),
+    );
+    // a + (t*b + neg(t*a)) ≡ a + (t*b - t*a)
+    lemma_add_congruence::<T>(
+        a, a,
+        t.mul(b).sub(t.mul(a)), t.mul(b.sub(a)),
+    );
+    // a + (t*b - t*a) ≡ a + t*(b-a)
+    T::axiom_eqv_transitive(
+        a.add(t.mul(b).add(t.mul(a).neg())),
+        a.add(t.mul(b).sub(t.mul(a))),
+        a.add(t.mul(b.sub(a))),
+    );
+
+    // Final: convex(b, a, t) ≡ a + t*(b-a)
+    T::axiom_eqv_transitive(
+        t.mul(b).add(T::one().sub(t).mul(a)),
+        a.add(t.mul(b).add(t.mul(a).neg())),
+        a.add(t.mul(b.sub(a))),
+    );
+}
+
+/// s ≤ t and a ≤ b implies scalar_lerp(a, b, s) ≤ scalar_lerp(a, b, t).
+pub proof fn lemma_scalar_lerp_monotone<T: OrderedField>(a: T, b: T, s: T, t: T)
+    requires
+        a.le(b),
+        s.le(t),
+    ensures
+        scalar_lerp(a, b, s).le(scalar_lerp(a, b, t)),
+{
+    use verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_iff_sub_nonneg;
+
+    // 1. 0 ≤ b-a from a ≤ b
+    lemma_le_iff_sub_nonneg::<T>(a, b);
+    // T::zero().le(b.sub(a))
+
+    // 2. s*(b-a) ≤ t*(b-a) from s ≤ t and 0 ≤ b-a
+    T::axiom_le_mul_nonneg_monotone(s, t, b.sub(a));
+    // s.mul(b.sub(a)).le(t.mul(b.sub(a)))
+
+    // 3. a + s*(b-a) ≤ a + t*(b-a) via axiom_le_add_monotone + commutativity
+    T::axiom_le_add_monotone(s.mul(b.sub(a)), t.mul(b.sub(a)), a);
+    // s.mul(b.sub(a)).add(a).le(t.mul(b.sub(a)).add(a))
+    T::axiom_add_commutative(s.mul(b.sub(a)), a);
+    T::axiom_add_commutative(t.mul(b.sub(a)), a);
+    T::axiom_le_congruence(
+        s.mul(b.sub(a)).add(a), a.add(s.mul(b.sub(a))),
+        t.mul(b.sub(a)).add(a), a.add(t.mul(b.sub(a))),
+    );
+    // a.add(s.mul(b.sub(a))).le(a.add(t.mul(b.sub(a))))
+
+    // 4. Transfer via congruence from offset form to scalar_lerp
+    lemma_scalar_lerp_as_offset::<T>(a, b, s);
+    lemma_scalar_lerp_as_offset::<T>(a, b, t);
+    T::axiom_eqv_symmetric(scalar_lerp(a, b, s), a.add(s.mul(b.sub(a))));
+    T::axiom_eqv_symmetric(scalar_lerp(a, b, t), a.add(t.mul(b.sub(a))));
+    T::axiom_le_congruence(
+        a.add(s.mul(b.sub(a))), scalar_lerp(a, b, s),
+        a.add(t.mul(b.sub(a))), scalar_lerp(a, b, t),
+    );
+}
+
+// ── Node componentwise ordering ──────────────────────────────────
+
+/// Whether a ≤ b componentwise at all levels to given depth.
+pub open spec fn nodes_componentwise_le<T: OrderedRing>(
+    a: Node<T>, b: Node<T>, depth: nat,
+) -> bool
+    decreases depth,
+{
+    a.x.le(b.x) && a.y.le(b.y)
+    && a.size.width.le(b.size.width) && a.size.height.le(b.size.height)
+    && a.children.len() == b.children.len()
+    && (depth > 0 ==> forall|i: int| 0 <= i < a.children.len() ==>
+        nodes_componentwise_le(a.children[i], b.children[i], (depth - 1) as nat))
+}
+
+/// Increasing t moves lerp_node monotonically when a ≤ b componentwise.
+pub proof fn lemma_lerp_node_monotone_deep<T: OrderedField>(
+    a: Node<T>, b: Node<T>, s: T, t: T, fuel: nat,
+)
+    requires
+        fuel > 0,
+        nodes_componentwise_le(a, b, (fuel - 1) as nat),
+        s.le(t),
+    ensures
+        nodes_componentwise_le(
+            lerp_node(a, b, s, fuel),
+            lerp_node(a, b, t, fuel),
+            (fuel - 1) as nat,
+        ),
+    decreases fuel,
+{
+    // a.children.len() == b.children.len() from componentwise_le
+    // Both lerp_node calls enter the interpolation branch
+    // Fields: scalar_lerp_monotone on x, y, width, height
+    lemma_scalar_lerp_monotone::<T>(a.x, b.x, s, t);
+    lemma_scalar_lerp_monotone::<T>(a.y, b.y, s, t);
+    lemma_scalar_lerp_monotone::<T>(a.size.width, b.size.width, s, t);
+    lemma_scalar_lerp_monotone::<T>(a.size.height, b.size.height, s, t);
+    // Children: recursive IH
+    if fuel > 1 {
+        assert forall|i: int| 0 <= i < a.children.len() implies
+            nodes_componentwise_le(
+                lerp_node(a.children[i], b.children[i], s, (fuel - 1) as nat),
+                lerp_node(a.children[i], b.children[i], t, (fuel - 1) as nat),
+                (fuel - 2) as nat,
+            )
+        by {
+            lemma_lerp_node_monotone_deep::<T>(
+                a.children[i], b.children[i], s, t, (fuel - 1) as nat,
+            );
+        };
+    }
+}
+
 // ── Deep node lerp congruence ────────────────────────────────────
 
 /// lerp_node(a1, b, t, fuel) deeply ≡ lerp_node(a2, b, t, fuel) when a1 deeply ≡ a2.
