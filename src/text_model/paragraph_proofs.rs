@@ -26,6 +26,29 @@ pub proof fn lemma_count_char_push(text: Seq<char>, c: char, x: char)
     assert(text.push(x).last() == x);
 }
 
+/// count_char of a sequence is at most the sequence length.
+pub proof fn lemma_count_char_le_len(text: Seq<char>, c: char)
+    ensures
+        count_char(text, c) <= text.len(),
+    decreases text.len(),
+{
+    if text.len() > 0 {
+        lemma_count_char_le_len(text.drop_last(), c);
+    }
+}
+
+/// Every element of seq_repeat(val, count) is val.
+pub proof fn lemma_seq_repeat_index<A>(val: A, count: nat, i: int)
+    requires 0 <= i < count as int,
+    ensures seq_repeat(val, count)[i] == val,
+    decreases count,
+{
+    lemma_seq_repeat_len(val, (count - 1) as nat);
+    if i < count as int - 1 {
+        lemma_seq_repeat_index(val, (count - 1) as nat, i);
+    }
+}
+
 /// count_char of a subrange: additive decomposition.
 /// count_char(text[a..c), ch) == count_char(text[a..b), ch) + count_char(text[b..c), ch)
 pub proof fn lemma_count_char_subrange_additive(

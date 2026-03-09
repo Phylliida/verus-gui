@@ -29,6 +29,7 @@ pub mod scroll;
 pub mod listview;
 pub mod event;
 pub mod interaction;
+pub mod text_model;
 
 verus! {
 
