@@ -5,6 +5,7 @@ use crate::text_model::cursor::*;
 use crate::text_model::proofs::*;
 use crate::text_model::paragraph_proofs::*;
 use crate::text_model::undo::*;
+use crate::text_model::undo_proofs::*;
 
 verus! {
 
