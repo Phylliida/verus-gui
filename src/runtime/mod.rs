@@ -21,13 +21,14 @@ pub mod grid;
 pub mod wrap;
 pub mod absolute;
 pub mod widget;
-pub mod widget_proofs;
 pub mod measure;
 pub mod hit_test;
 pub mod diff;
 pub mod animation;
 pub mod scroll;
+pub mod listview;
 pub mod event;
+pub mod interaction;
 
 verus! {
 

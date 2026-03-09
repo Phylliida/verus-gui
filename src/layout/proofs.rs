@@ -1910,6 +1910,9 @@ pub proof fn lemma_layout_respects_limits<T: OrderedField>(
         Widget::ScrollView { viewport, scroll_x, scroll_y, child } => {
             lemma_resolve_bounds(limits, viewport);
         },
+        Widget::ListView { spacing, scroll_y, viewport, children } => {
+            lemma_resolve_bounds(limits, viewport);
+        },
     }
 }
 
@@ -3666,6 +3669,10 @@ pub open spec fn widget_wf<T: OrderedField>(
                 viewport.is_nonneg()
                 && T::zero().le(scroll_x)
                 && T::zero().le(scroll_y),
+            // ListView uses scroll offsets too, so children can be at negative y
+            Widget::ListView { spacing, scroll_y, viewport, children } =>
+                viewport.is_nonneg()
+                && T::zero().le(scroll_y),
         }
     }
 }
@@ -3709,6 +3716,8 @@ pub open spec fn widget_cwb_ok<T: OrderedRing>(widget: Widget<T>, fuel: nat) -> 
                 widget_cwb_ok(*child, (fuel - 1) as nat),
             Widget::AspectRatio { child, .. } =>
                 widget_cwb_ok(*child, (fuel - 1) as nat),
+            // ListView positions children with scroll offset → can be negative
+            Widget::ListView { .. } => false,
         }
     }
 }
@@ -3808,6 +3817,10 @@ pub proof fn lemma_layout_widget_cwb<T: OrderedField>(
         },
         Widget::ScrollView { .. } => {
             // Excluded by widget_cwb_ok (returns false for ScrollView)
+            assert(false);
+        },
+        Widget::ListView { .. } => {
+            // Excluded by widget_cwb_ok (returns false for ListView)
             assert(false);
         },
     }
@@ -3961,6 +3974,7 @@ pub open spec fn widget_size_monotone_ok<T: OrderedRing>(
             Widget::SizedBox { child, .. } =>
                 widget_size_monotone_ok(*child, (fuel - 1) as nat),
             Widget::ScrollView { .. } => true,
+            Widget::ListView { .. } => true,
         }
     }
 }
@@ -4033,6 +4047,7 @@ pub closed spec fn widget_monotone_wf<T: OrderedField>(
             Widget::Grid { .. } => true,
             Widget::Wrap { .. } => true,
             Widget::ScrollView { .. } => true,
+            Widget::ListView { .. } => true,
         }
     }
 }
@@ -4393,6 +4408,10 @@ pub proof fn lemma_layout_widget_monotone<T: OrderedField>(
         Widget::ScrollView { viewport, scroll_x, scroll_y, child } => {
             // Output = limits.resolve(viewport), same viewport for both.
             // Monotone in limits.max only.
+            lemma_resolve_monotone_max(limits1, limits2, viewport);
+        },
+        Widget::ListView { spacing, scroll_y, viewport, children } => {
+            // Output = limits.resolve(viewport), same viewport for both.
             lemma_resolve_monotone_max(limits1, limits2, viewport);
         },
     }

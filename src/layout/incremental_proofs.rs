@@ -169,4 +169,103 @@ pub proof fn lemma_diff_converged_stability<T: OrderedField>(
     lemma_diff_reflexive(layout_widget(limits, widget, fuel1), fuel1);
 }
 
+// ── Theorem 6: Sufficient fuel implies convergence ──────────────
+
+/// Helper: max_child_widget_depth(children, fuel, count) >= widget_depth(children[i], fuel)
+/// for all i < count.
+proof fn lemma_max_child_depth_bound<T: OrderedRing>(
+    children: Seq<Widget<T>>,
+    fuel: nat,
+    count: nat,
+    i: int,
+)
+    requires
+        0 <= i < count,
+        count <= children.len(),
+    ensures
+        max_child_widget_depth(children, fuel, count) >= widget_depth(children[i], fuel),
+    decreases count,
+{
+    if count == 0 {
+        // impossible since i < count
+    } else if i == (count - 1) as int {
+        // widget_depth(children[count-1], fuel) is the cur value
+        // max_child_depth = max(prev, cur) >= cur
+    } else {
+        // i < count - 1, so by IH, prev >= widget_depth(children[i], fuel)
+        lemma_max_child_depth_bound::<T>(children, fuel, (count - 1) as nat, i);
+        // max_child_depth = max(prev, cur) >= prev >= widget_depth(children[i], fuel)
+    }
+}
+
+/// If fuel > widget_depth(widget, fuel), then widget_converged(widget, fuel).
+///
+/// The widget_depth function computes the tree depth within the given fuel budget.
+/// When fuel exceeds this depth, all subtrees are fully resolved and the widget
+/// has converged.
+pub proof fn lemma_sufficient_fuel_converges<T: OrderedRing>(
+    widget: Widget<T>,
+    fuel: nat,
+)
+    requires
+        fuel > widget_depth(widget, fuel),
+    ensures
+        widget_converged(widget, fuel),
+    decreases fuel,
+{
+    // fuel > widget_depth >= 0, so fuel >= 1
+    let children = get_children(widget);
+    if children.len() == 0 {
+        // Leaf-like: widget_converged = true for fuel >= 1
+    } else {
+        // widget_depth(widget, fuel) = 1 + max_child_widget_depth(children, fuel-1, children.len())
+        // So fuel > 1 + max_child_depth, i.e., fuel - 1 > max_child_depth
+        let max_child_depth = max_child_widget_depth(children, (fuel - 1) as nat, children.len());
+        assert forall|i: int| 0 <= i < children.len() implies
+            widget_converged(children[i], (fuel - 1) as nat)
+        by {
+            // max_child_depth >= widget_depth(children[i], fuel-1) by helper
+            lemma_max_child_depth_bound::<T>(
+                children, (fuel - 1) as nat, children.len() as nat, i,
+            );
+            // fuel - 1 > max_child_depth >= widget_depth(children[i], fuel-1)
+            // By IH: widget_converged(children[i], fuel-1)
+            lemma_sufficient_fuel_converges::<T>(children[i], (fuel - 1) as nat);
+        };
+    }
+}
+
+// ── Theorem 7: Fuel-independent layout ──────────────────────────
+
+/// If both fuel1 and fuel2 exceed the widget's depth, the layout results are
+/// identical — the layout is independent of fuel choice once sufficient.
+///
+/// Combines `lemma_sufficient_fuel_converges` and `lemma_converged_layout_stable`
+/// into a single easy-to-use theorem.
+pub proof fn lemma_layout_stable_beyond_depth<T: OrderedField>(
+    limits: Limits<T>,
+    widget: Widget<T>,
+    fuel1: nat,
+    fuel2: nat,
+)
+    requires
+        fuel1 > widget_depth(widget, fuel1),
+        fuel2 > widget_depth(widget, fuel2),
+    ensures
+        layout_widget(limits, widget, fuel1) === layout_widget(limits, widget, fuel2),
+{
+    // Both fuels are sufficient → both have converged
+    lemma_sufficient_fuel_converges::<T>(widget, fuel1);
+    lemma_sufficient_fuel_converges::<T>(widget, fuel2);
+    // widget_converged(widget, fuel1) and widget_converged(widget, fuel2)
+
+    if fuel1 <= fuel2 {
+        // fuel2 >= fuel1, converged at fuel1 → same layout
+        lemma_converged_layout_stable(limits, widget, fuel1, fuel2);
+    } else {
+        // fuel1 > fuel2, converged at fuel2 → same layout
+        lemma_converged_layout_stable(limits, widget, fuel2, fuel1);
+    }
+}
+
 } // verus!

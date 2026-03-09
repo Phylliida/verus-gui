@@ -156,6 +156,9 @@ pub open spec fn measure_widget<T: OrderedField>(
             Widget::ScrollView { viewport, scroll_x, scroll_y, child } => {
                 limits.resolve(viewport)
             },
+            Widget::ListView { spacing, scroll_y, viewport, children } => {
+                limits.resolve(viewport)
+            },
         }
     }
 }
@@ -512,6 +515,10 @@ pub proof fn lemma_measure_is_layout_size<T: OrderedField>(
                 // measure = limits.resolve(viewport) = layout_widget(...).size
                 // No recursion needed — child doesn't affect output size
             },
+            Widget::ListView { spacing, scroll_y, viewport, children } => {
+                // measure = limits.resolve(viewport) = layout_widget(...).size
+                // Output size depends only on viewport, not children
+            },
         }
     }
 }
@@ -531,6 +538,7 @@ pub proof fn lemma_measure_fuel_monotone<T: OrderedField>(
     ensures
         measure_widget(limits, widget, fuel)
             == measure_widget(limits, widget, fuel + 1),
+    decreases fuel,
 {
     lemma_measure_is_layout_size(limits, widget, fuel);
     lemma_measure_is_layout_size(limits, widget, fuel + 1);

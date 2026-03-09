@@ -45,7 +45,12 @@ pub fn measure_widget_exec(
             },
             RuntimeWidget::Column { padding, spacing, alignment, children, model } => {
                 proof {
-                    crate::runtime::widget_proofs::lemma_fuel_bridge_children(children@, fuel);
+                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
+                    assert forall|j: int| 0 <= j < children@.len() implies
+                        (#[trigger] children@[j]).wf_spec((fuel - 1) as nat)
+                    by {
+                        assert(children@[j].wf_spec((fuel as nat - 1) as nat));
+                    }
                 }
                 let dummy_sp = RuntimeRational::from_int(0);
                 measure_container_exec(limits, padding, spacing, &dummy_sp,
@@ -53,7 +58,12 @@ pub fn measure_widget_exec(
             },
             RuntimeWidget::Row { padding, spacing, alignment, children, model } => {
                 proof {
-                    crate::runtime::widget_proofs::lemma_fuel_bridge_children(children@, fuel);
+                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
+                    assert forall|j: int| 0 <= j < children@.len() implies
+                        (#[trigger] children@[j]).wf_spec((fuel - 1) as nat)
+                    by {
+                        assert(children@[j].wf_spec((fuel as nat - 1) as nat));
+                    }
                 }
                 let dummy_sp = RuntimeRational::from_int(0);
                 measure_container_exec(limits, padding, spacing, &dummy_sp,
@@ -61,7 +71,12 @@ pub fn measure_widget_exec(
             },
             RuntimeWidget::Stack { padding, h_align, v_align, children, model } => {
                 proof {
-                    crate::runtime::widget_proofs::lemma_fuel_bridge_children(children@, fuel);
+                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
+                    assert forall|j: int| 0 <= j < children@.len() implies
+                        (#[trigger] children@[j]).wf_spec((fuel - 1) as nat)
+                    by {
+                        assert(children@[j].wf_spec((fuel as nat - 1) as nat));
+                    }
                 }
                 let dummy_sp1 = RuntimeRational::from_int(0);
                 let dummy_sp2 = RuntimeRational::from_int(0);
@@ -70,7 +85,12 @@ pub fn measure_widget_exec(
             },
             RuntimeWidget::Wrap { padding, h_spacing, v_spacing, children, model } => {
                 proof {
-                    crate::runtime::widget_proofs::lemma_fuel_bridge_children(children@, fuel);
+                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
+                    assert forall|j: int| 0 <= j < children@.len() implies
+                        (#[trigger] children@[j]).wf_spec((fuel - 1) as nat)
+                    by {
+                        assert(children@[j].wf_spec((fuel as nat - 1) as nat));
+                    }
                 }
                 measure_container_exec(limits, padding, h_spacing, v_spacing,
                     children, fuel, ContainerKind::Wrap)
@@ -91,13 +111,21 @@ pub fn measure_widget_exec(
             },
             RuntimeWidget::Absolute { padding, children, model } => {
                 proof {
-                    crate::runtime::widget_proofs::lemma_fuel_bridge_absolute_children(children@, fuel);
+                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
+                    assert forall|j: int| 0 <= j < children@.len() implies
+                        (#[trigger] children@[j]).child.wf_spec((fuel - 1) as nat)
+                    by {
+                        assert(children@[j].child.wf_spec((fuel as nat - 1) as nat));
+                    }
                 }
                 measure_absolute_exec(limits, padding, children, fuel)
             },
             RuntimeWidget::Margin { margin, child, model } => {
                 proof {
-                    crate::runtime::widget_proofs::lemma_fuel_nat_eq(fuel);
+                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
+                    assert(child.wf_spec((fuel - 1) as nat)) by {
+                        assert(child.wf_spec((fuel as nat - 1) as nat));
+                    }
                 }
                 let pad_h = margin.horizontal_exec();
                 let pad_v = margin.vertical_exec();
@@ -112,7 +140,10 @@ pub fn measure_widget_exec(
             RuntimeWidget::Conditional { visible, child, model } => {
                 if *visible {
                     proof {
-                        crate::runtime::widget_proofs::lemma_fuel_nat_eq(fuel);
+                        assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
+                        assert(child.wf_spec((fuel - 1) as nat)) by {
+                            assert(child.wf_spec((fuel as nat - 1) as nat));
+                        }
                     }
                     let child_size = measure_widget_exec(limits, child, fuel - 1);
                     limits.resolve_exec(child_size)
@@ -122,7 +153,10 @@ pub fn measure_widget_exec(
             },
             RuntimeWidget::SizedBox { inner_limits: il, child, model } => {
                 proof {
-                    crate::runtime::widget_proofs::lemma_fuel_nat_eq(fuel);
+                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
+                    assert(child.wf_spec((fuel - 1) as nat)) by {
+                        assert(child.wf_spec((fuel as nat - 1) as nat));
+                    }
                 }
                 let effective = limits.intersect_exec(il);
                 let child_size = measure_widget_exec(&effective, child, fuel - 1);
@@ -130,7 +164,10 @@ pub fn measure_widget_exec(
             },
             RuntimeWidget::AspectRatio { ratio, child, model } => {
                 proof {
-                    crate::runtime::widget_proofs::lemma_fuel_nat_eq(fuel);
+                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
+                    assert(child.wf_spec((fuel - 1) as nat)) by {
+                        assert(child.wf_spec((fuel as nat - 1) as nat));
+                    }
                 }
                 let w1 = copy_rational(&limits.max.width);
                 let h1 = w1.div(ratio);
@@ -164,6 +201,10 @@ pub fn measure_widget_exec(
             },
             RuntimeWidget::ScrollView { viewport, scroll_x, scroll_y, child, model } => {
                 // measure = limits.resolve(viewport), child doesn't affect output
+                limits.resolve_exec(viewport.copy_size())
+            },
+            RuntimeWidget::ListView { spacing, scroll_y, viewport, children, model } => {
+                // measure = limits.resolve(viewport), children don't affect output
                 limits.resolve_exec(viewport.copy_size())
             },
         }

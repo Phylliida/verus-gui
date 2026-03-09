@@ -12,6 +12,7 @@ use crate::layout::flex::*;
 use crate::layout::grid::*;
 use crate::layout::wrap::*;
 use crate::layout::absolute::*;
+use crate::layout::listview::*;
 
 verus! {
 
@@ -108,6 +109,14 @@ pub enum Widget<T: OrderedRing> {
         scroll_x: T,
         scroll_y: T,
         child: Box<Widget<T>>,
+    },
+    /// Virtualized list: variable-height children, only visible children are laid out.
+    /// Child heights determined by measure_widget. Output size = limits.resolve(viewport).
+    ListView {
+        spacing: T,
+        scroll_y: T,
+        viewport: Size<T>,
+        children: Seq<Widget<T>>,
     },
 }
 
@@ -539,6 +548,20 @@ pub open spec fn layout_widget<T: OrderedField>(
                     }),
                 }
             },
+            Widget::ListView { spacing, scroll_y, viewport, children } => {
+                let child_limits = Limits {
+                    min: Size::zero_size(),
+                    max: Size::new(viewport.width, viewport.height),
+                };
+                let child_sizes = crate::measure::measure_children(
+                    child_limits, children, (fuel - 1) as nat);
+                let first = listview_first_visible(child_sizes, spacing, scroll_y);
+                let end = listview_end_visible(child_sizes, spacing, scroll_y, viewport.height);
+                let cn = listview_widget_child_nodes(
+                    child_limits, children, first, end, (fuel - 1) as nat,
+                );
+                layout_listview_body(limits, child_sizes, spacing, scroll_y, viewport, cn, first)
+            },
         }
     }
 }
@@ -581,6 +604,7 @@ pub open spec fn get_children<T: OrderedRing>(widget: Widget<T>) -> Seq<Widget<T
         Widget::SizedBox { child, .. } => Seq::empty().push(*child),
         Widget::AspectRatio { child, .. } => Seq::empty().push(*child),
         Widget::ScrollView { child, .. } => Seq::empty().push(*child),
+        Widget::ListView { children, .. } => children,
     }
 }
 
@@ -1020,6 +1044,63 @@ pub proof fn lemma_layout_widget_fuel_monotone<T: OrderedField>(
                 max: viewport,
             };
             lemma_layout_widget_fuel_monotone(child_limits, *child, (fuel - 1) as nat);
+        },
+        Widget::ListView { spacing, scroll_y, viewport, children } => {
+            let gc = get_children(widget);
+            assert(gc =~= children);
+            let child_limits = Limits {
+                min: Size::zero_size(),
+                max: Size::new(viewport.width, viewport.height),
+            };
+            // Show measure_children at fuel-1 == measure_children at fuel
+            // (since all children are converged at fuel-1)
+            let cs1 = crate::measure::measure_children(child_limits, children, (fuel - 1) as nat);
+            let cs2 = crate::measure::measure_children(child_limits, children, fuel);
+            assert forall|j: int| 0 <= j < children.len() implies
+                crate::measure::measure_widget(child_limits, children[j], (fuel - 1) as nat)
+                == crate::measure::measure_widget(child_limits, children[j], fuel)
+            by {
+                assert(widget_converged(children[j], (fuel - 1) as nat));
+                crate::measure::lemma_measure_fuel_monotone(child_limits, children[j], (fuel - 1) as nat);
+            };
+            assert(cs1 =~= cs2);
+            // With same child_sizes, visible range is the same
+            let first = listview_first_visible(cs1, spacing, scroll_y);
+            let end = listview_end_visible(cs1, spacing, scroll_y, viewport.height);
+            // Prove bounds on first and end
+            crate::layout::listview_proofs::lemma_first_visible_bounded(cs1, spacing, scroll_y);
+            crate::layout::listview_proofs::lemma_end_visible_bounded(cs1, spacing, scroll_y, viewport.height);
+            let count: nat = if end >= first { (end - first) as nat } else { 0 };
+            // Each visible child is converged at fuel-1, so layout(fuel-1) == layout(fuel)
+            assert forall|i: int| 0 <= i < (count as int) implies
+                (#[trigger] layout_widget(
+                    child_limits, children[(first + i) as int], (fuel - 1) as nat,
+                )) == layout_widget(
+                    child_limits, children[(first + i) as int], fuel,
+                )
+            by {
+                let ci = (first + i) as int;
+                assert(first <= end);
+                assert(end <= children.len());
+                assert(0 <= ci && ci < children.len() as int);
+                assert(widget_converged(children[ci], (fuel - 1) as nat));
+                lemma_layout_widget_fuel_monotone(child_limits, children[ci], (fuel - 1) as nat);
+            };
+            // The visible child node sequences are equal
+            // listview_widget_child_nodes wraps Seq::new — unfold both sides
+            let cn1 = listview_widget_child_nodes(child_limits, children, first, end, (fuel - 1) as nat);
+            let cn2 = listview_widget_child_nodes(child_limits, children, first, end, fuel);
+            assert(cn1.len() == cn2.len());
+            assert forall|i: int| 0 <= i < cn1.len() implies cn1[i] == (#[trigger] cn2[i])
+            by {
+                assert(cn1[i] == layout_widget(child_limits, children[(first + i) as int], (fuel - 1) as nat));
+                assert(cn2[i] == layout_widget(child_limits, children[(first + i) as int], fuel));
+                let ci = (first + i) as int;
+                assert(0 <= ci && ci < children.len() as int);
+                assert(widget_converged(children[ci], (fuel - 1) as nat));
+                lemma_layout_widget_fuel_monotone(child_limits, children[ci], (fuel - 1) as nat);
+            };
+            assert(cn1 =~= cn2);
         },
     }
 }

@@ -769,4 +769,572 @@ pub proof fn lemma_lerp_node_congruence_right<T: OrderedField>(
     }
 }
 
+// ── Scalar lerp algebraic properties ─────────────────────────────
+
+/// Lipschitz / exact difference: lerp(a,b,t) - lerp(a,b,s) ≡ (t-s)*(b-a).
+///
+/// Proof: Using offset form, lerp(a,b,t) = a + t*(b-a), lerp(a,b,s) = a + s*(b-a).
+/// Subtract: (a + t*d) - (a + s*d) = t*d - s*d = (t-s)*d where d = b-a.
+pub proof fn lemma_scalar_lerp_difference<T: OrderedField>(a: T, b: T, s: T, t: T)
+    ensures
+        scalar_lerp(a, b, t).sub(scalar_lerp(a, b, s))
+            .eqv(t.sub(s).mul(b.sub(a))),
+{
+    let d = b.sub(a);
+
+    // 1. offset forms
+    lemma_scalar_lerp_as_offset::<T>(a, b, t);
+    // scalar_lerp(a, b, t) ≡ a.add(t.mul(d))
+    lemma_scalar_lerp_as_offset::<T>(a, b, s);
+    // scalar_lerp(a, b, s) ≡ a.add(s.mul(d))
+
+    // 2. (a + t*d) - (a + s*d) ≡ t*d - s*d  via right-cancel lemma
+    use verus_algebra::lemmas::additive_group_lemmas::lemma_add_sub_cancel_right;
+    lemma_add_sub_cancel_right::<T>(t.mul(d), s.mul(d), a);
+    // t.mul(d).add(a).sub(s.mul(d).add(a)) ≡ t.mul(d).sub(s.mul(d))
+    // Need commuted version: (a + t*d) - (a + s*d)
+    T::axiom_add_commutative(a, t.mul(d));
+    T::axiom_add_commutative(a, s.mul(d));
+    use verus_algebra::lemmas::additive_group_lemmas::lemma_sub_congruence;
+    lemma_sub_congruence::<T>(
+        a.add(t.mul(d)), t.mul(d).add(a),
+        a.add(s.mul(d)), s.mul(d).add(a),
+    );
+    // a.add(t.mul(d)).sub(a.add(s.mul(d))) ≡ t.mul(d).add(a).sub(s.mul(d).add(a))
+    T::axiom_eqv_transitive(
+        a.add(t.mul(d)).sub(a.add(s.mul(d))),
+        t.mul(d).add(a).sub(s.mul(d).add(a)),
+        t.mul(d).sub(s.mul(d)),
+    );
+
+    // 3. t*d - s*d ≡ (t-s)*d  via distributes_over_sub (reverse)
+    use verus_algebra::lemmas::ring_lemmas::lemma_mul_distributes_over_sub;
+    lemma_mul_distributes_over_sub::<T>(d, t, s);
+    // d.mul(t.sub(s)) ≡ d.mul(t).sub(d.mul(s))
+    // Need: t.mul(d) - s.mul(d) ≡ (t-s).mul(d) ≡ d.mul(t-s)
+    T::axiom_mul_commutative(t, d);
+    T::axiom_mul_commutative(s, d);
+    lemma_sub_congruence::<T>(t.mul(d), d.mul(t), s.mul(d), d.mul(s));
+    // t.mul(d).sub(s.mul(d)) ≡ d.mul(t).sub(d.mul(s))
+    T::axiom_eqv_symmetric(d.mul(t.sub(s)), d.mul(t).sub(d.mul(s)));
+    T::axiom_eqv_transitive(
+        t.mul(d).sub(s.mul(d)),
+        d.mul(t).sub(d.mul(s)),
+        d.mul(t.sub(s)),
+    );
+    // t.mul(d).sub(s.mul(d)) ≡ d.mul(t.sub(s))
+    T::axiom_mul_commutative(d, t.sub(s));
+    T::axiom_eqv_transitive(
+        t.mul(d).sub(s.mul(d)),
+        d.mul(t.sub(s)),
+        t.sub(s).mul(d),
+    );
+
+    // 4. Chain: (a+t*d)-(a+s*d) ≡ t*d-s*d ≡ (t-s)*d
+    T::axiom_eqv_transitive(
+        a.add(t.mul(d)).sub(a.add(s.mul(d))),
+        t.mul(d).sub(s.mul(d)),
+        t.sub(s).mul(d),
+    );
+
+    // 5. Transfer via congruence from offset form to scalar_lerp
+    lemma_sub_congruence::<T>(
+        scalar_lerp(a, b, t), a.add(t.mul(d)),
+        scalar_lerp(a, b, s), a.add(s.mul(d)),
+    );
+    T::axiom_eqv_transitive(
+        scalar_lerp(a, b, t).sub(scalar_lerp(a, b, s)),
+        a.add(t.mul(d)).sub(a.add(s.mul(d))),
+        t.sub(s).mul(d),
+    );
+}
+
+/// Composition / nesting: lerp(lerp(a,b,s), lerp(a,b,t), u) ≡ lerp(a, b, lerp(s,t,u)).
+///
+/// Interpolating between two interpolated values is equivalent to interpolating
+/// between the original endpoints with a re-parameterized t.
+pub proof fn lemma_scalar_lerp_composition<T: OrderedField>(a: T, b: T, s: T, t: T, u: T)
+    ensures
+        scalar_lerp(scalar_lerp(a, b, s), scalar_lerp(a, b, t), u)
+            .eqv(scalar_lerp(a, b, scalar_lerp(s, t, u))),
+{
+    let d = b.sub(a);
+    let ls = scalar_lerp(a, b, s);
+    let lt = scalar_lerp(a, b, t);
+
+    // 1. Offset forms
+    lemma_scalar_lerp_as_offset::<T>(a, b, s);
+    // ls ≡ a + s*d
+    lemma_scalar_lerp_as_offset::<T>(a, b, t);
+    // lt ≡ a + t*d
+
+    // 2. LHS = ls + u*(lt - ls) via offset form
+    lemma_scalar_lerp_as_offset::<T>(ls, lt, u);
+    // lerp(ls, lt, u) ≡ ls + u*(lt - ls)
+
+    // 3. lt - ls ≡ (t-s)*d via Lipschitz
+    lemma_scalar_lerp_difference::<T>(a, b, s, t);
+    // lt.sub(ls) ≡ (t-s)*d
+
+    // 4. u*(lt - ls) ≡ u*(t-s)*d via mul congruence
+    use verus_algebra::lemmas::ring_lemmas::lemma_mul_congruence_right;
+    lemma_mul_congruence_right::<T>(u, lt.sub(ls), t.sub(s).mul(d));
+    // u.mul(lt.sub(ls)) ≡ u.mul((t-s)*d)
+
+    // 5. u*(t-s)*d ≡ u*(t-s) * d via associativity
+    T::axiom_mul_associative(u, t.sub(s), d);
+    T::axiom_eqv_symmetric(u.mul(t.sub(s)).mul(d), u.mul(t.sub(s).mul(d)));
+    T::axiom_eqv_transitive(
+        u.mul(lt.sub(ls)),
+        u.mul(t.sub(s).mul(d)),
+        u.mul(t.sub(s)).mul(d),
+    );
+
+    // 6. ls + u*(lt-ls) ≡ (a + s*d) + u*(t-s)*d via congruence
+    use verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence;
+    T::axiom_eqv_reflexive(ls);
+    lemma_add_congruence::<T>(
+        ls, ls,
+        u.mul(lt.sub(ls)), u.mul(t.sub(s)).mul(d),
+    );
+    // ls.add(u.mul(lt.sub(ls))) ≡ ls.add(u.mul(t.sub(s)).mul(d))
+    T::axiom_eqv_reflexive(u.mul(t.sub(s)).mul(d));
+    lemma_add_congruence::<T>(
+        ls, a.add(s.mul(d)),
+        u.mul(t.sub(s)).mul(d), u.mul(t.sub(s)).mul(d),
+    );
+    // ls.add(u*(t-s)*d) ≡ (a + s*d).add(u*(t-s)*d)
+
+    // 7. (a + s*d) + u*(t-s)*d ≡ a + (s*d + u*(t-s)*d) via associativity
+    T::axiom_add_associative(a, s.mul(d), u.mul(t.sub(s)).mul(d));
+
+    // 8. s*d + u*(t-s)*d ≡ (s + u*(t-s))*d via reverse distribution
+    //    (s + u*(t-s)) * d = s*d + u*(t-s)*d
+    T::axiom_mul_commutative(s, d);
+    T::axiom_mul_commutative(u.mul(t.sub(s)), d);
+    // s*d ≡ d*s, u*(t-s)*d ≡ d*(u*(t-s))
+    T::axiom_mul_commutative(s.add(u.mul(t.sub(s))), d);
+    T::axiom_mul_distributes_left(d, s, u.mul(t.sub(s)));
+    // d * (s + u*(t-s)) ≡ d*s + d*(u*(t-s))
+    // = s*d + u*(t-s)*d (via commutativity, already established)
+
+    use verus_algebra::lemmas::additive_group_lemmas::lemma_sub_congruence;
+    T::axiom_eqv_symmetric(s.mul(d), d.mul(s));
+    T::axiom_eqv_symmetric(u.mul(t.sub(s)).mul(d), d.mul(u.mul(t.sub(s))));
+
+    // Chain: s*d + u*(t-s)*d ≡ d*s + d*(u*(t-s))
+    lemma_add_congruence::<T>(
+        s.mul(d), d.mul(s),
+        u.mul(t.sub(s)).mul(d), d.mul(u.mul(t.sub(s))),
+    );
+    // s*d + u*(t-s)*d ≡ d*s + d*(u*(t-s))
+    T::axiom_eqv_symmetric(
+        d.mul(s.add(u.mul(t.sub(s)))),
+        d.mul(s).add(d.mul(u.mul(t.sub(s)))),
+    );
+    T::axiom_eqv_transitive(
+        s.mul(d).add(u.mul(t.sub(s)).mul(d)),
+        d.mul(s).add(d.mul(u.mul(t.sub(s)))),
+        d.mul(s.add(u.mul(t.sub(s)))),
+    );
+    // s*d + u*(t-s)*d ≡ d*(s + u*(t-s))
+    // ≡ (s + u*(t-s))*d via commutativity (symmetric direction)
+    T::axiom_eqv_symmetric(
+        s.add(u.mul(t.sub(s))).mul(d),
+        d.mul(s.add(u.mul(t.sub(s)))),
+    );
+    T::axiom_eqv_transitive(
+        s.mul(d).add(u.mul(t.sub(s)).mul(d)),
+        d.mul(s.add(u.mul(t.sub(s)))),
+        s.add(u.mul(t.sub(s))).mul(d),
+    );
+
+    // 9. s + u*(t-s) ≡ lerp(s, t, u) via offset form (reverse)
+    lemma_scalar_lerp_as_offset::<T>(s, t, u);
+    T::axiom_eqv_symmetric(scalar_lerp(s, t, u), s.add(u.mul(t.sub(s))));
+    // s.add(u.mul(t.sub(s))) ≡ scalar_lerp(s, t, u)
+
+    // 10. (s + u*(t-s))*d ≡ lerp(s,t,u)*d via mul congruence
+    use verus_algebra::lemmas::ring_lemmas::lemma_mul_congruence;
+    T::axiom_eqv_reflexive(d);
+    lemma_mul_congruence::<T>(
+        s.add(u.mul(t.sub(s))), scalar_lerp(s, t, u),
+        d, d,
+    );
+    // (s + u*(t-s))*d ≡ lerp(s,t,u)*d
+    T::axiom_eqv_transitive(
+        s.mul(d).add(u.mul(t.sub(s)).mul(d)),
+        s.add(u.mul(t.sub(s))).mul(d),
+        scalar_lerp(s, t, u).mul(d),
+    );
+
+    // 11. a + lerp(s,t,u)*d ≡ lerp(a, b, lerp(s,t,u)) via offset form (reverse)
+    lemma_scalar_lerp_as_offset::<T>(a, b, scalar_lerp(s, t, u));
+    T::axiom_eqv_symmetric(
+        scalar_lerp(a, b, scalar_lerp(s, t, u)),
+        a.add(scalar_lerp(s, t, u).mul(d)),
+    );
+
+    // 12. Final chain: LHS ≡ ls + u*(lt-ls) ≡ (a+s*d) + u*(t-s)*d
+    //                      ≡ a + (s*d + u*(t-s)*d) ≡ a + lerp(s,t,u)*d ≡ RHS
+
+    // a + (s*d + u*(t-s)*d) ≡ a + lerp(s,t,u)*d
+    T::axiom_eqv_reflexive(a);
+    lemma_add_congruence::<T>(
+        a, a,
+        s.mul(d).add(u.mul(t.sub(s)).mul(d)),
+        scalar_lerp(s, t, u).mul(d),
+    );
+
+    // Chain through all the intermediate forms
+    // lerp(ls, lt, u) ≡ ls.add(u*(lt-ls))
+    let lhs = scalar_lerp(ls, lt, u);
+    let form1 = ls.add(u.mul(lt.sub(ls)));
+    let form2 = ls.add(u.mul(t.sub(s)).mul(d));
+    let form3 = a.add(s.mul(d)).add(u.mul(t.sub(s)).mul(d));
+    let form4 = a.add(s.mul(d).add(u.mul(t.sub(s)).mul(d)));
+    let form5 = a.add(scalar_lerp(s, t, u).mul(d));
+    let rhs = scalar_lerp(a, b, scalar_lerp(s, t, u));
+
+    // lhs ≡ form1
+    // (already proved above via lemma_scalar_lerp_as_offset)
+
+    // form1 ≡ form2
+    // (ls.add(u*(lt-ls)) ≡ ls.add(u*(t-s)*d) — already proved)
+
+    // form2 ≡ form3
+    // ls ≡ a+s*d, so form2 ≡ (a+s*d).add(u*(t-s)*d) = form3
+    lemma_add_congruence::<T>(
+        ls, a.add(s.mul(d)),
+        u.mul(t.sub(s)).mul(d), u.mul(t.sub(s)).mul(d),
+    );
+    T::axiom_eqv_reflexive(u.mul(t.sub(s)).mul(d));
+
+    // form3 ≡ form4 (associativity)
+    // Already proved: T::axiom_add_associative(a, s.mul(d), u.mul(t.sub(s)).mul(d))
+
+    // form4 ≡ form5
+    // Already proved above
+
+    // form5 ≡ rhs
+    // Already proved above
+
+    // Now chain: lhs → form1 → form2 → form3 → form4 → form5 → rhs
+    T::axiom_eqv_transitive(lhs, form1, form2);
+    T::axiom_eqv_transitive(form2, form3, form4);
+    T::axiom_eqv_transitive(form4, form5, rhs);
+    T::axiom_eqv_transitive(form2, form4, rhs);
+    T::axiom_eqv_transitive(lhs, form2, rhs);
+}
+
+/// Midpoint: lerp(a, b, 1/2) ≡ (a + b) / 2.
+///
+/// Requires: two ≢ 0 (so 1/2 is well-defined and we can divide by 2).
+pub proof fn lemma_scalar_lerp_midpoint<T: OrderedField>(a: T, b: T)
+    requires
+        !T::one().add(T::one()).eqv(T::zero()),
+    ensures
+        scalar_lerp(a, b, T::one().div(T::one().add(T::one())))
+            .eqv(a.add(b).div(T::one().add(T::one()))),
+{
+    let two = T::one().add(T::one());
+    let half = T::one().div(two);
+    let d = b.sub(a);
+
+    // 1. lerp(a, b, 1/2) ≡ a + (1/2)*(b-a) via offset form
+    lemma_scalar_lerp_as_offset::<T>(a, b, half);
+
+    // 2. (1/2)*(b-a) ≡ (b-a)/2 via div definition: x/y = x * recip(y), 1/2 = recip(2)
+    //    half.mul(d) = (1*recip(2)).mul(d) = recip(2).mul(d) via 1*x=x
+    //    ≡ d * recip(2) = d / 2
+    T::axiom_div_is_mul_recip(T::one(), two);
+    // one.div(two) ≡ one.mul(recip(two))
+    use verus_algebra::lemmas::ring_lemmas::lemma_mul_one_left;
+    lemma_mul_one_left::<T>(T::recip(two));
+    // one.mul(recip(two)) ≡ recip(two)
+    T::axiom_eqv_transitive(half, T::one().mul(T::recip(two)), T::recip(two));
+    // half ≡ recip(two)
+
+    // half * d ≡ recip(two) * d
+    use verus_algebra::lemmas::ring_lemmas::lemma_mul_congruence;
+    T::axiom_eqv_reflexive(d);
+    lemma_mul_congruence::<T>(half, T::recip(two), d, d);
+    // half.mul(d) ≡ recip(two).mul(d)
+
+    T::axiom_mul_commutative(T::recip(two), d);
+    T::axiom_eqv_transitive(half.mul(d), T::recip(two).mul(d), d.mul(T::recip(two)));
+    // half.mul(d) ≡ d.mul(recip(two))
+
+    // d.mul(recip(two)) ≡ d.div(two) via div definition (reverse)
+    T::axiom_div_is_mul_recip(d, two);
+    T::axiom_eqv_symmetric(d.div(two), d.mul(T::recip(two)));
+    T::axiom_eqv_transitive(half.mul(d), d.mul(T::recip(two)), d.div(two));
+    // half.mul(d) ≡ d/2
+
+    // 3. a + d/2 ≡ a + (b-a)/2 = (2a + b - a)/2 = (a+b)/2
+    //    More directly: a + (b-a)/2 = (2a + (b-a))/2 = (a+b)/2
+    //    We need: a ≡ 2a/2
+    //    Then: a + (b-a)/2 ≡ 2a/2 + (b-a)/2 ≡ (2a + (b-a))/2 ≡ (a+b)/2
+
+    // a ≡ two*a / two:
+    // two * recip(two) ≡ one (field axiom)
+    T::axiom_mul_recip_right(two);
+    // two.mul(recip(two)) ≡ one
+
+    // a ≡ a * one ≡ a * (two * recip(two)) ≡ (a*two) * recip(two) ≡ (two*a) * recip(two)
+    T::axiom_mul_one_right(a);
+    T::axiom_eqv_symmetric(a.mul(T::one()), a);
+    // a ≡ a * one
+    T::axiom_eqv_reflexive(a);
+    T::axiom_eqv_symmetric(two.mul(T::recip(two)), T::one());
+    lemma_mul_congruence::<T>(a, a, T::one(), two.mul(T::recip(two)));
+    // a * one ≡ a * (two * recip(two))
+    T::axiom_mul_associative(a, two, T::recip(two));
+    T::axiom_eqv_symmetric(a.mul(two).mul(T::recip(two)), a.mul(two.mul(T::recip(two))));
+    // a * (two * recip(two)) ≡ (a*two) * recip(two)
+    T::axiom_eqv_transitive(a.mul(T::one()), a.mul(two.mul(T::recip(two))), a.mul(two).mul(T::recip(two)));
+    T::axiom_eqv_transitive(a, a.mul(T::one()), a.mul(two).mul(T::recip(two)));
+    // a ≡ (a*two) * recip(two)
+
+    // (a*two)*recip(two) ≡ (a*two).div(two)
+    T::axiom_div_is_mul_recip(a.mul(two), two);
+    T::axiom_eqv_symmetric(a.mul(two).div(two), a.mul(two).mul(T::recip(two)));
+    T::axiom_eqv_transitive(a, a.mul(two).mul(T::recip(two)), a.mul(two).div(two));
+    // a ≡ (a*two)/two
+
+    // a*two ≡ two*a
+    T::axiom_mul_commutative(a, two);
+    use verus_algebra::lemmas::additive_group_lemmas::{lemma_sub_congruence, lemma_add_congruence};
+
+    // (a*two)/two ≡ (two*a)/two
+    // Need div congruence: x ≡ y → x/z ≡ y/z. Use mul_recip form:
+    // x/z = x*recip(z), y/z = y*recip(z), so x≡y → x*recip(z) ≡ y*recip(z)
+    T::axiom_eqv_reflexive(T::recip(two));
+    lemma_mul_congruence::<T>(a.mul(two), two.mul(a), T::recip(two), T::recip(two));
+    // (a*two)*recip(two) ≡ (two*a)*recip(two)
+    T::axiom_div_is_mul_recip(a.mul(two), two);
+    T::axiom_div_is_mul_recip(two.mul(a), two);
+    T::axiom_eqv_transitive(
+        a.mul(two).div(two),
+        a.mul(two).mul(T::recip(two)),
+        two.mul(a).mul(T::recip(two)),
+    );
+    T::axiom_eqv_symmetric(two.mul(a).div(two), two.mul(a).mul(T::recip(two)));
+    T::axiom_eqv_transitive(
+        a.mul(two).div(two),
+        two.mul(a).mul(T::recip(two)),
+        two.mul(a).div(two),
+    );
+    T::axiom_eqv_transitive(a, a.mul(two).div(two), two.mul(a).div(two));
+    // a ≡ (two*a)/two
+
+    // 4. a + (b-a)/2 ≡ (two*a)/two + (b-a)/two
+    T::axiom_eqv_reflexive(d.div(two));
+    lemma_add_congruence::<T>(
+        a, two.mul(a).div(two),
+        d.div(two), d.div(two),
+    );
+
+    // 5. x/z + y/z ≡ (x+y)/z: since div = mul recip,
+    //    x*r + y*r = (x+y)*r where r = recip(two)
+    let r = T::recip(two);
+    T::axiom_mul_commutative(two.mul(a), r);
+    T::axiom_mul_commutative(d, r);
+    // (two*a)/two = (two*a)*r ≡ r*(two*a)
+    // d/two = d*r ≡ r*d
+    T::axiom_div_is_mul_recip(two.mul(a), two);
+    T::axiom_div_is_mul_recip(d, two);
+    // two*a.div(two) ≡ two*a.mul(r)
+    // d.div(two) ≡ d.mul(r)
+
+    // (two*a)*r + d*r ≡ (two*a + d)*r via right distribution
+    // Use: (p+q)*r = p*r + q*r reversed
+    T::axiom_mul_distributes_left(r, two.mul(a), d);
+    // r*(two*a + d) ≡ r*(two*a) + r*d
+    T::axiom_eqv_symmetric(
+        r.mul(two.mul(a).add(d)),
+        r.mul(two.mul(a)).add(r.mul(d)),
+    );
+
+    // Rewrite via div: (two*a + d)/two
+    // two*a + d = two*a + (b - a)
+    // Need: two*a + (b-a) ≡ a + b
+    // two*a = a + a (since two = 1+1)
+    T::axiom_mul_distributes_left(a, T::one(), T::one());
+    // a*(1+1) = a*1 + a*1
+    T::axiom_mul_one_right(a);
+    // a*1 ≡ a
+    lemma_add_congruence::<T>(a.mul(T::one()), a, a.mul(T::one()), a);
+    // a*1 + a*1 ≡ a + a
+    T::axiom_mul_commutative(a, two);
+    T::axiom_eqv_transitive(
+        a.mul(two),
+        a.mul(T::one()).add(a.mul(T::one())),
+        a.add(a),
+    );
+    T::axiom_eqv_symmetric(a.mul(two), two.mul(a));
+    T::axiom_eqv_transitive(two.mul(a), a.mul(two), a.add(a));
+    // two*a ≡ a + a
+
+    // (a+a) + (b-a) ≡ a + (a + (b-a)) via assoc
+    T::axiom_add_associative(a, a, d);
+    // a.add(a).add(d) ≡ a.add(a.add(d))
+    // Congruence from two*a to a+a:
+    T::axiom_eqv_reflexive(d);
+    lemma_add_congruence::<T>(two.mul(a), a.add(a), d, d);
+    // two*a + d ≡ (a+a) + d ≡ a + (a + d)
+    T::axiom_eqv_transitive(
+        two.mul(a).add(d),
+        a.add(a).add(d),
+        a.add(a.add(d)),
+    );
+
+    // a + (b-a) ≡ a + b - a ≡ b   ...actually a.add(b.sub(a)) ≡ b
+    // Use: a + (b - a) = b via add_then_sub_cancel reversed
+    // lemma_add_then_sub_cancel gives: b.add(a).sub(a) ≡ b
+    // But we need a.add(b.sub(a)).
+    // a.add(b.sub(a)): sub_is_add_neg → a + (b + (-a)) = (a + b) + (-a) = (a+b) - a
+    T::axiom_sub_is_add_neg(b, a);
+    T::axiom_eqv_reflexive(a);
+    lemma_add_congruence::<T>(a, a, b.sub(a), b.add(a.neg()));
+    // a + (b-a) ≡ a + (b + (-a))
+    T::axiom_add_associative(a, b, a.neg());
+    T::axiom_eqv_symmetric(a.add(b).add(a.neg()), a.add(b.add(a.neg())));
+    T::axiom_eqv_transitive(
+        a.add(b.sub(a)),
+        a.add(b.add(a.neg())),
+        a.add(b).add(a.neg()),
+    );
+    // a + (b-a) ≡ (a+b) + (-a) = (a+b) - a
+    T::axiom_sub_is_add_neg(a.add(b), a);
+    T::axiom_eqv_symmetric(a.add(b).sub(a), a.add(b).add(a.neg()));
+    T::axiom_eqv_transitive(
+        a.add(b.sub(a)),
+        a.add(b).add(a.neg()),
+        a.add(b).sub(a),
+    );
+    // a.add(d) ≡ a.add(b).sub(a)
+
+    use verus_algebra::lemmas::additive_group_lemmas::lemma_add_then_sub_cancel;
+    T::axiom_add_commutative(a, b);
+    // a+b ≡ b+a
+    // (b+a) - a ≡ b via lemma_add_then_sub_cancel
+    lemma_add_then_sub_cancel::<T>(b, a);
+    lemma_sub_congruence::<T>(a.add(b), b.add(a), a, a);
+    T::axiom_eqv_reflexive(a);
+    T::axiom_eqv_transitive(a.add(b).sub(a), b.add(a).sub(a), b);
+    T::axiom_eqv_transitive(a.add(d), a.add(b).sub(a), b);
+    // a + d ≡ b
+
+    // So a + (a + d) ≡ a + b
+    T::axiom_eqv_reflexive(a);
+    lemma_add_congruence::<T>(a, a, a.add(d), b);
+    // a.add(a.add(d)) ≡ a.add(b)
+
+    // Chain: two*a + d ≡ a + (a + d) ≡ a + b
+    T::axiom_eqv_transitive(two.mul(a).add(d), a.add(a.add(d)), a.add(b));
+    // two*a + d ≡ a + b
+
+    // 6. Final: lerp(a,b,1/2) ≡ a + half*d ≡ a + d/2
+    //    ≡ (two*a)/two + d/two ≡ (two*a + d)/two ≡ (a+b)/two
+    // We proved all these chains. Let me carefully assemble the final result.
+
+    // lerp(a,b,half) ≡ a.add(half.mul(d))  [step 1]
+    // half.mul(d) ≡ d.div(two)  [step 2]
+    // a.add(half.mul(d)) ≡ a.add(d.div(two))
+    lemma_add_congruence::<T>(a, a, half.mul(d), d.div(two));
+
+    T::axiom_eqv_transitive(
+        scalar_lerp(a, b, half),
+        a.add(half.mul(d)),
+        a.add(d.div(two)),
+    );
+
+    // Now: (a+b)/two is the target.
+    // (two*a + d)/two → use: two*a + d ≡ a + b, so /two of both sides
+    lemma_mul_congruence::<T>(two.mul(a).add(d), a.add(b), r, r);
+    T::axiom_eqv_reflexive(r);
+    // (two*a+d)*r ≡ (a+b)*r
+    // ≡ (two*a+d)/two ≡ (a+b)/two via div_is_mul_recip
+
+    // We need: a + d/2 ≡ (a+b)/2
+    // a ≡ (two*a)/two  [step 4]
+    // a + d/two ≡ (two*a)/two + d/two
+    // = (in mul_recip form): (two*a)*r + d*r = ((two*a)+d)*r = (a+b)*r = (a+b)/two
+
+    // (two*a)/two + d/two: convert to recip form
+    // = (two*a)*r + d*r
+    T::axiom_div_is_mul_recip(two.mul(a), two);
+    T::axiom_div_is_mul_recip(d, two);
+    lemma_add_congruence::<T>(
+        two.mul(a).div(two), two.mul(a).mul(r),
+        d.div(two), d.mul(r),
+    );
+    // (two*a)/two + d/two ≡ (two*a)*r + d*r
+
+    // (two*a)*r + d*r ≡ ((two*a)+d)*r via distribution
+    T::axiom_mul_distributes_left(r, two.mul(a), d);
+    T::axiom_mul_commutative(two.mul(a), r);
+    T::axiom_mul_commutative(d, r);
+    lemma_add_congruence::<T>(
+        two.mul(a).mul(r), r.mul(two.mul(a)),
+        d.mul(r), r.mul(d),
+    );
+    // (two*a)*r + d*r ≡ r*(two*a) + r*d
+    T::axiom_eqv_transitive(
+        two.mul(a).mul(r).add(d.mul(r)),
+        r.mul(two.mul(a)).add(r.mul(d)),
+        r.mul(two.mul(a).add(d)),
+    );
+    // (two*a)*r + d*r ≡ r*(two*a + d)
+    T::axiom_mul_commutative(r, two.mul(a).add(d));
+    T::axiom_eqv_transitive(
+        two.mul(a).mul(r).add(d.mul(r)),
+        r.mul(two.mul(a).add(d)),
+        two.mul(a).add(d).mul(r),
+    );
+
+    // (two*a + d)*r ≡ (a+b)*r (via congruence: two*a+d ≡ a+b)
+    T::axiom_eqv_reflexive(r);
+    lemma_mul_congruence::<T>(two.mul(a).add(d), a.add(b), r, r);
+    // (a+b)*r ≡ (a+b)/two
+    T::axiom_div_is_mul_recip(a.add(b), two);
+    T::axiom_eqv_symmetric(a.add(b).div(two), a.add(b).mul(r));
+    T::axiom_eqv_transitive(
+        two.mul(a).add(d).mul(r),
+        a.add(b).mul(r),
+        a.add(b).div(two),
+    );
+
+    // Chain: (two*a)*r + d*r ≡ (two*a+d)*r ≡ (a+b)/two
+    T::axiom_eqv_transitive(
+        two.mul(a).mul(r).add(d.mul(r)),
+        two.mul(a).add(d).mul(r),
+        a.add(b).div(two),
+    );
+
+    // Chain: (two*a)/two + d/two ≡ (two*a)*r + d*r ≡ (a+b)/two
+    T::axiom_eqv_transitive(
+        two.mul(a).div(two).add(d.div(two)),
+        two.mul(a).mul(r).add(d.mul(r)),
+        a.add(b).div(two),
+    );
+
+    // a + d/two ≡ (two*a)/two + d/two
+    T::axiom_eqv_reflexive(d.div(two));
+    lemma_add_congruence::<T>(a, two.mul(a).div(two), d.div(two), d.div(two));
+    T::axiom_eqv_transitive(
+        a.add(d.div(two)),
+        two.mul(a).div(two).add(d.div(two)),
+        a.add(b).div(two),
+    );
+
+    // Final: lerp(a,b,half) ≡ a.add(d.div(two)) ≡ (a+b)/two
+    T::axiom_eqv_transitive(
+        scalar_lerp(a, b, half),
+        a.add(d.div(two)),
+        a.add(b).div(two),
+    );
+}
+
 } // verus!

@@ -38,4 +38,7 @@ pub mod scroll;
 pub mod event;
 
 #[cfg(verus_keep_ghost)]
+pub mod interaction;
+
+#[cfg(verus_keep_ghost)]
 pub mod runtime;

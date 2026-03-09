@@ -21,6 +21,9 @@ pub mod absolute;
 pub mod absolute_proofs;
 pub mod incremental_proofs;
 pub mod cache_proofs;
+pub mod bounds_proofs;
+pub mod listview;
+pub mod listview_proofs;
 
 verus! {
 
