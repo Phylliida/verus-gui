@@ -42,3 +42,6 @@ pub mod interaction;
 
 #[cfg(verus_keep_ghost)]
 pub mod runtime;
+
+#[cfg(verus_keep_ghost)]
+pub mod text_model;

@@ -131,19 +131,38 @@ proof fn lemma_clamp_at_upper<T: OrderedRing>(x: T, delta: T, lo: T, hi: T)
             Limits::clamp(x.add(delta), lo, hi).eqv(hi),
 {
     if x.eqv(hi) && T::zero().le(delta) {
-        // x + delta >= hi since x ≡ hi and delta >= 0
-        verus_algebra::lemmas::ordered_ring_lemmas::lemma_add_le_right::<T>(T::zero(), delta, x);
-        // 0 + x <= delta + x, i.e., x <= x + delta
+        let val = x.add(delta);
+        // Step 1: Prove hi.le(val)
+        // 0 <= delta => 0 + x <= delta + x
+        T::axiom_le_add_monotone(T::zero(), delta, x);
         verus_algebra::lemmas::additive_group_lemmas::lemma_add_zero_left::<T>(x);
-        // 0 + x ≡ x
-        verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_both::<T>(
-            T::zero().add(x), x, x.add(delta), x.add(delta));
-        // So x <= x + delta
-        // And x ≡ hi, so hi <= x + delta
-        verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_both::<T>(
-            x, hi, x.add(delta), x.add(delta));
-        // hi <= x + delta, so min(x + delta, hi) = hi
-        // max(lo, hi) = hi since lo <= hi
+        verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
+            T::zero().add(x), x, delta.add(x));
+        T::axiom_add_commutative(delta, x);
+        verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_right::<T>(
+            x, delta.add(x), val);
+        // x.le(val), and x.eqv(hi), so hi.le(val)
+        verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
+            x, hi, val);
+
+        // Step 2: Evaluate min(val, hi) and max(lo, ...)
+        T::axiom_le_total(val, hi);
+        if val.le(hi) {
+            // val.le(hi) && hi.le(val) => val ≡ hi
+            T::axiom_le_antisymmetric(val, hi);
+            // min(val, hi) = val (since val.le(hi))
+            // max(lo, val): need lo.le(val)
+            T::axiom_le_transitive(lo, hi, val);
+            // lo.le(val), so max(lo, val) = val
+            // val.eqv(hi), need clamp.eqv(hi)
+            // clamp = max(lo, min(val, hi)) = max(lo, val) = val
+            // val.eqv(hi) ✓
+        } else {
+            // !val.le(hi), so min(val, hi) = hi
+            // max(lo, hi): lo.le(hi) given, so max = hi
+            // hi.eqv(hi) by reflexivity
+            T::axiom_eqv_reflexive(hi);
+        }
     }
 }
 
@@ -158,22 +177,38 @@ proof fn lemma_clamp_at_lower<T: OrderedRing>(x: T, delta: T, lo: T, hi: T)
             Limits::clamp(x.add(delta), lo, hi).eqv(lo),
 {
     if x.eqv(lo) && delta.le(T::zero()) {
-        // x + delta <= x since delta <= 0
-        // delta <= 0 => x + delta <= x + 0 = x
-        verus_algebra::lemmas::ordered_ring_lemmas::lemma_add_le_right::<T>(delta, T::zero(), x);
-        // delta + x <= 0 + x
+        let val = x.add(delta);
+        // Step 1: Prove val.le(lo)
+        // delta <= 0 => delta + x <= 0 + x
+        T::axiom_le_add_monotone(delta, T::zero(), x);
         T::axiom_add_commutative(delta, x);
-        T::axiom_add_commutative(T::zero(), x);
         verus_algebra::lemmas::additive_group_lemmas::lemma_add_zero_left::<T>(x);
-        // x + delta ≡ delta + x <= 0 + x ≡ x
-        verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_both::<T>(
-            delta.add(x), x.add(delta), T::zero().add(x), x);
-        // x + delta <= x
-        // x ≡ lo, so x + delta <= lo
-        verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_both::<T>(
-            x.add(delta), x.add(delta), x, lo);
-        // x + delta <= lo, so max(lo, min(x+delta, hi)) = max(lo, ...) = lo
-        // since min(x+delta, hi) <= x+delta <= lo, and max(lo, y) when y <= lo is lo
+        verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
+            delta.add(x), val, T::zero().add(x));
+        verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_right::<T>(
+            val, T::zero().add(x), x);
+        // val.le(x), and x.eqv(lo), so val.le(lo)
+        verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_right::<T>(
+            val, x, lo);
+
+        // Step 2: val.le(hi) via transitivity
+        T::axiom_le_transitive(val, lo, hi);
+
+        // Step 3: Evaluate min(val, hi)
+        // val.le(hi), so min(val, hi) = val
+        // Evaluate max(lo, val)
+        T::axiom_le_total(lo, val);
+        if lo.le(val) {
+            // lo.le(val) && val.le(lo) => lo ≡ val
+            T::axiom_le_antisymmetric(lo, val);
+            // max(lo, val) = val (since lo.le(val))
+            // val.eqv(lo) (symmetric of lo.eqv(val))
+            T::axiom_eqv_symmetric(lo, val);
+        } else {
+            // !lo.le(val), so max(lo, val) = lo
+            // lo.eqv(lo) by reflexivity
+            T::axiom_eqv_reflexive(lo);
+        }
     }
 }
 
@@ -273,27 +308,28 @@ pub proof fn lemma_resize_monotone<T: OrderedRing>(
         apply_resize(constraints, size, dw1, dh1).le(
             apply_resize(constraints, size, dw2, dh2)),
 {
-    // width + dw1 <= width + dw2 (by add_le_right)
-    verus_algebra::lemmas::ordered_ring_lemmas::lemma_add_le_right::<T>(
-        dw1, dw2, size.width);
+    // dw1 <= dw2 => dw1 + width <= dw2 + width
+    T::axiom_le_add_monotone(dw1, dw2, size.width);
+    // commute to width + dw1 <= width + dw2
     T::axiom_add_commutative(dw1, size.width);
     T::axiom_add_commutative(dw2, size.width);
-    verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_both::<T>(
-        dw1.add(size.width), size.width.add(dw1),
-        dw2.add(size.width), size.width.add(dw2));
+    verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
+        dw1.add(size.width), size.width.add(dw1), dw2.add(size.width));
+    verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_right::<T>(
+        size.width.add(dw1), dw2.add(size.width), size.width.add(dw2));
     // clamp is monotone in value
     crate::layout::proofs::lemma_clamp_monotone_value::<T>(
         size.width.add(dw1), size.width.add(dw2),
         constraints.min_size.width, constraints.max_size.width);
 
     // Same for height
-    verus_algebra::lemmas::ordered_ring_lemmas::lemma_add_le_right::<T>(
-        dh1, dh2, size.height);
+    T::axiom_le_add_monotone(dh1, dh2, size.height);
     T::axiom_add_commutative(dh1, size.height);
     T::axiom_add_commutative(dh2, size.height);
-    verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_both::<T>(
-        dh1.add(size.height), size.height.add(dh1),
-        dh2.add(size.height), size.height.add(dh2));
+    verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
+        dh1.add(size.height), size.height.add(dh1), dh2.add(size.height));
+    verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_right::<T>(
+        size.height.add(dh1), dh2.add(size.height), size.height.add(dh2));
     crate::layout::proofs::lemma_clamp_monotone_value::<T>(
         size.height.add(dh1), size.height.add(dh2),
         constraints.min_size.height, constraints.max_size.height);
