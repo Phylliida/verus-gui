@@ -1637,6 +1637,11 @@ fn layout_absolute_widget_exec(
         by {}
     }
 
+    // Build exec_data once, reuse for lemma and proof
+    let ghost exec_data: Seq<(RationalModel, RationalModel, Size<RationalModel>)> =
+        Seq::new(child_sizes@.len() as nat, |i: int|
+            (offsets_x@[i]@, offsets_y@[i]@, child_sizes@[i]@));
+
     let layout_result = absolute_layout_exec(limits, padding, &child_sizes,
         &offsets_x, &offsets_y);
 
@@ -1645,12 +1650,7 @@ fn layout_absolute_widget_exec(
         Seq::new(n as nat, |j: int| child_nodes@[j]@);
 
     proof {
-        lemma_absolute_children_len::<RationalModel>(
-            padding@,
-            Seq::new(child_sizes@.len() as nat, |i: int|
-                (offsets_x@[i]@, offsets_y@[i]@, child_sizes@[i]@)),
-            0,
-        );
+        lemma_absolute_children_len::<RationalModel>(padding@, exec_data, 0);
         assert(layout_result.children@.len() == child_nodes@.len());
     }
 
@@ -1672,40 +1672,19 @@ fn layout_absolute_widget_exec(
         }
         assert(cn_models =~= spec_cn);
 
-        // child_sizes view matches spec
-        let sizes_view: Seq<Size<RationalModel>> =
-            Seq::new(child_sizes@.len() as nat, |i: int| child_sizes@[i]@);
-        let spec_sizes: Seq<Size<RationalModel>> =
-            Seq::new(spec_cn.len(), |i: int| spec_cn[i].size);
-        assert(sizes_view =~= spec_sizes) by {
-            assert forall|j: int| 0 <= j < sizes_view.len() as int implies
-                sizes_view[j] == spec_sizes[j]
-            by {}
-        }
-
-        // offsets match spec
-        let ox_view: Seq<RationalModel> =
-            Seq::new(offsets_x@.len() as nat, |i: int| offsets_x@[i]@);
-        let oy_view: Seq<RationalModel> =
-            Seq::new(offsets_y@.len() as nat, |i: int| offsets_y@[i]@);
-
-        // Build spec child_data from spec_ac
-        let body_offsets: Seq<(RationalModel, RationalModel)> =
-            Seq::new(spec_ac.len(), |i: int| (spec_ac[i].x, spec_ac[i].y));
+        // exec_data =~= body_data (what layout_absolute_body computes)
         let body_data: Seq<(RationalModel, RationalModel, Size<RationalModel>)> =
             Seq::new(spec_cn.len(), |i: int|
-                (body_offsets[i].0, body_offsets[i].1, spec_cn[i].size));
-
-        // layout_result data matches body_data
-        let exec_data: Seq<(RationalModel, RationalModel, Size<RationalModel>)> =
-            Seq::new(child_sizes@.len() as nat, |i: int|
-                (offsets_x@[i]@, offsets_y@[i]@, child_sizes@[i]@));
+                (spec_ac[i].x, spec_ac[i].y, spec_cn[i].size));
         assert(exec_data =~= body_data) by {
             assert forall|j: int| 0 <= j < exec_data.len() as int implies
                 exec_data[j] == body_data[j]
             by {
                 assert(offsets_x@[j]@ == spec_ac[j].x);
                 assert(offsets_y@[j]@ == spec_ac[j].y);
+                // child_sizes@[j]@ == child_nodes@[j]@.size == cn_models[j].size == spec_cn[j].size
+                assert(child_sizes@[j]@ == child_nodes@[j]@.size);
+                assert(cn_models[j] == spec_cn[j]);
             }
         }
     }
