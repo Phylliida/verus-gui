@@ -195,6 +195,50 @@ pub fn copy_paragraph_style(s: &RuntimeParagraphStyle) -> (out: RuntimeParagraph
     }
 }
 
+fn copy_char_vec(v: &Vec<char>) -> (out: Vec<char>)
+    ensures out@ == v@,
+{
+    let mut out: Vec<char> = Vec::new();
+    let mut i: usize = 0;
+    while i < v.len()
+        invariant
+            i <= v.len(),
+            out@ =~= v@.subrange(0, i as int),
+        decreases v.len() - i,
+    {
+        out.push(v[i]);
+        proof {
+            assert(v@.subrange(0, i as int).push(v@[i as int])
+                =~= v@.subrange(0, (i + 1) as int));
+        }
+        i += 1;
+    }
+    proof { assert(v@.subrange(0, v@.len() as int) =~= v@); }
+    out
+}
+
+fn copy_style_vec(v: &Vec<RuntimeStyleSet>) -> (out: Vec<RuntimeStyleSet>)
+    ensures
+        out@.len() == v@.len(),
+        forall|k: int| 0 <= k < out@.len() ==>
+            (#[trigger] out@[k])@ == v@[k]@,
+{
+    let mut out: Vec<RuntimeStyleSet> = Vec::new();
+    let mut i: usize = 0;
+    while i < v.len()
+        invariant
+            i <= v.len(),
+            out@.len() == i,
+            forall|k: int| 0 <= k < i as int ==>
+                (#[trigger] out@[k])@ == v@[k]@,
+        decreases v.len() - i,
+    {
+        out.push(copy_style_set(&v[i]));
+        i += 1;
+    }
+    out
+}
+
 pub fn default_paragraph_style_exec() -> (out: RuntimeParagraphStyle)
     ensures out@ == default_paragraph_style(),
 {
@@ -1286,6 +1330,22 @@ pub struct RuntimeUndoEntry {
     pub focus_after: usize,
 }
 
+impl View for RuntimeUndoEntry {
+    type V = UndoEntry;
+    open spec fn view(&self) -> UndoEntry {
+        UndoEntry {
+            start: self.start as nat,
+            removed_text: self.removed_text@,
+            removed_styles: style_seq_view(self.removed_styles@),
+            inserted_text: self.inserted_text@,
+            inserted_styles: style_seq_view(self.inserted_styles@),
+            anchor_before: self.anchor_before as nat,
+            focus_before: self.focus_before as nat,
+            focus_after: self.focus_after as nat,
+        }
+    }
+}
+
 pub struct RuntimeUndoStack {
     pub entries: Vec<RuntimeUndoEntry>,
     pub position: usize,
@@ -1304,6 +1364,8 @@ impl RuntimeUndoStack {
         &&& undo_stack_wf(self.model@)
         &&& self.position as nat == self.model@.position
         &&& self.entries@.len() == self.model@.entries.len()
+        &&& forall|i: int| 0 <= i < self.entries@.len() ==>
+            (#[trigger] self.entries@[i])@ == self.model@.entries[i]
     }
 }
 
@@ -1331,6 +1393,360 @@ pub fn can_redo_exec(stack: &RuntimeUndoStack) -> (result: bool)
     ensures result == can_redo(stack@),
 {
     stack.position < stack.entries.len()
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Undo operations (exec)
+// ──────────────────────────────────────────────────────────────────────
+
+pub fn undo_entry_for_splice_exec(
+    model: &RuntimeTextModel,
+    start: usize,
+    end: usize,
+    new_text: &Vec<char>,
+    new_styles: &Vec<RuntimeStyleSet>,
+    new_focus: usize,
+) -> (out: RuntimeUndoEntry)
+    requires
+        model.wf_spec(),
+        start <= end,
+        end <= model.text.len(),
+        new_text@.len() == new_styles@.len(),
+    ensures
+        out@ == undo_entry_for_splice(
+            model@, start as nat, end as nat,
+            new_text@, style_seq_view(new_styles@), new_focus as nat),
+        undo_entry_wf(out@),
+{
+    // Copy model.text[start..end) into removed_text
+    let mut removed_text: Vec<char> = Vec::new();
+    let mut i: usize = start;
+    while i < end
+        invariant
+            start <= i, i <= end, end <= model.text.len(),
+            removed_text@ =~= model.text@.subrange(start as int, i as int),
+        decreases end - i,
+    {
+        removed_text.push(model.text[i]);
+        proof {
+            assert(model.text@.subrange(start as int, i as int)
+                .push(model.text@[i as int])
+                =~= model.text@.subrange(start as int, (i + 1) as int));
+        }
+        i += 1;
+    }
+
+    // Copy model.styles[start..end) into removed_styles
+    let mut removed_styles: Vec<RuntimeStyleSet> = Vec::new();
+    let mut j: usize = start;
+    while j < end
+        invariant
+            start <= j, j <= end, end <= model.styles.len(),
+            model.wf_spec(),
+            removed_styles@.len() == j - start,
+            forall|k: int| 0 <= k < (j - start) as int ==>
+                (#[trigger] removed_styles@[k])@ == model@.styles[start as int + k],
+        decreases end - j,
+    {
+        removed_styles.push(copy_style_set(&model.styles[j]));
+        j += 1;
+    }
+
+    // Copy new_text and new_styles
+    let inserted_text = copy_char_vec(new_text);
+    let inserted_styles = copy_style_vec(new_styles);
+
+    proof {
+        // Connect removed_styles view to spec subrange
+        let spec_removed = model@.styles.subrange(start as int, end as int);
+        assert(style_seq_view(removed_styles@) =~= spec_removed) by {
+            assert(style_seq_view(removed_styles@).len() == spec_removed.len());
+            assert forall|k: int| 0 <= k < style_seq_view(removed_styles@).len()
+                implies style_seq_view(removed_styles@)[k] == spec_removed[k]
+            by {
+                assert(removed_styles@[k]@ == model@.styles[start as int + k]);
+            };
+        };
+        // Connect inserted_styles view
+        assert(style_seq_view(inserted_styles@) =~= style_seq_view(new_styles@)) by {
+            assert(style_seq_view(inserted_styles@).len() == style_seq_view(new_styles@).len());
+            assert forall|k: int| 0 <= k < style_seq_view(inserted_styles@).len()
+                implies style_seq_view(inserted_styles@)[k] == style_seq_view(new_styles@)[k]
+            by {};
+        };
+    }
+
+    RuntimeUndoEntry {
+        start,
+        removed_text,
+        removed_styles,
+        inserted_text,
+        inserted_styles,
+        anchor_before: model.anchor,
+        focus_before: model.focus,
+        focus_after: new_focus,
+    }
+}
+
+pub fn push_undo_exec(stack: RuntimeUndoStack, entry: RuntimeUndoEntry) -> (out: RuntimeUndoStack)
+    requires
+        stack.wf_spec(),
+        undo_entry_wf(entry@),
+        stack.entries.len() < usize::MAX,
+    ensures
+        out@ == push_undo(stack@, entry@),
+        out.wf_spec(),
+{
+    let ghost old_spec = stack@;
+    let ghost entry_view = entry@;
+    let pos = stack.position;
+    let mut entries = stack.entries;
+
+    // Truncate entries beyond position
+    while entries.len() > pos
+        invariant
+            pos <= entries.len(),
+            forall|i: int| 0 <= i < entries@.len() ==>
+                (#[trigger] entries@[i])@ == old_spec.entries[i],
+        decreases entries.len() - pos,
+    {
+        entries.pop();
+    }
+
+    entries.push(entry);
+
+    proof {
+        lemma_push_preserves_wf(old_spec, entry_view);
+        let new_spec = push_undo(old_spec, entry_view);
+        assert forall|i: int| 0 <= i < entries@.len()
+            implies (#[trigger] entries@[i])@ == new_spec.entries[i]
+        by {
+            if i < pos as int {
+                assert(new_spec.entries[i]
+                    == old_spec.entries.subrange(0, old_spec.position as int)[i]);
+            }
+        };
+    }
+
+    RuntimeUndoStack {
+        entries,
+        position: pos + 1,
+        model: Ghost(push_undo(old_spec, entry_view)),
+    }
+}
+
+pub fn record_edit_exec(
+    stack: RuntimeUndoStack,
+    model: &RuntimeTextModel,
+    start: usize,
+    end: usize,
+    new_text: &Vec<char>,
+    new_styles: &Vec<RuntimeStyleSet>,
+    new_focus: usize,
+) -> (out: RuntimeUndoStack)
+    requires
+        stack.wf_spec(),
+        model.wf_spec(),
+        start <= end,
+        end <= model.text.len(),
+        new_text@.len() == new_styles@.len(),
+        stack.entries.len() < usize::MAX,
+    ensures
+        out@ == record_edit(stack@, model@, start as nat, end as nat,
+                            new_text@, style_seq_view(new_styles@), new_focus as nat),
+        out.wf_spec(),
+{
+    let entry = undo_entry_for_splice_exec(model, start, end, new_text, new_styles, new_focus);
+    push_undo_exec(stack, entry)
+}
+
+pub fn apply_undo_exec(stack: RuntimeUndoStack, model: RuntimeTextModel)
+    -> (out: (RuntimeUndoStack, RuntimeTextModel))
+    requires
+        stack.wf_spec(),
+        model.wf_spec(),
+        can_undo(stack@),
+        ({
+            let entry = stack@.entries[(stack@.position - 1) as int];
+            let undo_end = entry.start + entry.inserted_text.len();
+            &&& undo_end <= model@.text.len()
+            &&& entry.focus_before <= model@.text.len()
+                - entry.inserted_text.len() + entry.removed_text.len()
+            &&& model@.text.len() - entry.inserted_text.len()
+                + entry.removed_text.len() < usize::MAX
+            &&& wf_text(seq_splice(model@.text, entry.start as int,
+                    undo_end as int, entry.removed_text))
+            &&& is_grapheme_boundary(
+                    seq_splice(model@.text, entry.start as int,
+                        undo_end as int, entry.removed_text),
+                    entry.focus_before)
+        }),
+    ensures
+        out.0@ == apply_undo(stack@, model@).0,
+        out.1@ == apply_undo(stack@, model@).1,
+        out.0.wf_spec(),
+        out.1.wf_spec(),
+{
+    let ghost old_stack_view = stack@;
+    let ghost old_model_view = model@;
+    let pos = stack.position - 1;
+
+    // Read entry fields
+    let start = stack.entries[pos].start;
+    let ins_len = stack.entries[pos].inserted_text.len();
+    let undo_end = start + ins_len;
+    let new_focus = stack.entries[pos].focus_before;
+
+    // Copy removed text/styles from entry (these become splice input)
+    let new_text = copy_char_vec(&stack.entries[pos].removed_text);
+    let new_styles = copy_style_vec(&stack.entries[pos].removed_styles);
+
+    let ghost spec_entry = old_stack_view.entries[(old_stack_view.position - 1) as int];
+    let ghost ghost_new_styles = spec_entry.removed_styles;
+
+    proof {
+        // Connect runtime entry to spec entry
+        assert(stack.entries@[pos as int]@ == spec_entry);
+        assert(start as nat == spec_entry.start);
+        assert(undo_end as nat == spec_entry.start + spec_entry.inserted_text.len());
+        assert(new_focus as nat == spec_entry.focus_before);
+        assert(new_text@ =~= spec_entry.removed_text);
+
+        // new_styles correspondence
+        assert forall|i: int| 0 <= i < new_styles@.len()
+            implies (#[trigger] new_styles@[i])@ == ghost_new_styles[i]
+        by {
+            assert(new_styles@[i]@ == stack.entries@[pos as int].removed_styles@[i]@);
+        };
+
+        // removed_text.len() == removed_styles.len() from undo_entry_wf
+        assert(undo_entry_wf(spec_entry));
+        assert(new_text.len() == new_styles.len());
+    }
+
+    let new_model = splice_exec(
+        model, start, undo_end,
+        new_text, new_styles, new_focus,
+        Ghost(ghost_new_styles),
+    );
+
+    let ghost new_stack_spec = apply_undo(old_stack_view, old_model_view).0;
+
+    proof {
+        lemma_undo_preserves_wf(old_stack_view, old_model_view);
+        // Entry correspondence (entries unchanged)
+        assert forall|i: int| 0 <= i < stack.entries@.len()
+            implies (#[trigger] stack.entries@[i])@ == new_stack_spec.entries[i]
+        by {
+            assert(stack.entries@[i]@ == old_stack_view.entries[i]);
+            assert(new_stack_spec.entries[i] == old_stack_view.entries[i]);
+        };
+    }
+
+    let new_stack = RuntimeUndoStack {
+        entries: stack.entries,
+        position: pos,
+        model: Ghost(new_stack_spec),
+    };
+
+    (new_stack, new_model)
+}
+
+pub fn apply_redo_exec(stack: RuntimeUndoStack, model: RuntimeTextModel)
+    -> (out: (RuntimeUndoStack, RuntimeTextModel))
+    requires
+        stack.wf_spec(),
+        model.wf_spec(),
+        can_redo(stack@),
+        ({
+            let entry = stack@.entries[stack@.position as int];
+            let redo_end = entry.start + entry.removed_text.len();
+            &&& redo_end <= model@.text.len()
+            &&& entry.focus_after <= model@.text.len()
+                - entry.removed_text.len() + entry.inserted_text.len()
+            &&& model@.text.len() - entry.removed_text.len()
+                + entry.inserted_text.len() < usize::MAX
+            &&& wf_text(seq_splice(model@.text, entry.start as int,
+                    redo_end as int, entry.inserted_text))
+            &&& is_grapheme_boundary(
+                    seq_splice(model@.text, entry.start as int,
+                        redo_end as int, entry.inserted_text),
+                    entry.focus_after)
+        }),
+    ensures
+        out.0@ == apply_redo(stack@, model@).0,
+        out.1@ == apply_redo(stack@, model@).1,
+        out.0.wf_spec(),
+        out.1.wf_spec(),
+{
+    let ghost old_stack_view = stack@;
+    let ghost old_model_view = model@;
+    let pos = stack.position;
+
+    // Read entry fields
+    let start = stack.entries[pos].start;
+    let rem_len = stack.entries[pos].removed_text.len();
+    let redo_end = start + rem_len;
+    let new_focus = stack.entries[pos].focus_after;
+
+    // Copy inserted text/styles from entry (these become splice input)
+    let new_text = copy_char_vec(&stack.entries[pos].inserted_text);
+    let new_styles = copy_style_vec(&stack.entries[pos].inserted_styles);
+
+    let ghost spec_entry = old_stack_view.entries[old_stack_view.position as int];
+    let ghost ghost_new_styles = spec_entry.inserted_styles;
+
+    proof {
+        // Connect runtime entry to spec entry
+        assert(stack.entries@[pos as int]@ == spec_entry);
+        assert(start as nat == spec_entry.start);
+        assert(redo_end as nat == spec_entry.start + spec_entry.removed_text.len());
+        assert(new_focus as nat == spec_entry.focus_after);
+        assert(new_text@ =~= spec_entry.inserted_text);
+
+        // new_styles correspondence
+        assert forall|i: int| 0 <= i < new_styles@.len()
+            implies (#[trigger] new_styles@[i])@ == ghost_new_styles[i]
+        by {
+            assert(new_styles@[i]@ == stack.entries@[pos as int].inserted_styles@[i]@);
+        };
+
+        // inserted_text.len() == inserted_styles.len() from undo_entry_wf
+        assert(undo_entry_wf(spec_entry));
+        assert(new_text.len() == new_styles.len());
+    }
+
+    let new_model = splice_exec(
+        model, start, redo_end,
+        new_text, new_styles, new_focus,
+        Ghost(ghost_new_styles),
+    );
+
+    let ghost new_stack_spec = apply_redo(old_stack_view, old_model_view).0;
+
+    proof {
+        lemma_redo_preserves_wf(old_stack_view, old_model_view);
+        // Entry correspondence (entries unchanged)
+        assert forall|i: int| 0 <= i < stack.entries@.len()
+            implies (#[trigger] stack.entries@[i])@ == new_stack_spec.entries[i]
+        by {
+            assert(stack.entries@[i]@ == old_stack_view.entries[i]);
+            assert(new_stack_spec.entries[i] == old_stack_view.entries[i]);
+        };
+    }
+
+    proof {
+        // can_redo: pos < entries.len(), so pos + 1 won't overflow
+        assert(pos < stack.entries.len());
+    }
+
+    let new_stack = RuntimeUndoStack {
+        entries: stack.entries,
+        position: pos + 1,
+        model: Ghost(new_stack_spec),
+    };
+
+    (new_stack, new_model)
 }
 
 } // verus!
