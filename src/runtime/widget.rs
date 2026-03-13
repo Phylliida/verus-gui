@@ -1637,11 +1637,6 @@ fn layout_absolute_widget_exec(
         by {}
     }
 
-    // Build exec_data once, reuse for lemma and proof
-    let ghost exec_data: Seq<(RationalModel, RationalModel, Size<RationalModel>)> =
-        Seq::new(child_sizes@.len() as nat, |i: int|
-            (offsets_x@[i]@, offsets_y@[i]@, child_sizes@[i]@));
-
     let layout_result = absolute_layout_exec(limits, padding, &child_sizes,
         &offsets_x, &offsets_y);
 
@@ -1650,7 +1645,12 @@ fn layout_absolute_widget_exec(
         Seq::new(n as nat, |j: int| child_nodes@[j]@);
 
     proof {
-        lemma_absolute_children_len::<RationalModel>(padding@, exec_data, 0);
+        lemma_absolute_children_len::<RationalModel>(
+            padding@,
+            Seq::new(child_sizes@.len() as nat, |i: int|
+                (offsets_x@[i]@, offsets_y@[i]@, child_sizes@[i]@)),
+            0,
+        );
         assert(layout_result.children@.len() == child_nodes@.len());
     }
 
@@ -1672,19 +1672,40 @@ fn layout_absolute_widget_exec(
         }
         assert(cn_models =~= spec_cn);
 
-        // exec_data =~= body_data (what layout_absolute_body computes)
+        // child_sizes view matches spec
+        let sizes_view: Seq<Size<RationalModel>> =
+            Seq::new(child_sizes@.len() as nat, |i: int| child_sizes@[i]@);
+        let spec_sizes: Seq<Size<RationalModel>> =
+            Seq::new(spec_cn.len(), |i: int| spec_cn[i].size);
+        assert(sizes_view =~= spec_sizes) by {
+            assert forall|j: int| 0 <= j < sizes_view.len() as int implies
+                sizes_view[j] == spec_sizes[j]
+            by {}
+        }
+
+        // offsets match spec
+        let ox_view: Seq<RationalModel> =
+            Seq::new(offsets_x@.len() as nat, |i: int| offsets_x@[i]@);
+        let oy_view: Seq<RationalModel> =
+            Seq::new(offsets_y@.len() as nat, |i: int| offsets_y@[i]@);
+
+        // Build spec child_data from spec_ac
+        let body_offsets: Seq<(RationalModel, RationalModel)> =
+            Seq::new(spec_ac.len(), |i: int| (spec_ac[i].x, spec_ac[i].y));
         let body_data: Seq<(RationalModel, RationalModel, Size<RationalModel>)> =
             Seq::new(spec_cn.len(), |i: int|
-                (spec_ac[i].x, spec_ac[i].y, spec_cn[i].size));
+                (body_offsets[i].0, body_offsets[i].1, spec_cn[i].size));
+
+        // layout_result data matches body_data
+        let exec_data: Seq<(RationalModel, RationalModel, Size<RationalModel>)> =
+            Seq::new(child_sizes@.len() as nat, |i: int|
+                (offsets_x@[i]@, offsets_y@[i]@, child_sizes@[i]@));
         assert(exec_data =~= body_data) by {
             assert forall|j: int| 0 <= j < exec_data.len() as int implies
                 exec_data[j] == body_data[j]
             by {
                 assert(offsets_x@[j]@ == spec_ac[j].x);
                 assert(offsets_y@[j]@ == spec_ac[j].y);
-                // child_sizes@[j]@ == child_nodes@[j]@.size == cn_models[j].size == spec_cn[j].size
-                assert(child_sizes@[j]@ == child_nodes@[j]@.size);
-                assert(cn_models[j] == spec_cn[j]);
             }
         }
     }
@@ -1850,6 +1871,23 @@ fn layout_sized_box_widget_exec(
         fuel as nat,
     );
 
+    // Z3 hint: connect exec child result to spec child result.
+    // Without these, Z3 must search through layout_widget_exec's postcondition
+    // and layout_widget's 14-arm match to derive these connections itself.
+    proof {
+        // layout_widget_exec ensures child_node@ == layout_widget(effective@, ..., fuel-1)
+        // which is exactly child_spec by definition — make this explicit for Z3
+        assert(child_spec == child_node@);
+        assert(child_spec.size == child_node@.size);
+        // Unfold layout_widget's SizedBox arm: parent_model fields are:
+        //   size = limits.resolve(child_node.size), children = [child_node at (0,0)]
+        // Stating these prevents Z3 from having to unfold the 14-arm match itself.
+        assert(parent_model.size == limits@.resolve(child_spec.size));
+        assert(parent_model.children.len() == 1);
+        assert(parent_model.children[0].size == child_spec.size);
+        assert(parent_model.children[0].children == child_spec.children);
+    }
+
     let mut result_children: Vec<RuntimeNode> = Vec::new();
     result_children.push(positioned_child);
 
@@ -1861,8 +1899,9 @@ fn layout_sized_box_widget_exec(
         model: Ghost(parent_model),
     };
 
+    // Z3 hint: wf_spec requires each exec child's view matches its model.
+    // These bridge exec Vec indexing to spec Seq indexing.
     proof {
-        assert(parent_model.children.len() == 1);
         assert(out.children@.len() == 1);
         assert(out@.children.len() == 1);
         assert(out.children@[0].wf_shallow());
