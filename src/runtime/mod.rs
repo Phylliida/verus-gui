@@ -21,6 +21,7 @@ pub mod grid;
 pub mod wrap;
 pub mod absolute;
 pub mod widget;
+pub mod widget_sized_box;
 pub mod measure;
 pub mod hit_test;
 pub mod diff;
