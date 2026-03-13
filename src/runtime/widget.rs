@@ -1871,23 +1871,6 @@ fn layout_sized_box_widget_exec(
         fuel as nat,
     );
 
-    // Z3 hint: connect exec child result to spec child result.
-    // Without these, Z3 must search through layout_widget_exec's postcondition
-    // and layout_widget's 14-arm match to derive these connections itself.
-    proof {
-        // layout_widget_exec ensures child_node@ == layout_widget(effective@, ..., fuel-1)
-        // which is exactly child_spec by definition — make this explicit for Z3
-        assert(child_spec == child_node@);
-        assert(child_spec.size == child_node@.size);
-        // Unfold layout_widget's SizedBox arm: parent_model fields are:
-        //   size = limits.resolve(child_node.size), children = [child_node at (0,0)]
-        // Stating these prevents Z3 from having to unfold the 14-arm match itself.
-        assert(parent_model.size == limits@.resolve(child_spec.size));
-        assert(parent_model.children.len() == 1);
-        assert(parent_model.children[0].size == child_spec.size);
-        assert(parent_model.children[0].children == child_spec.children);
-    }
-
     let mut result_children: Vec<RuntimeNode> = Vec::new();
     result_children.push(positioned_child);
 
@@ -1899,9 +1882,8 @@ fn layout_sized_box_widget_exec(
         model: Ghost(parent_model),
     };
 
-    // Z3 hint: wf_spec requires each exec child's view matches its model.
-    // These bridge exec Vec indexing to spec Seq indexing.
     proof {
+        assert(parent_model.children.len() == 1);
         assert(out.children@.len() == 1);
         assert(out@.children.len() == 1);
         assert(out.children@[0].wf_shallow());
