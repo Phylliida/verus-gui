@@ -6,6 +6,9 @@ use crate::text_model::proofs::*;
 use crate::text_model::paragraph_proofs::*;
 use crate::text_model::undo::*;
 use crate::text_model::undo_proofs::*;
+use crate::text_model::selection_geometry::*;
+use crate::text_model::viewport::*;
+use crate::text_model::word_wrap::*;
 
 verus! {
 
@@ -2696,6 +2699,348 @@ pub fn apply_redo_exec(stack: RuntimeUndoStack, model: RuntimeTextModel)
     };
 
     (new_stack, new_model)
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Selection extraction (exec)
+// ──────────────────────────────────────────────────────────────────────
+
+pub fn get_selection_text_exec(model: &RuntimeTextModel) -> (out: Vec<char>)
+    requires model.wf_spec(),
+    ensures out@ == get_selection_text(model@),
+{
+    let sel_start = if model.anchor <= model.focus { model.anchor } else { model.focus };
+    let sel_end = if model.anchor <= model.focus { model.focus } else { model.anchor };
+    let mut out: Vec<char> = Vec::new();
+    let mut i: usize = sel_start;
+    while i < sel_end
+        invariant
+            sel_start <= i,
+            i <= sel_end,
+            sel_end <= model.text.len(),
+            model.wf_spec(),
+            out@ =~= model.text@.subrange(sel_start as int, i as int),
+        decreases sel_end - i,
+    {
+        out.push(model.text[i]);
+        proof {
+            assert(model.text@.subrange(sel_start as int, i as int)
+                .push(model.text@[i as int])
+                =~= model.text@.subrange(sel_start as int, (i + 1) as int));
+        }
+        i += 1;
+    }
+    out
+}
+
+pub fn get_selection_styles_exec(model: &RuntimeTextModel) -> (out: Vec<RuntimeStyleSet>)
+    requires model.wf_spec(),
+    ensures
+        out@.len() == get_selection_styles(model@).len(),
+        forall|k: int| 0 <= k < out@.len() ==>
+            (#[trigger] out@[k])@ == get_selection_styles(model@)[k],
+{
+    let sel_start = if model.anchor <= model.focus { model.anchor } else { model.focus };
+    let sel_end = if model.anchor <= model.focus { model.focus } else { model.anchor };
+    let mut out: Vec<RuntimeStyleSet> = Vec::new();
+    let mut i: usize = sel_start;
+    while i < sel_end
+        invariant
+            sel_start <= i,
+            i <= sel_end,
+            sel_end <= model.styles.len(),
+            model.wf_spec(),
+            out@.len() == (i - sel_start) as nat,
+            forall|k: int| 0 <= k < out@.len() ==>
+                (#[trigger] out@[k])@ == model@.styles[sel_start as int + k],
+        decreases sel_end - i,
+    {
+        out.push(copy_style_set(&model.styles[i]));
+        i += 1;
+    }
+    out
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Selection geometry (exec)
+// ──────────────────────────────────────────────────────────────────────
+
+pub struct RuntimeSelectionRect {
+    pub line: usize,
+    pub start_col: usize,
+    pub end_col: usize,
+}
+
+/// Compute selection highlight rectangles. External body because it
+/// relies on text_pos_to_visual_exec and line geometry.
+#[verifier::external_body]
+pub fn selection_rects_exec(
+    text: &Vec<char>, anchor: usize, focus: usize,
+) -> (out: Vec<RuntimeSelectionRect>)
+    requires
+        anchor <= text.len(),
+        focus <= text.len(),
+{
+    if anchor == focus {
+        return Vec::new();
+    }
+    let sel_start = if anchor <= focus { anchor } else { focus };
+    let sel_end = if anchor <= focus { focus } else { anchor };
+    let (start_line, start_col) = text_pos_to_visual_exec(
+        text, sel_start, Affinity::Downstream);
+    let (end_line, end_col) = text_pos_to_visual_exec(
+        text, sel_end, Affinity::Upstream);
+
+    let mut rects: Vec<RuntimeSelectionRect> = Vec::new();
+    if start_line == end_line {
+        rects.push(RuntimeSelectionRect {
+            line: start_line, start_col, end_col,
+        });
+    } else {
+        // First line: partial
+        rects.push(RuntimeSelectionRect {
+            line: start_line, start_col, end_col: usize::MAX,
+        });
+        // Middle lines: full
+        let mut line = start_line + 1;
+        while line < end_line {
+            rects.push(RuntimeSelectionRect {
+                line, start_col: 0, end_col: usize::MAX,
+            });
+            line += 1;
+        }
+        // Last line: partial
+        rects.push(RuntimeSelectionRect {
+            line: end_line, start_col: 0, end_col,
+        });
+    }
+    rects
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Viewport (exec)
+// ──────────────────────────────────────────────────────────────────────
+
+pub struct RuntimeTextViewport {
+    pub scroll_line: usize,
+    pub visible_lines: usize,
+}
+
+impl View for RuntimeTextViewport {
+    type V = TextViewport;
+    open spec fn view(&self) -> TextViewport {
+        TextViewport {
+            scroll_line: self.scroll_line as nat,
+            visible_lines: self.visible_lines as nat,
+        }
+    }
+}
+
+pub fn cursor_visible_exec(
+    vp: &RuntimeTextViewport, cursor_line: usize,
+) -> (result: bool)
+    requires
+        vp.scroll_line as u64 + vp.visible_lines as u64 <= usize::MAX as u64,
+    ensures result == cursor_visible(vp@, cursor_line as nat),
+{
+    cursor_line >= vp.scroll_line
+    && cursor_line < vp.scroll_line + vp.visible_lines
+}
+
+pub fn scroll_to_cursor_exec(
+    vp: RuntimeTextViewport, cursor_line: usize,
+) -> (result: RuntimeTextViewport)
+    requires
+        cursor_line < usize::MAX,
+        vp.scroll_line as u64 + vp.visible_lines as u64 <= usize::MAX as u64,
+    ensures result@ == scroll_to_cursor(vp@, cursor_line as nat),
+{
+    if vp.visible_lines == 0 {
+        vp
+    } else if cursor_line < vp.scroll_line {
+        RuntimeTextViewport { scroll_line: cursor_line, ..vp }
+    } else if cursor_line >= vp.scroll_line + vp.visible_lines {
+        RuntimeTextViewport {
+            scroll_line: cursor_line - vp.visible_lines + 1,
+            ..vp
+        }
+    } else {
+        vp
+    }
+}
+
+#[verifier::external_body]
+pub fn scroll_by_exec(
+    vp: RuntimeTextViewport, delta: i64, total_lines: usize,
+) -> (result: RuntimeTextViewport)
+    requires
+        total_lines < usize::MAX,
+    ensures result@ == scroll_by(vp@, delta as int, total_lines as nat),
+{
+    let new_scroll: i64 = (vp.scroll_line as i64).saturating_add(delta);
+    let clamped: usize = if new_scroll < 0 {
+        0
+    } else if total_lines == 0 {
+        0
+    } else if new_scroll >= total_lines as i64 {
+        total_lines - 1
+    } else {
+        new_scroll as usize
+    };
+    RuntimeTextViewport { scroll_line: clamped, ..vp }
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Soft word wrap (exec)
+// ──────────────────────────────────────────────────────────────────────
+
+/// Compute soft wrap break positions. External body — uses runtime
+/// character width and greedy break algorithm.
+#[verifier::external_body]
+pub fn compute_wrap_breaks_exec(
+    text: &Vec<char>, line_width: usize,
+) -> (out: Vec<usize>)
+{
+    if line_width == 0 || text.len() == 0 {
+        return Vec::new();
+    }
+    let mut breaks: Vec<usize> = Vec::new();
+    let mut pos: usize = 0;
+    while pos < text.len() {
+        // Find end of current hard line
+        let mut hard_end = pos;
+        while hard_end < text.len() && text[hard_end] != '\n' {
+            hard_end += 1;
+        }
+        // Wrap this hard line
+        let mut line_start = pos;
+        while line_start < hard_end {
+            let segment_end = (line_start + line_width).min(hard_end);
+            if segment_end >= hard_end {
+                break;
+            }
+            // Find last break opportunity
+            let mut bp = segment_end;
+            while bp > line_start {
+                let c = text[bp - 1];
+                if c == ' ' || c == '\t' || c == '-' {
+                    break;
+                }
+                bp -= 1;
+            }
+            let actual_break = if bp > line_start { bp } else { segment_end };
+            breaks.push(actual_break);
+            line_start = actual_break;
+        }
+        // Skip past '\n'
+        pos = if hard_end < text.len() { hard_end + 1 } else { hard_end };
+    }
+    breaks
+}
+
+/// Count wrapped visual lines. External body.
+#[verifier::external_body]
+pub fn wrapped_line_count_exec(
+    text: &Vec<char>, line_width: usize,
+) -> (out: usize)
+{
+    if line_width == 0 || text.len() == 0 {
+        return 1;
+    }
+    let breaks = compute_wrap_breaks_exec(text, line_width);
+    // Each hard line produces (soft_breaks_in_line + 1) visual lines.
+    // Total = breaks.len() + paragraph_count
+    let mut newline_count: usize = 0;
+    let mut i: usize = 0;
+    while i < text.len() {
+        if text[i] == '\n' {
+            newline_count += 1;
+        }
+        i += 1;
+    }
+    breaks.len() + newline_count + 1
+}
+
+/// Map text position to visual (line, col) with soft wrap. External body.
+#[verifier::external_body]
+pub fn wrapped_pos_to_visual_exec(
+    text: &Vec<char>, pos: usize, line_width: usize,
+) -> (out: (usize, usize))
+    ensures
+        out.0 as nat == wrapped_pos_to_visual(text@, pos as nat, line_width as nat).0,
+        out.1 as nat == wrapped_pos_to_visual(text@, pos as nat, line_width as nat).1,
+{
+    if text.len() == 0 || line_width == 0 {
+        return (0, pos);
+    }
+    let breaks = compute_wrap_breaks_exec(text, line_width);
+    let mut visual_line: usize = 0;
+    let mut line_start: usize = 0;
+    // Walk through hard lines and soft breaks
+    let mut p: usize = 0;
+    let mut bi: usize = 0;  // index into breaks
+    while p < text.len() {
+        // Find end of current hard line
+        let mut hard_end = p;
+        while hard_end < text.len() && text[hard_end] != '\n' {
+            hard_end += 1;
+        }
+        // Walk soft breaks within this hard line
+        let mut seg_start = p;
+        while bi < breaks.len() && breaks[bi] <= hard_end {
+            if pos >= seg_start && pos < breaks[bi] {
+                return (visual_line, pos - seg_start);
+            }
+            seg_start = breaks[bi];
+            bi += 1;
+            visual_line += 1;
+        }
+        // Check if pos is in last segment of this hard line
+        if pos >= seg_start && pos <= hard_end {
+            return (visual_line, pos - seg_start);
+        }
+        visual_line += 1;
+        p = if hard_end < text.len() { hard_end + 1 } else { hard_end };
+    }
+    (visual_line, 0)
+}
+
+/// Map visual (line, col) to text position with soft wrap. External body.
+#[verifier::external_body]
+pub fn wrapped_visual_to_pos_exec(
+    text: &Vec<char>, line: usize, col: usize, line_width: usize,
+) -> (out: usize)
+    ensures out as nat == wrapped_visual_to_pos(text@, line as nat, col as nat, line_width as nat),
+{
+    if text.len() == 0 || line_width == 0 {
+        return col.min(text.len());
+    }
+    let breaks = compute_wrap_breaks_exec(text, line_width);
+    let mut visual_line: usize = 0;
+    let mut p: usize = 0;
+    let mut bi: usize = 0;
+    while p < text.len() {
+        let mut hard_end = p;
+        while hard_end < text.len() && text[hard_end] != '\n' {
+            hard_end += 1;
+        }
+        let mut seg_start = p;
+        while bi < breaks.len() && breaks[bi] <= hard_end {
+            if visual_line == line {
+                return (seg_start + col).min(breaks[bi]);
+            }
+            seg_start = breaks[bi];
+            bi += 1;
+            visual_line += 1;
+        }
+        if visual_line == line {
+            return (seg_start + col).min(hard_end);
+        }
+        visual_line += 1;
+        p = if hard_end < text.len() { hard_end + 1 } else { hard_end };
+    }
+    // Target line beyond content
+    text.len()
 }
 
 } // verus!

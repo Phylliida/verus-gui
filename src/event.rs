@@ -236,6 +236,11 @@ pub enum KeyEventKind {
     Redo,
     Cut,
     Copy,
+    // IME composition events
+    ComposeStart,
+    ComposeUpdate(Seq<char>, nat),
+    ComposeCommit,
+    ComposeCancel,
 }
 
 /// A keyboard event with modifiers.
@@ -330,6 +335,18 @@ pub open spec fn dispatch_key(model: TextModel, event: KeyEvent) -> KeyAction {
         KeyEventKind::Redo => KeyAction::External(ExternalAction::Redo),
         KeyEventKind::Cut => KeyAction::External(ExternalAction::Cut),
         KeyEventKind::Copy => KeyAction::External(ExternalAction::Copy),
+        KeyEventKind::ComposeStart => {
+            KeyAction::NewModel(compose_start(model))
+        },
+        KeyEventKind::ComposeUpdate(text, cursor) => {
+            KeyAction::NewModel(compose_update(model, text, cursor))
+        },
+        KeyEventKind::ComposeCommit => {
+            KeyAction::NewModel(compose_commit(model))
+        },
+        KeyEventKind::ComposeCancel => {
+            KeyAction::NewModel(compose_cancel(model))
+        },
         _ => {
             // Arrow/Home/End keys
             match key_to_move_direction(event) {

@@ -30,6 +30,8 @@ pub mod listview;
 pub mod event;
 pub mod interaction;
 pub mod text_model;
+pub mod session;
+pub mod text_input;
 
 verus! {
 

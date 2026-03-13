@@ -329,5 +329,8 @@ pub mod undo;
 pub mod undo_proofs;
 pub mod paragraph_proofs;
 pub mod session;
+pub mod selection_geometry;
+pub mod viewport;
+pub mod word_wrap;
 
 } // verus!

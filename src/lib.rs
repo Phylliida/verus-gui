@@ -45,3 +45,6 @@ pub mod runtime;
 
 #[cfg(verus_keep_ghost)]
 pub mod text_model;
+
+#[cfg(verus_keep_ghost)]
+pub mod text_input;

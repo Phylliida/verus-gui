@@ -160,6 +160,10 @@ pub enum RuntimeKeyEventKind {
     Redo,
     Cut,
     Copy,
+    ComposeStart,
+    ComposeUpdate(Vec<char>, usize),
+    ComposeCommit,
+    ComposeCancel,
 }
 
 impl View for RuntimeKeyEventKind {
@@ -182,6 +186,11 @@ impl View for RuntimeKeyEventKind {
             RuntimeKeyEventKind::Redo => KeyEventKind::Redo,
             RuntimeKeyEventKind::Cut => KeyEventKind::Cut,
             RuntimeKeyEventKind::Copy => KeyEventKind::Copy,
+            RuntimeKeyEventKind::ComposeStart => KeyEventKind::ComposeStart,
+            RuntimeKeyEventKind::ComposeUpdate(text, cursor) =>
+                KeyEventKind::ComposeUpdate(text@, *cursor as nat),
+            RuntimeKeyEventKind::ComposeCommit => KeyEventKind::ComposeCommit,
+            RuntimeKeyEventKind::ComposeCancel => KeyEventKind::ComposeCancel,
         }
     }
 }
@@ -343,6 +352,34 @@ pub fn dispatch_key_exec(
         RuntimeKeyEventKind::Redo => RuntimeKeyAction::External(ExternalAction::Redo),
         RuntimeKeyEventKind::Cut => RuntimeKeyAction::External(ExternalAction::Cut),
         RuntimeKeyEventKind::Copy => RuntimeKeyAction::External(ExternalAction::Copy),
+        RuntimeKeyEventKind::ComposeStart => {
+            if model.composition.is_some() {
+                return RuntimeKeyAction::None;
+            }
+            RuntimeKeyAction::NewModel(compose_start_exec(model))
+        },
+        RuntimeKeyEventKind::ComposeUpdate(text, cursor) => {
+            if model.composition.is_none() || *cursor > text.len() {
+                return RuntimeKeyAction::None;
+            }
+            // Copy text since we can't move it out of the ref
+            let mut prov: Vec<char> = Vec::new();
+            let mut pi: usize = 0;
+            while pi < text.len() {
+                prov.push(text[pi]);
+                pi += 1;
+            }
+            RuntimeKeyAction::NewModel(compose_update_exec(model, prov, *cursor))
+        },
+        RuntimeKeyEventKind::ComposeCommit => {
+            if model.composition.is_none() {
+                return RuntimeKeyAction::None;
+            }
+            RuntimeKeyAction::NewModel(compose_commit_exec(model))
+        },
+        RuntimeKeyEventKind::ComposeCancel => {
+            RuntimeKeyAction::NewModel(compose_cancel_exec(model))
+        },
         _ => {
             // Arrow/Home/End keys
             let dir_opt = key_to_move_direction_exec(event);
