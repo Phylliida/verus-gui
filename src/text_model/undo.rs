@@ -177,4 +177,51 @@ pub open spec fn apply_redo(
     (new_stack, new_model)
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Undo merge
+// ──────────────────────────────────────────────────────────────────────
+
+/// Whether two entries can be merged (adjacent pure insertions).
+/// Both must be pure insertions (removed_text empty), and e2 must start
+/// where e1's insertion ends.
+pub open spec fn can_merge_entries(e1: UndoEntry, e2: UndoEntry) -> bool {
+    &&& e1.removed_text.len() == 0
+    &&& e2.removed_text.len() == 0
+    &&& e2.start == e1.start + e1.inserted_text.len()
+}
+
+/// Merge two adjacent insertion entries into one.
+pub open spec fn merge_entries(e1: UndoEntry, e2: UndoEntry) -> UndoEntry {
+    UndoEntry {
+        start: e1.start,
+        removed_text: Seq::empty(),
+        removed_styles: Seq::empty(),
+        inserted_text: e1.inserted_text + e2.inserted_text,
+        inserted_styles: e1.inserted_styles + e2.inserted_styles,
+        anchor_before: e1.anchor_before,
+        focus_before: e1.focus_before,
+        focus_after: e2.focus_after,
+    }
+}
+
+/// Push an undo entry, optionally merging with the top entry.
+/// If `merge` is true and the top entry is merge-compatible, replace top with merged.
+/// Otherwise, normal push.
+pub open spec fn push_undo_or_merge(
+    stack: UndoStack, entry: UndoEntry, merge: bool,
+) -> UndoStack {
+    if merge && can_undo(stack)
+        && can_merge_entries(stack.entries[(stack.position - 1) as int], entry)
+    {
+        let top = stack.entries[(stack.position - 1) as int];
+        let merged = merge_entries(top, entry);
+        UndoStack {
+            entries: stack.entries.subrange(0, (stack.position - 1) as int).push(merged),
+            position: stack.position,
+        }
+    } else {
+        push_undo(stack, entry)
+    }
+}
+
 } // verus!

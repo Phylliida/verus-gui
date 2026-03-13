@@ -386,4 +386,20 @@ pub open spec fn compose_cancel(model: TextModel) -> TextModel {
     }
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Selection extraction helpers
+// ──────────────────────────────────────────────────────────────────────
+
+/// Extract the text within the current selection.
+pub open spec fn get_selection_text(model: TextModel) -> Seq<char> {
+    let (sel_start, sel_end) = selection_range(model.anchor, model.focus);
+    model.text.subrange(sel_start as int, sel_end as int)
+}
+
+/// Extract the styles within the current selection.
+pub open spec fn get_selection_styles(model: TextModel) -> Seq<StyleSet> {
+    let (sel_start, sel_end) = selection_range(model.anchor, model.focus);
+    model.styles.subrange(sel_start as int, sel_end as int)
+}
+
 } // verus!

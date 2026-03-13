@@ -328,5 +328,6 @@ pub mod proofs;
 pub mod undo;
 pub mod undo_proofs;
 pub mod paragraph_proofs;
+pub mod session;
 
 } // verus!

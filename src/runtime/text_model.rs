@@ -752,25 +752,94 @@ fn resolve_typing_style_exec(
 pub fn prev_grapheme_boundary_exec(text: &Vec<char>, pos: usize) -> (result: usize)
     requires text@.len() > 0,
     ensures result as nat == prev_grapheme_boundary(text@, pos as nat),
-{ unimplemented!() }
+{
+    use unicode_segmentation::UnicodeSegmentation;
+    let s: String = text.iter().collect();
+    let clamped = pos.min(s.len());
+    // Find byte offset for char position `clamped`
+    let byte_pos = s.char_indices().nth(clamped).map(|(i, _)| i).unwrap_or(s.len());
+    // Find the previous grapheme boundary
+    let prev_byte = s[..byte_pos].grapheme_indices(true).last()
+        .map(|(i, _)| i).unwrap_or(0);
+    // Convert byte offset back to char offset
+    s[..prev_byte].chars().count()
+}
 
 #[verifier::external_body]
 pub fn next_grapheme_boundary_exec(text: &Vec<char>, pos: usize) -> (result: usize)
     requires text@.len() > 0,
     ensures result as nat == next_grapheme_boundary(text@, pos as nat),
-{ unimplemented!() }
+{
+    use unicode_segmentation::UnicodeSegmentation;
+    let s: String = text.iter().collect();
+    let char_len = s.chars().count();
+    let clamped = pos.min(char_len);
+    // Find byte offset for char position `clamped`
+    let byte_pos = s.char_indices().nth(clamped).map(|(i, _)| i).unwrap_or(s.len());
+    // Find the next grapheme boundary after byte_pos
+    let next_byte = s[byte_pos..].grapheme_indices(true).nth(1)
+        .map(|(i, _)| byte_pos + i).unwrap_or(s.len());
+    // Convert byte offset back to char offset
+    s[..next_byte].chars().count()
+}
 
 #[verifier::external_body]
 pub fn prev_word_start_exec(text: &Vec<char>, pos: usize) -> (result: usize)
     requires text@.len() > 0,
     ensures result as nat == prev_boundary_in(word_start_boundaries(text@), pos as nat),
-{ unimplemented!() }
+{
+    use unicode_segmentation::UnicodeSegmentation;
+    let s: String = text.iter().collect();
+    let clamped = pos.min(s.chars().count());
+    // Build word boundary set (char offsets where words start)
+    let mut boundaries: Vec<usize> = Vec::new();
+    let mut char_offset = 0usize;
+    for (_, word) in s.split_word_bound_indices() {
+        let word_char_len = word.chars().count();
+        // A word start boundary is at the start of a non-whitespace word
+        if word_char_len > 0 && !word.chars().next().unwrap().is_whitespace() {
+            boundaries.push(char_offset);
+        }
+        char_offset += word_char_len;
+    }
+    // Find the largest boundary strictly less than clamped
+    let mut best = 0usize;
+    for &b in boundaries.iter() {
+        if b < clamped {
+            best = b;
+        }
+    }
+    best
+}
 
 #[verifier::external_body]
 pub fn next_word_end_exec(text: &Vec<char>, pos: usize) -> (result: usize)
     requires text@.len() > 0,
     ensures result as nat == next_boundary_in(word_end_boundaries(text@), pos as nat),
-{ unimplemented!() }
+{
+    use unicode_segmentation::UnicodeSegmentation;
+    let s: String = text.iter().collect();
+    let char_len = s.chars().count();
+    let clamped = pos.min(char_len);
+    // Build word end boundary set (char offsets where words end)
+    let mut boundaries: Vec<usize> = Vec::new();
+    let mut char_offset = 0usize;
+    for (_, word) in s.split_word_bound_indices() {
+        let word_char_len = word.chars().count();
+        // A word end boundary is at the end of a non-whitespace word
+        if word_char_len > 0 && !word.chars().next().unwrap().is_whitespace() {
+            boundaries.push(char_offset + word_char_len);
+        }
+        char_offset += word_char_len;
+    }
+    // Find the smallest boundary strictly greater than clamped
+    for &b in boundaries.iter() {
+        if b > clamped {
+            return b;
+        }
+    }
+    char_len
+}
 
 // ──────────────────────────────────────────────────────────────────────
 // Editing operations (exec)
@@ -1316,6 +1385,626 @@ pub fn compose_cancel_exec(model: RuntimeTextModel) -> (result: RuntimeTextModel
 }
 
 // ──────────────────────────────────────────────────────────────────────
+// Sanitization helpers (exec)
+// ──────────────────────────────────────────────────────────────────────
+
+fn is_permitted_exec(c: char) -> (result: bool)
+    ensures result == is_permitted(c),
+{
+    c != '\0' && c != '\u{FFF9}' && c != '\u{FFFA}' && c != '\u{FFFB}'
+}
+
+pub fn filter_permitted_exec(s: &Vec<char>) -> (out: Vec<char>)
+    ensures out@ =~= filter_permitted(s@),
+{
+    let mut out: Vec<char> = Vec::new();
+    let mut i: usize = 0;
+    while i < s.len()
+        invariant
+            i <= s.len(),
+            out@ =~= filter_permitted(s@.subrange(0, i as int)),
+        decreases s.len() - i,
+    {
+        proof {
+            let sub_i = s@.subrange(0, i as int);
+            let sub_i1 = s@.subrange(0, (i + 1) as int);
+            assert(sub_i1.len() > 0);
+            assert(sub_i1.drop_last() =~= sub_i);
+            assert(sub_i1.last() == s@[i as int]);
+        }
+        if is_permitted_exec(s[i]) {
+            out.push(s[i]);
+        }
+        i += 1;
+    }
+    proof { assert(s@.subrange(0, s@.len() as int) =~= s@); }
+    out
+}
+
+pub fn canonicalize_newlines_exec(s: &Vec<char>) -> (out: Vec<char>)
+    ensures out@ =~= canonicalize_newlines(s@),
+{
+    let mut out: Vec<char> = Vec::new();
+    let mut i: usize = 0;
+    while i < s.len()
+        invariant
+            i <= s.len(),
+            out@ =~= canonicalize_newlines(s@.subrange(0, i as int)),
+            // If prev char was \r, current can't be \n (consumed together)
+            i > 0 && i < s.len() ==> (
+                s@[(i - 1) as int] == '\r' ==> s@[i as int] != '\n'),
+        decreases s.len() - i,
+    {
+        if s[i] == '\r' {
+            if i + 1 < s.len() && s[i + 1] == '\n' {
+                // \r\n pair → single \n
+                out.push('\n');
+                proof {
+                    let sub = s@.subrange(0, (i + 2) as int);
+                    assert(sub.len() >= 2);
+                    assert(sub.last() == s@[(i + 1) as int]);
+                    assert(sub[sub.len() as int - 2] == s@[i as int]);
+                    assert(sub.subrange(0, sub.len() as int - 2)
+                        =~= s@.subrange(0, i as int));
+                }
+                i += 2;
+            } else {
+                // bare \r → \n
+                out.push('\n');
+                proof {
+                    let sub = s@.subrange(0, (i + 1) as int);
+                    assert(sub.last() == s@[i as int]);
+                    assert(sub.drop_last() =~= s@.subrange(0, i as int));
+                }
+                i += 1;
+            }
+        } else {
+            out.push(s[i]);
+            proof {
+                let sub = s@.subrange(0, (i + 1) as int);
+                assert(sub.last() == s@[i as int]);
+                assert(sub.drop_last() =~= s@.subrange(0, i as int));
+                if s@[i as int] == '\n' && i > 0 {
+                    assert(sub.len() >= 2);
+                    assert(sub[sub.len() as int - 2] == s@[(i - 1) as int]);
+                    assert(s@[(i - 1) as int] != '\r');
+                }
+            }
+            i += 1;
+        }
+    }
+    proof { assert(s@.subrange(0, s@.len() as int) =~= s@); }
+    out
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Additional editing operations (exec)
+// ──────────────────────────────────────────────────────────────────────
+
+pub fn insert_seq_exec(
+    model: RuntimeTextModel,
+    s: Vec<char>,
+    styles: Vec<RuntimeStyleSet>,
+    Ghost(ghost_styles): Ghost<Seq<StyleSet>>,
+) -> (result: RuntimeTextModel)
+    requires
+        model.wf_spec(),
+        s.len() == styles.len(),
+        s@.len() == ghost_styles.len(),
+        forall|i: int| 0 <= i < styles@.len() ==>
+            (#[trigger] styles@[i])@ == ghost_styles[i],
+        ({
+            let (sel_start, sel_end) = selection_range(model@.anchor, model@.focus);
+            let text_prime = seq_splice(
+                model@.text, sel_start as int, sel_end as int, s@);
+            &&& model@.text.len() - (sel_end - sel_start) + s@.len() < usize::MAX
+            &&& wf_text(text_prime)
+            &&& is_grapheme_boundary(text_prime, sel_start + s@.len())
+        }),
+    ensures
+        result@ == insert_seq(model@, s@, ghost_styles),
+        result.wf_spec(),
+{
+    let sel_start = if model.anchor <= model.focus { model.anchor } else { model.focus };
+    let sel_end = if model.anchor <= model.focus { model.focus } else { model.anchor };
+    let new_focus = sel_start + s.len();
+    splice_exec(
+        model, sel_start, sel_end,
+        s, styles, new_focus,
+        Ghost(ghost_styles),
+    )
+}
+
+pub fn paste_exec(model: RuntimeTextModel, text: &Vec<char>) -> (result: RuntimeTextModel)
+    requires
+        model.wf_spec(),
+        ({
+            let clean = canonicalize_newlines(filter_permitted(text@));
+            let (sel_start, sel_end) = selection_range(model@.anchor, model@.focus);
+            let text_prime = seq_splice(
+                model@.text, sel_start as int, sel_end as int, clean);
+            &&& model@.text.len() - (sel_end - sel_start) + clean.len() < usize::MAX
+            &&& wf_text(text_prime)
+            &&& is_grapheme_boundary(text_prime, sel_start + clean.len())
+        }),
+    ensures
+        result@ == paste(model@, text@, Seq::empty()),
+        result.wf_spec(),
+{
+    let filtered = filter_permitted_exec(text);
+    let clean = canonicalize_newlines_exec(&filtered);
+
+    // Build styles: seq_repeat(typing_style, clean.len())
+    let mut clean_styles: Vec<RuntimeStyleSet> = Vec::new();
+    let mut i: usize = 0;
+    while i < clean.len()
+        invariant
+            i <= clean.len(),
+            model.wf_spec(),
+            clean_styles@.len() == i,
+            forall|k: int| 0 <= k < i as int ==>
+                (#[trigger] clean_styles@[k])@ == model@.typing_style,
+        decreases clean.len() - i,
+    {
+        clean_styles.push(copy_style_set(&model.typing_style));
+        i += 1;
+    }
+
+    let sel_start = if model.anchor <= model.focus { model.anchor } else { model.focus };
+    let sel_end = if model.anchor <= model.focus { model.focus } else { model.anchor };
+    let new_focus = sel_start + clean.len();
+
+    let ghost ghost_clean_styles = seq_repeat(model@.typing_style, clean@.len());
+    proof {
+        lemma_seq_repeat_len(model@.typing_style, clean@.len());
+        assert forall|k: int| 0 <= k < clean_styles@.len()
+            implies (#[trigger] clean_styles@[k])@ == ghost_clean_styles[k]
+        by {
+            lemma_seq_repeat_index(model@.typing_style, clean@.len(), k);
+        };
+    }
+
+    splice_exec(
+        model, sel_start, sel_end,
+        clean, clean_styles, new_focus,
+        Ghost(ghost_clean_styles),
+    )
+}
+
+pub fn delete_word_backward_exec(model: RuntimeTextModel) -> (result: RuntimeTextModel)
+    requires
+        model.wf_spec(),
+        !has_selection(model@.anchor, model@.focus),
+        model@.focus > 0,
+        model@.text.len() > 0,
+        ({
+            let prev = prev_boundary_in(word_start_boundaries(model@.text), model@.focus);
+            let text_prime = seq_splice(
+                model@.text, prev as int, model@.focus as int, Seq::<char>::empty());
+            &&& wf_text(text_prime)
+            &&& is_grapheme_boundary(text_prime, prev)
+        }),
+    ensures
+        result@ == delete_word_backward(model@),
+        result.wf_spec(),
+{
+    let prev = prev_word_start_exec(&model.text, model.focus);
+    let focus = model.focus;
+    proof {
+        axiom_word_start_boundaries_valid(model@.text);
+        lemma_prev_boundary_lt(word_start_boundaries(model@.text), model@.focus);
+        // prev < focus, hence prev <= focus (start <= end for splice)
+    }
+    splice_exec(
+        model, prev, focus,
+        Vec::new(), Vec::new(), prev,
+        Ghost(Seq::empty()),
+    )
+}
+
+pub fn delete_word_forward_exec(model: RuntimeTextModel) -> (result: RuntimeTextModel)
+    requires
+        model.wf_spec(),
+        !has_selection(model@.anchor, model@.focus),
+        model@.focus < model@.text.len(),
+        ({
+            let next = next_boundary_in(word_end_boundaries(model@.text), model@.focus);
+            let text_prime = seq_splice(
+                model@.text, model@.focus as int, next as int, Seq::<char>::empty());
+            &&& next <= model@.text.len()
+            &&& wf_text(text_prime)
+            &&& is_grapheme_boundary(text_prime, model@.focus)
+        }),
+    ensures
+        result@ == delete_word_forward(model@),
+        result.wf_spec(),
+{
+    let focus = model.focus;
+    let next = next_word_end_exec(&model.text, focus);
+    proof {
+        axiom_word_end_boundaries_valid(model@.text);
+        lemma_next_boundary_gt(word_end_boundaries(model@.text), model@.focus);
+        // next > focus, hence focus <= next (start <= end for splice)
+    }
+    splice_exec(
+        model, focus, next,
+        Vec::new(), Vec::new(), focus,
+        Ghost(Seq::empty()),
+    )
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Line helpers (exec)
+// ──────────────────────────────────────────────────────────────────────
+
+fn line_start_exec(text: &Vec<char>, pos: usize) -> (result: usize)
+    requires pos <= text.len(),
+    ensures result as nat == line_start(text@, pos as nat),
+{
+    let mut p = pos;
+    while p > 0
+        invariant
+            p <= pos, pos <= text.len(),
+            line_start(text@, p as nat) == line_start(text@, pos as nat),
+        decreases p,
+    {
+        if text[p - 1] == '\n' {
+            return p;
+        }
+        p -= 1;
+    }
+    0
+}
+
+fn line_end_exec(text: &Vec<char>, pos: usize) -> (result: usize)
+    requires pos <= text.len(),
+    ensures result as nat == line_end(text@, pos as nat),
+{
+    let mut p = pos;
+    while p < text.len()
+        invariant
+            pos <= p, p <= text.len(),
+            line_end(text@, p as nat) == line_end(text@, pos as nat),
+        decreases text.len() - p,
+    {
+        if text[p] == '\n' {
+            return p;
+        }
+        p += 1;
+    }
+    text.len()
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Visual layout (external body)
+// ──────────────────────────────────────────────────────────────────────
+
+#[verifier::external_body]
+pub fn text_pos_to_visual_exec(
+    text: &Vec<char>, pos: usize, aff: Affinity,
+) -> (result: (usize, usize))
+    ensures
+        result.0 as nat == text_pos_to_visual(text@, pos as nat, aff).0,
+        result.1 as nat == text_pos_to_visual(text@, pos as nat, aff).1,
+        result.0 <= text.len(),
+{
+    use unicode_segmentation::UnicodeSegmentation;
+    let s: String = text.iter().collect();
+    let clamped = pos.min(text.len());
+    // Count '\n' before pos for line, grapheme clusters since last '\n' for column
+    let prefix: String = s.chars().take(clamped).collect();
+    let line = prefix.matches('\n').count();
+    // Column = grapheme clusters from last '\n' to pos
+    let last_newline = prefix.rfind('\n').map(|i| i + 1).unwrap_or(0);
+    let col = prefix[last_newline..].graphemes(true).count();
+    (line, col)
+}
+
+#[verifier::external_body]
+pub fn visual_to_text_pos_exec(
+    text: &Vec<char>, line: usize, col: usize,
+) -> (result: (usize, Affinity))
+    ensures
+        result.0 as nat == visual_to_text_pos(text@, line as nat, col as nat).0,
+        result.1 == visual_to_text_pos(text@, line as nat, col as nat).1,
+{
+    use unicode_segmentation::UnicodeSegmentation;
+    let s: String = text.iter().collect();
+    // Find the start of the target line by counting '\n'
+    let mut current_line: usize = 0;
+    let mut byte_pos: usize = 0;
+    for (i, ch) in s.char_indices() {
+        if current_line >= line {
+            byte_pos = i;
+            break;
+        }
+        if ch == '\n' {
+            current_line += 1;
+        }
+        byte_pos = i + ch.len_utf8();
+    }
+    if current_line < line {
+        // Target line doesn't exist, return end of text
+        return (text.len(), Affinity::Upstream);
+    }
+    let line_start_byte = byte_pos;
+    let line_start_char = s[..line_start_byte].chars().count();
+    // Advance by col grapheme clusters within this line
+    let line_str = &s[line_start_byte..];
+    let line_end_byte = line_str.find('\n').unwrap_or(line_str.len());
+    let line_content = &line_str[..line_end_byte];
+    let mut char_offset = line_start_char;
+    let mut grapheme_count = 0usize;
+    for grapheme in line_content.graphemes(true) {
+        if grapheme_count >= col {
+            break;
+        }
+        char_offset += grapheme.chars().count();
+        grapheme_count += 1;
+    }
+    let aff = if char_offset > line_start_char {
+        Affinity::Upstream
+    } else {
+        Affinity::Downstream
+    };
+    (char_offset, aff)
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Cursor movement (exec)
+// ──────────────────────────────────────────────────────────────────────
+
+/// Spec helper: convert Option<usize> to Option<nat>.
+pub open spec fn opt_nat_view(o: Option<usize>) -> Option<nat> {
+    match o { Some(n) => Some(n as nat), None => None }
+}
+
+pub fn move_cursor_exec(model: RuntimeTextModel, dir: MoveDirection) -> (result: RuntimeTextModel)
+    requires
+        model.wf_spec(),
+        model.text.len() < usize::MAX,
+        ({
+            let (new_focus, _, _) = resolve_movement(
+                model@.text, model@.focus, model@.focus_affinity,
+                model@.preferred_column, dir);
+            &&& new_focus <= model@.text.len()
+            &&& is_grapheme_boundary(model@.text, new_focus)
+        }),
+    ensures
+        result@ == move_cursor(model@, dir),
+        result.wf_spec(),
+{
+    let ghost spec_resolve = resolve_movement(
+        model@.text, model@.focus, model@.focus_affinity,
+        model@.preferred_column, dir);
+
+    // Compute new_focus, new_aff, new_pref based on direction
+    let (new_focus, new_aff, new_pref): (usize, Affinity, Option<usize>) = match dir {
+        MoveDirection::Left => {
+            let new_pos = if model.text.len() == 0 { 0 } else {
+                prev_grapheme_boundary_exec(&model.text, model.focus)
+            };
+            (new_pos, Affinity::Upstream, None)
+        },
+        MoveDirection::Right => {
+            let new_pos = if model.text.len() == 0 { 0 } else {
+                next_grapheme_boundary_exec(&model.text, model.focus)
+            };
+            (new_pos, Affinity::Downstream, None)
+        },
+        MoveDirection::WordLeft => {
+            let new_pos = if model.text.len() == 0 { 0 } else {
+                prev_word_start_exec(&model.text, model.focus)
+            };
+            (new_pos, Affinity::Upstream, None)
+        },
+        MoveDirection::WordRight => {
+            let new_pos = if model.text.len() == 0 { 0 } else {
+                next_word_end_exec(&model.text, model.focus)
+            };
+            (new_pos, Affinity::Downstream, None)
+        },
+        MoveDirection::LineStart => {
+            let new_pos = line_start_exec(&model.text, model.focus);
+            (new_pos, Affinity::Downstream, None)
+        },
+        MoveDirection::LineEnd => {
+            let new_pos = line_end_exec(&model.text, model.focus);
+            (new_pos, Affinity::Upstream, None)
+        },
+        MoveDirection::Home => {
+            (0, Affinity::Downstream, None)
+        },
+        MoveDirection::End => {
+            (model.text.len(), Affinity::Upstream, None)
+        },
+        MoveDirection::Up => {
+            let aff = match model.focus_affinity {
+                Affinity::Upstream => Affinity::Upstream,
+                Affinity::Downstream => Affinity::Downstream,
+            };
+            let (cur_line, cur_col) = text_pos_to_visual_exec(
+                &model.text, model.focus, aff);
+            let col = match model.preferred_column {
+                Some(c) => c,
+                None => cur_col,
+            };
+            if cur_line == 0 {
+                (0, Affinity::Downstream, Some(col))
+            } else {
+                let (new_pos, new_aff) = visual_to_text_pos_exec(
+                    &model.text, cur_line - 1, col);
+                (new_pos, new_aff, Some(col))
+            }
+        },
+        MoveDirection::Down => {
+            let aff = match model.focus_affinity {
+                Affinity::Upstream => Affinity::Upstream,
+                Affinity::Downstream => Affinity::Downstream,
+            };
+            let (cur_line, cur_col) = text_pos_to_visual_exec(
+                &model.text, model.focus, aff);
+            let col = match model.preferred_column {
+                Some(c) => c,
+                None => cur_col,
+            };
+            let (new_pos, new_aff) = visual_to_text_pos_exec(
+                &model.text, cur_line + 1, col);
+            if new_pos > model.text.len() {
+                (model.text.len(), Affinity::Upstream, Some(col))
+            } else {
+                (new_pos, new_aff, Some(col))
+            }
+        },
+    };
+
+    let new_typing = resolve_typing_style_exec(
+        &model.text, &model.styles, new_focus, &model.default_style);
+
+    proof {
+        lemma_move_cursor_preserves_wf(model@, dir);
+    }
+
+    let ghost spec_result = move_cursor(model@, dir);
+
+    RuntimeTextModel {
+        anchor: new_focus,
+        focus: new_focus,
+        focus_affinity: new_aff,
+        preferred_column: new_pref,
+        typing_style: new_typing,
+        model: Ghost(spec_result),
+        text: model.text,
+        styles: model.styles,
+        default_style: model.default_style,
+        composition: model.composition,
+        paragraph_styles: model.paragraph_styles,
+    }
+}
+
+pub fn extend_selection_exec(model: RuntimeTextModel, dir: MoveDirection) -> (result: RuntimeTextModel)
+    requires
+        model.wf_spec(),
+        model.text.len() < usize::MAX,
+        ({
+            let (new_focus, _, _) = resolve_movement(
+                model@.text, model@.focus, model@.focus_affinity,
+                model@.preferred_column, dir);
+            &&& new_focus <= model@.text.len()
+            &&& is_grapheme_boundary(model@.text, new_focus)
+        }),
+    ensures
+        result@ == extend_selection(model@, dir),
+        result.wf_spec(),
+{
+    // Compute new_focus, new_aff, new_pref based on direction
+    let (new_focus, new_aff, new_pref): (usize, Affinity, Option<usize>) = match dir {
+        MoveDirection::Left => {
+            let new_pos = if model.text.len() == 0 { 0 } else {
+                prev_grapheme_boundary_exec(&model.text, model.focus)
+            };
+            (new_pos, Affinity::Upstream, None)
+        },
+        MoveDirection::Right => {
+            let new_pos = if model.text.len() == 0 { 0 } else {
+                next_grapheme_boundary_exec(&model.text, model.focus)
+            };
+            (new_pos, Affinity::Downstream, None)
+        },
+        MoveDirection::WordLeft => {
+            let new_pos = if model.text.len() == 0 { 0 } else {
+                prev_word_start_exec(&model.text, model.focus)
+            };
+            (new_pos, Affinity::Upstream, None)
+        },
+        MoveDirection::WordRight => {
+            let new_pos = if model.text.len() == 0 { 0 } else {
+                next_word_end_exec(&model.text, model.focus)
+            };
+            (new_pos, Affinity::Downstream, None)
+        },
+        MoveDirection::LineStart => {
+            let new_pos = line_start_exec(&model.text, model.focus);
+            (new_pos, Affinity::Downstream, None)
+        },
+        MoveDirection::LineEnd => {
+            let new_pos = line_end_exec(&model.text, model.focus);
+            (new_pos, Affinity::Upstream, None)
+        },
+        MoveDirection::Home => {
+            (0, Affinity::Downstream, None)
+        },
+        MoveDirection::End => {
+            (model.text.len(), Affinity::Upstream, None)
+        },
+        MoveDirection::Up => {
+            let aff = match model.focus_affinity {
+                Affinity::Upstream => Affinity::Upstream,
+                Affinity::Downstream => Affinity::Downstream,
+            };
+            let (cur_line, cur_col) = text_pos_to_visual_exec(
+                &model.text, model.focus, aff);
+            let col = match model.preferred_column {
+                Some(c) => c,
+                None => cur_col,
+            };
+            if cur_line == 0 {
+                (0, Affinity::Downstream, Some(col))
+            } else {
+                let (new_pos, new_aff) = visual_to_text_pos_exec(
+                    &model.text, cur_line - 1, col);
+                (new_pos, new_aff, Some(col))
+            }
+        },
+        MoveDirection::Down => {
+            let aff = match model.focus_affinity {
+                Affinity::Upstream => Affinity::Upstream,
+                Affinity::Downstream => Affinity::Downstream,
+            };
+            let (cur_line, cur_col) = text_pos_to_visual_exec(
+                &model.text, model.focus, aff);
+            let col = match model.preferred_column {
+                Some(c) => c,
+                None => cur_col,
+            };
+            let (new_pos, new_aff) = visual_to_text_pos_exec(
+                &model.text, cur_line + 1, col);
+            if new_pos > model.text.len() {
+                (model.text.len(), Affinity::Upstream, Some(col))
+            } else {
+                (new_pos, new_aff, Some(col))
+            }
+        },
+    };
+
+    // extend_selection uses is_horizontal to decide preferred_column
+    let final_pref = match dir {
+        MoveDirection::Up | MoveDirection::Down => new_pref,
+        _ => None,
+    };
+
+    proof {
+        lemma_extend_selection_preserves_wf(model@, dir);
+    }
+
+    let ghost spec_result = extend_selection(model@, dir);
+
+    RuntimeTextModel {
+        focus: new_focus,
+        focus_affinity: new_aff,
+        preferred_column: final_pref,
+        model: Ghost(spec_result),
+        text: model.text,
+        styles: model.styles,
+        anchor: model.anchor,
+        typing_style: model.typing_style,
+        default_style: model.default_style,
+        composition: model.composition,
+        paragraph_styles: model.paragraph_styles,
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────
 // Undo runtime types
 // ──────────────────────────────────────────────────────────────────────
 
@@ -1558,6 +2247,266 @@ pub fn record_edit_exec(
 {
     let entry = undo_entry_for_splice_exec(model, start, end, new_text, new_styles, new_focus);
     push_undo_exec(stack, entry)
+}
+
+pub fn can_merge_entries_exec(e1: &RuntimeUndoEntry, e2: &RuntimeUndoEntry) -> (result: bool)
+    ensures result == can_merge_entries(e1@, e2@),
+{
+    e1.removed_text.len() == 0
+        && e2.removed_text.len() == 0
+        && e2.start >= e1.start
+        && e2.start - e1.start == e1.inserted_text.len()
+}
+
+pub fn merge_entries_exec(
+    e1: RuntimeUndoEntry, e2: RuntimeUndoEntry,
+) -> (out: RuntimeUndoEntry)
+    requires
+        undo_entry_wf(e1@),
+        undo_entry_wf(e2@),
+        can_merge_entries(e1@, e2@),
+    ensures
+        out@ == merge_entries(e1@, e2@),
+        undo_entry_wf(out@),
+{
+    let ghost e1_spec = e1@;
+    let ghost e2_spec = e2@;
+
+    let e1_start = e1.start;
+    let e1_anchor_before = e1.anchor_before;
+    let e1_focus_before = e1.focus_before;
+    let e2_focus_after = e2.focus_after;
+
+    // Concatenate inserted_text: e1.inserted_text + e2.inserted_text
+    let mut ins_text = e1.inserted_text;
+    let e2_inserted_text = e2.inserted_text;
+    let mut i: usize = 0;
+    while i < e2_inserted_text.len()
+        invariant
+            i <= e2_inserted_text.len(),
+            e2_inserted_text@ == e2_spec.inserted_text,
+            ins_text@ =~= e1_spec.inserted_text + e2_spec.inserted_text.subrange(0, i as int),
+        decreases e2_inserted_text.len() - i,
+    {
+        ins_text.push(e2_inserted_text[i]);
+        proof {
+            assert(e2_spec.inserted_text.subrange(0, i as int).push(e2_spec.inserted_text[i as int])
+                =~= e2_spec.inserted_text.subrange(0, (i + 1) as int));
+        }
+        i += 1;
+    }
+    proof {
+        assert(e2_spec.inserted_text.subrange(0, e2_spec.inserted_text.len() as int)
+            =~= e2_spec.inserted_text);
+    }
+
+    // Concatenate inserted_styles: e1.inserted_styles + e2.inserted_styles
+    let mut ins_styles = e1.inserted_styles;
+    let e2_inserted_styles = e2.inserted_styles;
+    let mut j: usize = 0;
+    while j < e2_inserted_styles.len()
+        invariant
+            j <= e2_inserted_styles.len(),
+            ins_styles@.len() == e1_spec.inserted_styles.len() + j,
+            forall|k: int| 0 <= k < e1_spec.inserted_styles.len() ==>
+                (#[trigger] ins_styles@[k])@ == e1_spec.inserted_styles[k],
+            forall|k: int| 0 <= k < j as int ==>
+                (#[trigger] ins_styles@[e1_spec.inserted_styles.len() as int + k])@
+                    == e2_spec.inserted_styles[k],
+            forall|k: int| 0 <= k < e2_inserted_styles@.len() ==>
+                (#[trigger] e2_inserted_styles@[k])@ == e2_spec.inserted_styles[k],
+        decreases e2_inserted_styles.len() - j,
+    {
+        ins_styles.push(copy_style_set(&e2_inserted_styles[j]));
+        j += 1;
+    }
+
+    let removed_text: Vec<char> = Vec::new();
+    let removed_styles: Vec<RuntimeStyleSet> = Vec::new();
+
+    proof {
+        lemma_merge_entry_wf(e1_spec, e2_spec);
+        let merged_spec = merge_entries(e1_spec, e2_spec);
+        // Empty removed seqs
+        assert(removed_text@ =~= Seq::<char>::empty());
+        assert(style_seq_view(removed_styles@) =~= Seq::<StyleSet>::empty());
+        // Connect style_seq_view(ins_styles@) to merged entry spec
+        assert(style_seq_view(ins_styles@) =~= merged_spec.inserted_styles) by {
+            assert forall|k: int| 0 <= k < style_seq_view(ins_styles@).len()
+                implies style_seq_view(ins_styles@)[k] == merged_spec.inserted_styles[k]
+            by {
+                if k < e1_spec.inserted_styles.len() as int {
+                    assert(ins_styles@[k]@ == e1_spec.inserted_styles[k]);
+                } else {
+                    let offset = k - e1_spec.inserted_styles.len() as int;
+                    assert(ins_styles@[e1_spec.inserted_styles.len() as int + offset]@
+                        == e2_spec.inserted_styles[offset]);
+                    assert(k == e1_spec.inserted_styles.len() as int + offset);
+                }
+            };
+        };
+    }
+
+    let out = RuntimeUndoEntry {
+        start: e1_start,
+        removed_text,
+        removed_styles,
+        inserted_text: ins_text,
+        inserted_styles: ins_styles,
+        anchor_before: e1_anchor_before,
+        focus_before: e1_focus_before,
+        focus_after: e2_focus_after,
+    };
+
+    proof {
+        let merged_spec = merge_entries(e1_spec, e2_spec);
+        assert(out@.start == merged_spec.start);
+        assert(out@.removed_text =~= merged_spec.removed_text);
+        assert(out@.removed_styles =~= merged_spec.removed_styles);
+        assert(out@.inserted_text =~= merged_spec.inserted_text);
+        assert(out@.inserted_styles =~= merged_spec.inserted_styles);
+        assert(out@.anchor_before == merged_spec.anchor_before);
+        assert(out@.focus_before == merged_spec.focus_before);
+        assert(out@.focus_after == merged_spec.focus_after);
+    }
+    out
+}
+
+fn copy_undo_entry(e: &RuntimeUndoEntry) -> (out: RuntimeUndoEntry)
+    ensures out@ == e@,
+{
+    let removed_text = copy_char_vec(&e.removed_text);
+    let removed_styles = copy_style_vec(&e.removed_styles);
+    let inserted_text = copy_char_vec(&e.inserted_text);
+    let inserted_styles = copy_style_vec(&e.inserted_styles);
+
+    let out = RuntimeUndoEntry {
+        start: e.start,
+        removed_text,
+        removed_styles,
+        inserted_text,
+        inserted_styles,
+        anchor_before: e.anchor_before,
+        focus_before: e.focus_before,
+        focus_after: e.focus_after,
+    };
+
+    proof {
+        // Connect style_seq_view for removed_styles
+        assert(style_seq_view(out.removed_styles@) =~= e@.removed_styles) by {
+            assert forall|k: int| 0 <= k < out.removed_styles@.len()
+                implies style_seq_view(out.removed_styles@)[k] == e@.removed_styles[k]
+            by {
+                assert(out.removed_styles@[k]@ == e.removed_styles@[k]@);
+            };
+        };
+        // Connect style_seq_view for inserted_styles
+        assert(style_seq_view(out.inserted_styles@) =~= e@.inserted_styles) by {
+            assert forall|k: int| 0 <= k < out.inserted_styles@.len()
+                implies style_seq_view(out.inserted_styles@)[k] == e@.inserted_styles[k]
+            by {
+                assert(out.inserted_styles@[k]@ == e.inserted_styles@[k]@);
+            };
+        };
+    }
+    out
+}
+
+pub fn push_undo_or_merge_exec(
+    stack: RuntimeUndoStack, entry: RuntimeUndoEntry, merge: bool,
+) -> (out: RuntimeUndoStack)
+    requires
+        stack.wf_spec(),
+        undo_entry_wf(entry@),
+        stack.entries.len() < usize::MAX,
+    ensures
+        out@ == push_undo_or_merge(stack@, entry@, merge),
+        out.wf_spec(),
+{
+    if merge && can_undo_exec(&stack) {
+        let pos = stack.position;
+        if can_merge_entries_exec(&stack.entries[pos - 1], &entry) {
+            let ghost old_spec = stack@;
+            let ghost entry_spec = entry@;
+
+            // Copy top entry and merge
+            let top_copy = copy_undo_entry(&stack.entries[pos - 1]);
+            let merged = merge_entries_exec(top_copy, entry);
+
+            // Create a temp stack at position-1, reuse push_undo_exec
+            let ghost temp_spec = UndoStack {
+                entries: old_spec.entries,
+                position: (old_spec.position - 1) as nat,
+            };
+            proof {
+                // temp_spec is wf
+                assert(undo_stack_wf(temp_spec)) by {
+                    assert(temp_spec.position <= temp_spec.entries.len());
+                    assert forall|i: int| 0 <= i < temp_spec.entries.len()
+                        implies undo_entry_wf(#[trigger] temp_spec.entries[i])
+                    by {
+                        assert(temp_spec.entries[i] == old_spec.entries[i]);
+                    };
+                };
+                assert(undo_entry_wf(merged@));
+            }
+
+            let temp_stack = RuntimeUndoStack {
+                entries: stack.entries,
+                position: pos - 1,
+                model: Ghost(temp_spec),
+            };
+
+            let result = push_undo_exec(temp_stack, merged);
+
+            proof {
+                // push_undo(temp_spec, merged@) == push_undo_or_merge(old_spec, entry_spec, merge)
+                // push_undo truncates to position and pushes:
+                //   entries = temp_spec.entries.subrange(0, temp_spec.position).push(merged@)
+                //           = old_spec.entries.subrange(0, (pos-1)).push(merged@)
+                //   position = temp_spec.position + 1 = pos
+                // push_undo_or_merge in merge path:
+                //   entries = old_spec.entries.subrange(0, (pos-1)).push(merge_entries(top, entry_spec))
+                //   position = pos
+                // These are equal since merged@ == merge_entries(top@, entry_spec)
+                //   and top@ == old_spec.entries[(pos-1)]
+                lemma_push_or_merge_preserves_wf(old_spec, entry_spec, merge);
+            }
+
+            proof {
+                // result@ == push_undo(temp_spec, merged@)
+                // Need to show this equals push_undo_or_merge(old_spec, entry_spec, merge)
+                assert(result@ == push_undo(temp_spec, merged@));
+                assert(push_undo_or_merge(old_spec, entry_spec, merge)
+                    == UndoStack {
+                        entries: old_spec.entries.subrange(0, (old_spec.position - 1) as int)
+                            .push(merge_entries(
+                                old_spec.entries[(old_spec.position - 1) as int],
+                                entry_spec)),
+                        position: old_spec.position,
+                    });
+                assert(push_undo(temp_spec, merged@)
+                    == UndoStack {
+                        entries: temp_spec.entries.subrange(0, temp_spec.position as int)
+                            .push(merged@),
+                        position: temp_spec.position + 1,
+                    });
+                // temp_spec.position = old_spec.position - 1
+                // temp_spec.entries = old_spec.entries
+                // merged@ = merge_entries(top_copy@, entry_spec) = merge_entries(old_spec.entries[pos-1], entry_spec)
+                assert(temp_spec.entries.subrange(0, temp_spec.position as int)
+                    =~= old_spec.entries.subrange(0, (old_spec.position - 1) as int));
+                assert(merged@ == merge_entries(
+                    old_spec.entries[(old_spec.position - 1) as int], entry_spec));
+            }
+
+            result
+        } else {
+            push_undo_exec(stack, entry)
+        }
+    } else {
+        push_undo_exec(stack, entry)
+    }
 }
 
 pub fn apply_undo_exec(stack: RuntimeUndoStack, model: RuntimeTextModel)

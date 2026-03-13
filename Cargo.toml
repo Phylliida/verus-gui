@@ -8,6 +8,7 @@ vstd = { path = "../verus/source/vstd" }
 verus-algebra = { path = "../verus-algebra" }
 verus-bigint = { path = "../verus-bigint" }
 verus-rational = { path = "../verus-rational" }
+unicode-segmentation = "1.11"
 
 [package.metadata.verus]
 verify = true

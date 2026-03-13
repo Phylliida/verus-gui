@@ -3,6 +3,9 @@ use verus_algebra::traits::ordered_ring::OrderedRing;
 use crate::node::Node;
 use crate::hit_test::{hit_test, path_valid, point_in_node,
     lemma_hit_test_path_valid, lemma_hit_test_point_in_node};
+use crate::text_model::*;
+use crate::text_model::operations::*;
+use crate::text_model::cursor::*;
 
 verus! {
 
@@ -204,6 +207,143 @@ pub proof fn lemma_focus_stable_on_move<T: OrderedRing>(
     ensures
         update_focus(state, root, event, fuel) === state,
 {
+}
+
+// ── Keyboard event types ──────────────────────────────────────────
+
+/// Modifier key state.
+pub struct Modifiers {
+    pub shift: bool,
+    pub ctrl: bool,
+    pub alt: bool,
+}
+
+/// Kind of keyboard event.
+pub enum KeyEventKind {
+    Char(char),
+    Backspace,
+    Delete,
+    Left,
+    Right,
+    Up,
+    Down,
+    Home,
+    End,
+    Enter,
+    Tab,
+    SelectAll,
+    Undo,
+    Redo,
+    Cut,
+    Copy,
+}
+
+/// A keyboard event with modifiers.
+pub struct KeyEvent {
+    pub kind: KeyEventKind,
+    pub modifiers: Modifiers,
+}
+
+// ── Key to move direction ────────────────────────────────────────
+
+/// Map arrow/home/end key events to move directions.
+pub open spec fn key_to_move_direction(event: KeyEvent) -> Option<MoveDirection> {
+    match event.kind {
+        KeyEventKind::Left => if event.modifiers.ctrl {
+            Some(MoveDirection::WordLeft)
+        } else {
+            Some(MoveDirection::Left)
+        },
+        KeyEventKind::Right => if event.modifiers.ctrl {
+            Some(MoveDirection::WordRight)
+        } else {
+            Some(MoveDirection::Right)
+        },
+        KeyEventKind::Up => Some(MoveDirection::Up),
+        KeyEventKind::Down => Some(MoveDirection::Down),
+        KeyEventKind::Home => if event.modifiers.ctrl {
+            Some(MoveDirection::Home)
+        } else {
+            Some(MoveDirection::LineStart)
+        },
+        KeyEventKind::End => if event.modifiers.ctrl {
+            Some(MoveDirection::End)
+        } else {
+            Some(MoveDirection::LineEnd)
+        },
+        _ => None,
+    }
+}
+
+/// Result of dispatching a key event.
+pub enum KeyAction {
+    /// A text model operation that produces a new model.
+    NewModel(TextModel),
+    /// An undo/redo/clipboard action handled at a higher level.
+    External(ExternalAction),
+    /// Key event not handled.
+    None,
+}
+
+/// Actions that must be handled externally (undo stack, clipboard).
+pub enum ExternalAction {
+    Undo,
+    Redo,
+    Cut,
+    Copy,
+}
+
+/// Dispatch a keyboard event to a text model operation.
+pub open spec fn dispatch_key(model: TextModel, event: KeyEvent) -> KeyAction {
+    match event.kind {
+        KeyEventKind::Char(ch) => {
+            if is_permitted(ch) && ch != '\r' {
+                KeyAction::NewModel(insert_char(model, ch))
+            } else {
+                KeyAction::None
+            }
+        },
+        KeyEventKind::Enter => {
+            KeyAction::NewModel(insert_char(model, '\n'))
+        },
+        KeyEventKind::Tab => {
+            KeyAction::NewModel(insert_char(model, '\t'))
+        },
+        KeyEventKind::Backspace => {
+            if event.modifiers.ctrl {
+                KeyAction::NewModel(delete_word_backward(model))
+            } else {
+                KeyAction::NewModel(delete_backward(model))
+            }
+        },
+        KeyEventKind::Delete => {
+            if event.modifiers.ctrl {
+                KeyAction::NewModel(delete_word_forward(model))
+            } else {
+                KeyAction::NewModel(delete_forward(model))
+            }
+        },
+        KeyEventKind::SelectAll => {
+            KeyAction::NewModel(select_all(model))
+        },
+        KeyEventKind::Undo => KeyAction::External(ExternalAction::Undo),
+        KeyEventKind::Redo => KeyAction::External(ExternalAction::Redo),
+        KeyEventKind::Cut => KeyAction::External(ExternalAction::Cut),
+        KeyEventKind::Copy => KeyAction::External(ExternalAction::Copy),
+        _ => {
+            // Arrow/Home/End keys
+            match key_to_move_direction(event) {
+                Some(dir) => {
+                    if event.modifiers.shift {
+                        KeyAction::NewModel(extend_selection(model, dir))
+                    } else {
+                        KeyAction::NewModel(move_cursor(model, dir))
+                    }
+                },
+                None => KeyAction::None,
+            }
+        },
+    }
 }
 
 } // verus!
