@@ -23,12 +23,12 @@ use crate::layout::proofs::*;
 use crate::layout::stack::*;
 use crate::layout::wrap::*;
 use crate::layout::wrap_proofs::*;
-use crate::layout::flex::sum_weights;
+use crate::layout::flex::*;
+use crate::runtime::flex::*;
 use crate::runtime::widget_sized_box::layout_sized_box_widget_exec;
 use crate::runtime::widget_margin::layout_margin_widget_exec;
 use crate::runtime::widget_aspect_ratio::layout_aspect_ratio_widget_exec;
 use crate::runtime::widget_scroll::layout_scroll_view_exec;
-use crate::runtime::widget_flex::layout_flex_widget_exec;
 use crate::runtime::widget_grid::layout_grid_widget_exec;
 use crate::runtime::widget_absolute::layout_absolute_widget_exec;
 
