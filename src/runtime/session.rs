@@ -242,6 +242,79 @@ fn session_handle_cut_exec(
     }
 }
 
+// ── Paste helper ────────────────────────────────────────────────────
+
+/// Handle Paste at the session level with full wf_spec preservation.
+fn session_handle_paste_exec(
+    session: RuntimeTextEditSession,
+    clean: Vec<char>,
+) -> (result: RuntimeTextEditSession)
+    requires
+        session.wf_spec(),
+        session.undo_stack.entries.len() < usize::MAX,
+        session.model.text.len() + 2 < usize::MAX,
+        clean@ =~= canonicalize_newlines(filter_permitted(session.clipboard@)),
+        clean.len() > 0 || has_selection(session.model@.anchor, session.model@.focus),
+        session.model.text.len() + clean.len() < usize::MAX,
+    ensures
+        result.view_session().model
+            == apply_key_to_session(session.view_session(),
+                KeyEvent { kind: KeyEventKind::Paste, modifiers: Modifiers { shift: false, ctrl: false, alt: false } }).model,
+        result.view_session().last_was_insert
+            == apply_key_to_session(session.view_session(),
+                KeyEvent { kind: KeyEventKind::Paste, modifiers: Modifiers { shift: false, ctrl: false, alt: false } }).last_was_insert,
+        result.view_session().clipboard
+            == apply_key_to_session(session.view_session(),
+                KeyEvent { kind: KeyEventKind::Paste, modifiers: Modifiers { shift: false, ctrl: false, alt: false } }).clipboard,
+        result.model.wf_spec(),
+        result.wf_spec(),
+{
+    let sel_start = if session.model.anchor <= session.model.focus {
+        session.model.anchor } else { session.model.focus };
+    let sel_end = if session.model.anchor <= session.model.focus {
+        session.model.focus } else { session.model.anchor };
+
+    let clean_styles = repeat_style_set_exec(
+        &session.model.typing_style, clean.len());
+    let new_focus = sel_start + clean.len();
+
+    let entry = undo_entry_for_splice_exec(
+        &session.model, sel_start, sel_end,
+        &clean, &clean_styles, new_focus);
+
+    let ghost old_model = session.model@;
+    let ghost old_stack = session.undo_stack@;
+    let ghost old_history = session.history@;
+
+    proof {
+        axiom_paste_wf(
+            session.model@.text,
+            sel_start as nat, sel_end as nat, clean@);
+    }
+
+    let new_model = paste_exec(session.model, &session.clipboard);
+    let new_stack = push_undo_or_merge_exec(
+        session.undo_stack, entry, false);
+    let ghost new_history = update_history_for_push(
+        old_stack, old_history, entry@, new_model@.text, false);
+
+    proof {
+        lemma_entry_for_splice_describes_transition(
+            old_model, sel_start as nat, sel_end as nat,
+            clean@, style_seq_view(clean_styles@), new_focus as nat);
+        lemma_push_or_merge_history_valid(
+            old_stack, old_history, entry@, new_model@.text, false);
+    }
+
+    RuntimeTextEditSession {
+        model: new_model,
+        undo_stack: new_stack,
+        last_was_insert: false,
+        clipboard: session.clipboard,
+        history: Ghost(new_history),
+    }
+}
+
 // ── Non-text-edit helper ────────────────────────────────────────────
 
 /// Handle a non-text-modifying NewModel operation (compose_start/update/cancel,
@@ -542,6 +615,16 @@ pub fn apply_key_to_session_exec(
                 if session.model.composition.is_none() {
                     return session_apply_redo_exec(session);
                 }
+            }
+            return session;
+        },
+        RuntimeKeyEventKind::Paste => {
+            let filtered = filter_permitted_exec(&session.clipboard);
+            let clean = canonicalize_newlines_exec(&filtered);
+            if (clean.len() > 0 || session.model.anchor != session.model.focus)
+                && session.model.text.len() + clean.len() < usize::MAX
+            {
+                return session_handle_paste_exec(session, clean);
             }
             return session;
         },

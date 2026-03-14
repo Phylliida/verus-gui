@@ -281,9 +281,11 @@ pub open spec fn apply_key_to_session(
         },
         KeyAction::External(ExternalAction::Paste) => {
             let clean = canonicalize_newlines(filter_permitted(session.clipboard));
-            if clean.len() > 0 || has_selection(session.model.anchor, session.model.focus) {
-                let (sel_start, sel_end) = selection_range(
-                    session.model.anchor, session.model.focus);
+            let (sel_start, sel_end) = selection_range(
+                session.model.anchor, session.model.focus);
+            if (clean.len() > 0 || has_selection(session.model.anchor, session.model.focus))
+                && session.model.text.len() + clean.len() < usize::MAX
+            {
                 let clean_styles = seq_repeat(session.model.typing_style, clean.len());
                 let new_model = paste(session.model, session.clipboard, Seq::empty());
                 let entry = undo_entry_for_splice(

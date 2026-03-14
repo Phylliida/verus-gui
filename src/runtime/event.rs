@@ -298,6 +298,7 @@ fn dispatch_backspace_exec(
     requires
         model.wf_spec(),
         model.text.len() + 2 < usize::MAX,
+        model@.composition.is_none(),
     ensures
         match (result, dispatch_key(model@,
             KeyEvent { kind: KeyEventKind::Backspace, modifiers: Modifiers { shift: false, ctrl, alt: false } }))
@@ -342,6 +343,7 @@ fn dispatch_delete_exec(
     requires
         model.wf_spec(),
         model.text.len() + 2 < usize::MAX,
+        model@.composition.is_none(),
     ensures
         match (result, dispatch_key(model@,
             KeyEvent { kind: KeyEventKind::Delete, modifiers: Modifiers { shift: false, ctrl, alt: false } }))

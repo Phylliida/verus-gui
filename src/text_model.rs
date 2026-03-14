@@ -252,6 +252,25 @@ pub proof fn axiom_compose_commit_wf(
             range_start + provisional.len()),
 {}
 
+/// Pasting filtered+canonicalized text at grapheme boundaries preserves wf_text
+/// and produces a grapheme boundary after the pasted text.
+#[verifier::external_body]
+pub proof fn axiom_paste_wf(
+    text: Seq<char>, pos_start: nat, pos_end: nat, paste_text: Seq<char>,
+)
+    requires
+        wf_text(text),
+        wf_text(paste_text),
+        pos_start <= pos_end, pos_end <= text.len(),
+        is_grapheme_boundary(text, pos_start),
+        is_grapheme_boundary(text, pos_end),
+    ensures
+        wf_text(seq_splice(text, pos_start as int, pos_end as int, paste_text)),
+        is_grapheme_boundary(
+            seq_splice(text, pos_start as int, pos_end as int, paste_text),
+            pos_start + paste_text.len()),
+{}
+
 /// resolve_movement always produces a valid position that is a
 /// grapheme boundary within the text.
 #[verifier::external_body]
