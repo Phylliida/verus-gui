@@ -25,7 +25,6 @@ pub mod widget_sized_box;
 pub mod widget_margin;
 pub mod widget_aspect_ratio;
 pub mod widget_scroll;
-pub mod widget_flex;
 pub mod widget_grid;
 pub mod widget_absolute;
 pub mod measure;
