@@ -19,6 +19,7 @@ pub struct TextEditSession {
     pub last_was_insert: bool,
     pub clipboard: Seq<char>,
     pub history: Seq<Seq<char>>,
+    pub style_history: Seq<Seq<StyleSet>>,
 }
 
 /// Create a new session from a model with empty undo and clipboard.
@@ -29,6 +30,7 @@ pub open spec fn new_session(model: TextModel) -> TextEditSession {
         last_was_insert: false,
         clipboard: Seq::empty(),
         history: seq![model.text],
+        style_history: seq![model.styles],
     }
 }
 
@@ -38,6 +40,8 @@ pub open spec fn session_wf(s: TextEditSession) -> bool {
     &&& undo_stack_wf(s.undo_stack)
     &&& undo_history_valid(s.undo_stack, s.history)
     &&& s.history[s.undo_stack.position as int] =~= s.model.text
+    &&& undo_style_history_valid(s.undo_stack, s.style_history)
+    &&& s.style_history[s.undo_stack.position as int] =~= s.model.styles
 }
 
 /// Whether a key event kind is a character insertion (Char, Enter, Tab).
@@ -80,6 +84,20 @@ pub open spec fn update_history_for_push(
     } else {
         // Push: truncate to position+1 entries, append new_text
         history.subrange(0, stack.position as int + 1).push(new_text)
+    }
+}
+
+/// Update style history after a push_undo_or_merge operation.
+pub open spec fn update_style_history_for_push(
+    stack: UndoStack, style_history: Seq<Seq<StyleSet>>,
+    entry: UndoEntry, new_styles: Seq<StyleSet>, merge: bool,
+) -> Seq<Seq<StyleSet>> {
+    if merge && can_undo(stack)
+        && can_merge_entries(stack.entries[(stack.position - 1) as int], entry)
+    {
+        style_history.subrange(0, stack.position as int).push(new_styles)
+    } else {
+        style_history.subrange(0, stack.position as int + 1).push(new_styles)
     }
 }
 
@@ -199,12 +217,15 @@ pub open spec fn apply_key_to_session(
                 let new_stack = push_undo_or_merge(session.undo_stack, entry, merge);
                 let new_history = update_history_for_push(
                     session.undo_stack, session.history, entry, new_model.text, merge);
+                let new_style_history = update_style_history_for_push(
+                    session.undo_stack, session.style_history, entry, new_model.styles, merge);
                 TextEditSession {
                     model: new_model,
                     undo_stack: new_stack,
                     last_was_insert: is_insert_key(event.kind),
                     clipboard: session.clipboard,
                     history: new_history,
+                    style_history: new_style_history,
                 }
             } else {
                 // Non-text-modifying operation: no undo entry
@@ -214,6 +235,7 @@ pub open spec fn apply_key_to_session(
                     undo_stack: session.undo_stack,
                     clipboard: session.clipboard,
                     history: session.history,
+                    style_history: session.style_history,
                 }
             }
         },
@@ -226,6 +248,7 @@ pub open spec fn apply_key_to_session(
                     last_was_insert: false,
                     clipboard: session.clipboard,
                     history: session.history,
+                    style_history: session.style_history,
                 }
             } else {
                 session
@@ -240,6 +263,7 @@ pub open spec fn apply_key_to_session(
                     last_was_insert: false,
                     clipboard: session.clipboard,
                     history: session.history,
+                    style_history: session.style_history,
                 }
             } else {
                 session
@@ -258,12 +282,15 @@ pub open spec fn apply_key_to_session(
                     session.undo_stack, entry, false);
                 let new_history = update_history_for_push(
                     session.undo_stack, session.history, entry, new_model.text, false);
+                let new_style_history = update_style_history_for_push(
+                    session.undo_stack, session.style_history, entry, new_model.styles, false);
                 TextEditSession {
                     model: new_model,
                     undo_stack: new_stack,
                     last_was_insert: false,
                     clipboard,
                     history: new_history,
+                    style_history: new_style_history,
                 }
             } else {
                 session
@@ -294,12 +321,15 @@ pub open spec fn apply_key_to_session(
                 let new_stack = push_undo_or_merge(session.undo_stack, entry, false);
                 let new_history = update_history_for_push(
                     session.undo_stack, session.history, entry, new_model.text, false);
+                let new_style_history = update_style_history_for_push(
+                    session.undo_stack, session.style_history, entry, new_model.styles, false);
                 TextEditSession {
                     model: new_model,
                     undo_stack: new_stack,
                     last_was_insert: false,
                     clipboard: session.clipboard,
                     history: new_history,
+                    style_history: new_style_history,
                 }
             } else {
                 session

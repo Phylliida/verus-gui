@@ -259,4 +259,29 @@ pub open spec fn undo_history_valid(
             #[trigger] stack.entries[i], history[i], history[i + 1])
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Style history consistency
+// ──────────────────────────────────────────────────────────────────────
+
+/// An undo entry correctly describes a style transition.
+pub open spec fn entry_describes_style_transition(
+    entry: UndoEntry, before_styles: Seq<StyleSet>, after_styles: Seq<StyleSet>,
+) -> bool {
+    let remove_end = entry.start + entry.removed_styles.len();
+    &&& remove_end <= before_styles.len()
+    &&& before_styles.subrange(entry.start as int, remove_end as int) =~= entry.removed_styles
+    &&& after_styles =~= seq_splice(before_styles, entry.start as int, remove_end as int,
+            entry.inserted_styles)
+}
+
+/// The style history is consistent with the undo stack.
+pub open spec fn undo_style_history_valid(
+    stack: UndoStack, style_history: Seq<Seq<StyleSet>>,
+) -> bool {
+    &&& style_history.len() == stack.entries.len() + 1
+    &&& forall|i: int| 0 <= i < stack.entries.len() ==>
+        entry_describes_style_transition(
+            #[trigger] stack.entries[i], style_history[i], style_history[i + 1])
+}
+
 } // verus!

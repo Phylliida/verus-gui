@@ -877,4 +877,234 @@ pub proof fn lemma_entry_for_splice_describes_transition(
     // is_grapheme_boundary(before, model.focus) from model.wf()
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Style history proofs
+// ──────────────────────────────────────────────────────────────────────
+
+/// An empty stack with a single style history entry is valid.
+pub proof fn lemma_empty_style_history_valid(styles: Seq<StyleSet>)
+    ensures
+        undo_style_history_valid(empty_undo_stack(), seq![styles]),
+{
+}
+
+/// Given a model and splice parameters, the undo entry describes the style
+/// transition from model.styles to the spliced styles.
+pub proof fn lemma_entry_for_splice_describes_style_transition(
+    model: TextModel, start: nat, end: nat,
+    new_text: Seq<char>, new_styles: Seq<StyleSet>, new_focus: nat,
+)
+    requires
+        model.wf(),
+        start <= end,
+        end <= model.text.len(),
+        new_text.len() == new_styles.len(),
+    ensures
+        entry_describes_style_transition(
+            undo_entry_for_splice(model, start, end, new_text, new_styles, new_focus),
+            model.styles,
+            seq_splice(model.styles, start as int, end as int, new_styles)),
+{
+    let entry = undo_entry_for_splice(model, start, end, new_text, new_styles, new_focus);
+    // entry.removed_styles = model.styles[start..end), len = end - start
+    // entry.inserted_styles = new_styles
+    // remove_end = start + (end - start) = end
+    assert(entry.removed_styles.len() == end - start);
+    let remove_end = entry.start + entry.removed_styles.len();
+    assert(remove_end == end);
+    assert(model.styles.subrange(start as int, end as int) =~= entry.removed_styles);
+}
+
+/// push_undo_or_merge preserves style history validity.
+pub proof fn lemma_push_or_merge_style_history_valid(
+    stack: UndoStack, style_history: Seq<Seq<StyleSet>>,
+    entry: UndoEntry, after_styles: Seq<StyleSet>, merge: bool,
+)
+    requires
+        undo_stack_wf(stack),
+        undo_style_history_valid(stack, style_history),
+        entry_describes_style_transition(entry, style_history[stack.position as int], after_styles),
+        undo_entry_wf(entry),
+    ensures ({
+        let new_stack = push_undo_or_merge(stack, entry, merge);
+        let new_style_history = if merge && can_undo(stack)
+            && can_merge_entries(stack.entries[(stack.position - 1) as int], entry)
+        {
+            style_history.subrange(0, stack.position as int).push(after_styles)
+        } else {
+            style_history.subrange(0, stack.position as int + 1).push(after_styles)
+        };
+        undo_style_history_valid(new_stack, new_style_history)
+    }),
+{
+    if merge && can_undo(stack)
+        && can_merge_entries(stack.entries[(stack.position - 1) as int], entry)
+    {
+        // Merge path
+        let pos = stack.position;
+        let top = stack.entries[(pos - 1) as int];
+        let merged = merge_entries(top, entry);
+        let new_stack = push_undo_or_merge(stack, entry, merge);
+        let new_style_history = style_history.subrange(0, pos as int).push(after_styles);
+
+        // merged describes style transition from style_history[pos-1] to after_styles
+        // top: pure insertion, removed_styles empty
+        // entry: pure insertion, removed_styles empty
+        // merged.removed_styles = empty, merged.inserted_styles = top.inserted + entry.inserted
+        let before_s = style_history[(pos - 1) as int];
+        let middle_s = style_history[pos as int];
+        // top: style_history[pos-1] → style_history[pos]
+        // entry: style_history[pos] → after_styles
+        // merged: style_history[pos-1] → after_styles
+        // By compose:
+        lemma_seq_splice_insert_compose(
+            before_s, top.start as int, top.inserted_styles, entry.inserted_styles);
+
+        assert forall|i: int| 0 <= i < new_stack.entries.len()
+            implies entry_describes_style_transition(
+                #[trigger] new_stack.entries[i], new_style_history[i], new_style_history[i + 1])
+        by {
+            if i < (pos - 1) as int {
+                let truncated = stack.entries.subrange(0, (pos - 1) as int);
+                assert(new_stack.entries[i] == truncated[i]);
+                assert(truncated[i] == stack.entries[i]);
+                assert(new_style_history[i] == style_history[i]);
+                assert(new_style_history[i + 1] == style_history[i + 1]);
+                assert(entry_describes_style_transition(stack.entries[i], style_history[i], style_history[i + 1]));
+            } else {
+                assert(i == (pos - 1) as int);
+                assert(new_stack.entries[i] == merged);
+                assert(new_style_history[i] == style_history[(pos - 1) as int]);
+                assert(new_style_history[i + 1] == after_styles);
+            }
+        }
+    } else {
+        // Push path
+        let new_stack = push_undo(stack, entry);
+        let new_style_history = style_history.subrange(0, stack.position as int + 1).push(after_styles);
+
+        assert forall|i: int| 0 <= i < new_stack.entries.len()
+            implies entry_describes_style_transition(
+                #[trigger] new_stack.entries[i], new_style_history[i], new_style_history[i + 1])
+        by {
+            if i < stack.position as int {
+                let truncated = stack.entries.subrange(0, stack.position as int);
+                assert(new_stack.entries[i] == truncated[i]);
+                assert(truncated[i] == stack.entries[i]);
+                assert(new_style_history[i] == style_history[i]);
+                assert(new_style_history[i + 1] == style_history[i + 1]);
+                assert(entry_describes_style_transition(stack.entries[i], style_history[i], style_history[i + 1]));
+            } else {
+                assert(i == stack.position as int);
+                assert(new_stack.entries[i] == entry);
+                assert(new_style_history[i] == style_history[stack.position as int]);
+                assert(new_style_history[i + 1] == after_styles);
+            }
+        }
+    }
+}
+
+/// After undo, style history validity is preserved.
+pub proof fn lemma_undo_maintains_style_history(
+    stack: UndoStack, style_history: Seq<Seq<StyleSet>>,
+)
+    requires
+        undo_stack_wf(stack),
+        undo_style_history_valid(stack, style_history),
+        can_undo(stack),
+    ensures ({
+        let new_stack = UndoStack {
+            position: (stack.position - 1) as nat,
+            ..stack
+        };
+        undo_style_history_valid(new_stack, style_history)
+    }),
+{
+    let new_stack = UndoStack {
+        position: (stack.position - 1) as nat,
+        ..stack
+    };
+    assert forall|i: int| 0 <= i < new_stack.entries.len()
+        implies entry_describes_style_transition(
+            #[trigger] new_stack.entries[i], style_history[i], style_history[i + 1])
+    by {
+        assert(new_stack.entries[i] == stack.entries[i]);
+    }
+}
+
+/// After redo, style history validity is preserved.
+pub proof fn lemma_redo_maintains_style_history(
+    stack: UndoStack, style_history: Seq<Seq<StyleSet>>,
+)
+    requires
+        undo_stack_wf(stack),
+        undo_style_history_valid(stack, style_history),
+        can_redo(stack),
+    ensures ({
+        let new_stack = UndoStack {
+            position: stack.position + 1,
+            ..stack
+        };
+        undo_style_history_valid(new_stack, style_history)
+    }),
+{
+    let new_stack = UndoStack {
+        position: stack.position + 1,
+        ..stack
+    };
+    assert forall|i: int| 0 <= i < new_stack.entries.len()
+        implies entry_describes_style_transition(
+            #[trigger] new_stack.entries[i], style_history[i], style_history[i + 1])
+    by {
+        assert(new_stack.entries[i] == stack.entries[i]);
+    }
+}
+
+/// After undo, styles match style_history at the new position.
+pub proof fn lemma_undo_style_history_position(
+    stack: UndoStack, style_history: Seq<Seq<StyleSet>>, model: TextModel,
+)
+    requires
+        undo_stack_wf(stack),
+        undo_style_history_valid(stack, style_history),
+        can_undo(stack),
+        model.styles =~= style_history[stack.position as int],
+    ensures ({
+        let (new_stack, new_model) = apply_undo(stack, model);
+        new_model.styles =~= style_history[new_stack.position as int]
+    }),
+{
+    let pos = stack.position;
+    let entry = stack.entries[(pos - 1) as int];
+    let before_s = style_history[(pos - 1) as int];
+    let after_s = style_history[pos as int];
+    assert(entry_describes_style_transition(entry, before_s, after_s));
+
+    // undo splice = seq_splice(after_s, start, start+inserted_styles.len(), removed_styles) =~= before_s
+    lemma_seq_splice_roundtrip(before_s, entry.start as int,
+        (entry.start + entry.removed_styles.len()) as int, entry.inserted_styles);
+}
+
+/// After redo, styles match style_history at the new position.
+pub proof fn lemma_redo_style_history_position(
+    stack: UndoStack, style_history: Seq<Seq<StyleSet>>, model: TextModel,
+)
+    requires
+        undo_stack_wf(stack),
+        undo_style_history_valid(stack, style_history),
+        can_redo(stack),
+        model.styles =~= style_history[stack.position as int],
+    ensures ({
+        let (new_stack, new_model) = apply_redo(stack, model);
+        new_model.styles =~= style_history[new_stack.position as int]
+    }),
+{
+    let pos = stack.position;
+    let entry = stack.entries[pos as int];
+    let before_s = style_history[pos as int];
+    let after_s = style_history[(pos + 1) as int];
+    assert(entry_describes_style_transition(entry, before_s, after_s));
+    // redo splice = seq_splice(before_s, start, start+removed_styles.len(), inserted_styles) =~= after_s
+}
+
 } // verus!

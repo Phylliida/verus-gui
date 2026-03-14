@@ -54,6 +54,7 @@ pub struct RuntimeTextEditSession {
     pub last_was_insert: bool,
     pub clipboard: Vec<char>,
     pub history: Ghost<Seq<Seq<char>>>,
+    pub style_history: Ghost<Seq<Seq<StyleSet>>>,
 }
 
 impl RuntimeTextEditSession {
@@ -64,6 +65,7 @@ impl RuntimeTextEditSession {
             last_was_insert: self.last_was_insert,
             clipboard: self.clipboard@,
             history: self.history@,
+            style_history: self.style_history@,
         }
     }
 
@@ -81,12 +83,14 @@ pub fn new_session_exec(model: RuntimeTextModel) -> (out: RuntimeTextEditSession
         out.wf_spec(),
 {
     let ghost init_text = model@.text;
+    let ghost init_styles = model@.styles;
     RuntimeTextEditSession {
         model,
         undo_stack: empty_undo_stack_exec(),
         last_was_insert: false,
         clipboard: Vec::new(),
         history: Ghost(Seq::empty().push(init_text)),
+        style_history: Ghost(Seq::empty().push(init_styles)),
     }
 }
 
@@ -123,6 +127,9 @@ fn session_apply_undo_exec(
         lemma_undo_maintains_history(session.undo_stack@, session.history@);
         lemma_undo_history_position(
             session.undo_stack@, session.history@, session.view_session().model);
+        lemma_undo_maintains_style_history(session.undo_stack@, session.style_history@);
+        lemma_undo_style_history_position(
+            session.undo_stack@, session.style_history@, session.view_session().model);
     }
     RuntimeTextEditSession {
         model: new_model,
@@ -130,6 +137,7 @@ fn session_apply_undo_exec(
         last_was_insert: false,
         clipboard: session.clipboard,
         history: session.history,
+        style_history: session.style_history,
     }
 }
 
@@ -164,6 +172,9 @@ fn session_apply_redo_exec(
         lemma_redo_maintains_history(session.undo_stack@, session.history@);
         lemma_redo_history_position(
             session.undo_stack@, session.history@, session.view_session().model);
+        lemma_redo_maintains_style_history(session.undo_stack@, session.style_history@);
+        lemma_redo_style_history_position(
+            session.undo_stack@, session.style_history@, session.view_session().model);
     }
     RuntimeTextEditSession {
         model: new_model,
@@ -171,13 +182,14 @@ fn session_apply_redo_exec(
         last_was_insert: false,
         clipboard: session.clipboard,
         history: session.history,
+        style_history: session.style_history,
     }
 }
 
 /// Helper for unreachable branches — requires false so can never be called
 /// in valid execution. Used to satisfy Rust's type checker.
 #[verifier::external_body]
-fn dead_session(undo_stack: RuntimeUndoStack, clipboard: Vec<char>, history: Ghost<Seq<Seq<char>>>) -> (out: RuntimeTextEditSession)
+fn dead_session(undo_stack: RuntimeUndoStack, clipboard: Vec<char>, history: Ghost<Seq<Seq<char>>>, style_history: Ghost<Seq<Seq<StyleSet>>>) -> (out: RuntimeTextEditSession)
     requires false,
 { unreachable!() }
 
@@ -219,11 +231,14 @@ fn session_handle_cut_exec(
     let ghost old_model = session.model@;
     let ghost old_stack = session.undo_stack@;
     let ghost old_history = session.history@;
+    let ghost old_style_history = session.style_history@;
     let new_model = delete_selection_exec(session.model);
     let new_stack = push_undo_or_merge_exec(
         session.undo_stack, entry, false);
     let ghost new_history = update_history_for_push(
         old_stack, old_history, entry@, new_model@.text, false);
+    let ghost new_style_history = update_style_history_for_push(
+        old_stack, old_style_history, entry@, new_model@.styles, false);
     proof {
         // Prove entry_describes_transition for the cut
         lemma_entry_for_splice_describes_transition(
@@ -232,6 +247,12 @@ fn session_handle_cut_exec(
         // Prove push_or_merge maintains history validity
         lemma_push_or_merge_history_valid(
             old_stack, old_history, entry@, new_model@.text, false);
+        // Style history
+        lemma_entry_for_splice_describes_style_transition(
+            old_model, sel_start as nat, sel_end as nat,
+            Seq::<char>::empty(), Seq::<StyleSet>::empty(), sel_start as nat);
+        lemma_push_or_merge_style_history_valid(
+            old_stack, old_style_history, entry@, new_model@.styles, false);
     }
     RuntimeTextEditSession {
         model: new_model,
@@ -239,6 +260,7 @@ fn session_handle_cut_exec(
         last_was_insert: false,
         clipboard,
         history: Ghost(new_history),
+        style_history: Ghost(new_style_history),
     }
 }
 
@@ -285,11 +307,12 @@ fn session_handle_paste_exec(
     let ghost old_model = session.model@;
     let ghost old_stack = session.undo_stack@;
     let ghost old_history = session.history@;
+    let ghost old_style_history = session.style_history@;
 
     proof {
         axiom_paste_wf(
             session.model@.text,
-            sel_start as nat, sel_end as nat, clean@);
+            sel_start as nat, sel_end as nat, session.clipboard@);
     }
 
     let new_model = paste_exec(session.model, &session.clipboard);
@@ -297,6 +320,8 @@ fn session_handle_paste_exec(
         session.undo_stack, entry, false);
     let ghost new_history = update_history_for_push(
         old_stack, old_history, entry@, new_model@.text, false);
+    let ghost new_style_history = update_style_history_for_push(
+        old_stack, old_style_history, entry@, new_model@.styles, false);
 
     proof {
         lemma_entry_for_splice_describes_transition(
@@ -304,6 +329,11 @@ fn session_handle_paste_exec(
             clean@, style_seq_view(clean_styles@), new_focus as nat);
         lemma_push_or_merge_history_valid(
             old_stack, old_history, entry@, new_model@.text, false);
+        lemma_entry_for_splice_describes_style_transition(
+            old_model, sel_start as nat, sel_end as nat,
+            clean@, style_seq_view(clean_styles@), new_focus as nat);
+        lemma_push_or_merge_style_history_valid(
+            old_stack, old_style_history, entry@, new_model@.styles, false);
     }
 
     RuntimeTextEditSession {
@@ -312,6 +342,7 @@ fn session_handle_paste_exec(
         last_was_insert: false,
         clipboard: session.clipboard,
         history: Ghost(new_history),
+        style_history: Ghost(new_style_history),
     }
 }
 
@@ -351,17 +382,14 @@ fn session_handle_non_text_edit_exec(
     let ghost old_history = session.history@;
     let undo_stack = session.undo_stack;
     let history = session.history;
+    let style_history = session.style_history;
     let action = dispatch_key_exec(session.model, event);
     match action {
         RuntimeKeyAction::NewModel(new_model) => {
             proof {
-                // Non-text-edit operations don't change text.
-                // dispatch_key returns the spec result, and for non-text-edit ops
-                // the text is unchanged, so history stays valid.
-                // new_model@ == dispatch_key(old_model, event@).unwrap_new_model()
+                // Non-text-edit operations don't change text or styles.
                 // For compose_start/update/cancel, select_all, move_cursor, extend_selection:
-                // new_model@.text =~= old_model.text
-                // (This follows from the spec definitions.)
+                // new_model@.text =~= old_model.text and new_model@.styles =~= old_model.styles
             }
             RuntimeTextEditSession {
                 model: new_model,
@@ -369,11 +397,12 @@ fn session_handle_non_text_edit_exec(
                 last_was_insert: false,
                 clipboard,
                 history,
+                style_history,
             }
         },
         _ => {
             proof { assert(false); }
-            dead_session(undo_stack, clipboard, history)
+            dead_session(undo_stack, clipboard, history, style_history)
         },
     }
 }
@@ -516,7 +545,9 @@ fn session_handle_text_edit_exec(
     let undo_stack = session.undo_stack;
     let ghost old_stack = undo_stack@;
     let ghost old_history = session.history@;
+    let ghost old_style_history = session.style_history@;
     let history = session.history;
+    let style_history = session.style_history;
     let action = dispatch_key_exec(session.model, event);
     match action {
         RuntimeKeyAction::NewModel(new_model) => {
@@ -525,6 +556,8 @@ fn session_handle_text_edit_exec(
                 undo_stack, entry, merge);
             let ghost new_history = update_history_for_push(
                 old_stack, old_history, entry@, new_model@.text, merge);
+            let ghost new_style_history = update_style_history_for_push(
+                old_stack, old_style_history, entry@, new_model@.styles, merge);
             proof {
                 // Key fact: undo params produce same text as dispatch
                 assert(seq_splice(old_model.text,
@@ -537,6 +570,12 @@ fn session_handle_text_edit_exec(
                 // Prove push_or_merge maintains history validity
                 lemma_push_or_merge_history_valid(
                     old_stack, old_history, entry@, new_model@.text, merge);
+                // Style history
+                lemma_entry_for_splice_describes_style_transition(
+                    old_model, undo_start as nat, undo_end as nat,
+                    ins_text@, style_seq_view(ins_styles@), new_model@.focus);
+                lemma_push_or_merge_style_history_valid(
+                    old_stack, old_style_history, entry@, new_model@.styles, merge);
             }
             RuntimeTextEditSession {
                 model: new_model,
@@ -544,11 +583,12 @@ fn session_handle_text_edit_exec(
                 last_was_insert: is_insert,
                 clipboard,
                 history: Ghost(new_history),
+                style_history: Ghost(new_style_history),
             }
         },
         _ => {
             proof { assert(false); }
-            dead_session(undo_stack, clipboard, history)
+            dead_session(undo_stack, clipboard, history, style_history)
         },
     }
 }
@@ -592,6 +632,7 @@ pub fn apply_key_to_session_exec(
                     model: session.model,
                     undo_stack: session.undo_stack,
                     history: session.history,
+                    style_history: session.style_history,
                 };
             }
             return session;
@@ -622,7 +663,7 @@ pub fn apply_key_to_session_exec(
             let filtered = filter_permitted_exec(&session.clipboard);
             let clean = canonicalize_newlines_exec(&filtered);
             if (clean.len() > 0 || session.model.anchor != session.model.focus)
-                && session.model.text.len() + clean.len() < usize::MAX
+                && clean.len() < usize::MAX - session.model.text.len()
             {
                 return session_handle_paste_exec(session, clean);
             }
