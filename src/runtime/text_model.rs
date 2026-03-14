@@ -2891,7 +2891,11 @@ pub fn scroll_by_exec(
     } else if delta > 0 {
         // ns = scroll_line + delta > scroll_line >= 0, so ns >= 0
         let d: usize = delta as usize;
-        proof { assert(ns == vp.scroll_line as int + d as int); }
+        proof {
+            assert(delta >= 0);
+            assert(d as int == delta as int);
+            assert(ns == vp.scroll_line as int + d as int);
+        }
         if d > total_lines - 1 {
             // d >= total_lines, so ns >= total_lines
             RuntimeTextViewport { scroll_line: total_lines - 1, ..vp }
