@@ -224,4 +224,39 @@ pub open spec fn push_undo_or_merge(
     }
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Undo history consistency
+// ──────────────────────────────────────────────────────────────────────
+
+/// An undo entry correctly describes a text transition.
+pub open spec fn entry_describes_transition(
+    entry: UndoEntry, before_text: Seq<char>, after_text: Seq<char>,
+) -> bool {
+    let remove_end = entry.start + entry.removed_text.len();
+    &&& remove_end <= before_text.len()
+    &&& before_text.subrange(entry.start as int, remove_end as int) =~= entry.removed_text
+    &&& after_text =~= seq_splice(before_text, entry.start as int, remove_end as int,
+            entry.inserted_text)
+    &&& entry.focus_before <= before_text.len()
+    &&& entry.focus_after <= after_text.len()
+    &&& wf_text(before_text)
+    &&& wf_text(after_text)
+    &&& is_grapheme_boundary(before_text, entry.focus_before)
+    &&& is_grapheme_boundary(after_text, entry.focus_after)
+    &&& before_text.len() < usize::MAX
+    &&& after_text.len() < usize::MAX
+}
+
+/// The history is consistent with the undo stack and current text.
+/// history[i] = text state before entry[i] was applied.
+/// history.last() = text after all entries applied.
+pub open spec fn undo_history_valid(
+    stack: UndoStack, history: Seq<Seq<char>>,
+) -> bool {
+    &&& history.len() == stack.entries.len() + 1
+    &&& forall|i: int| 0 <= i < stack.entries.len() ==>
+        entry_describes_transition(
+            #[trigger] stack.entries[i], history[i], history[i + 1])
+}
+
 } // verus!

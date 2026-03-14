@@ -3003,6 +3003,7 @@ pub fn wrapped_pos_to_visual_exec(
     ensures
         out.0 as nat == wrapped_pos_to_visual(text@, pos as nat, line_width as nat).0,
         out.1 as nat == wrapped_pos_to_visual(text@, pos as nat, line_width as nat).1,
+        out.0 <= text.len(),
 {
     if text.len() == 0 || line_width == 0 {
         return (0, pos);

@@ -86,6 +86,11 @@ pub fn text_input_handle_key_exec(
     requires
         input.session.wf_spec(),
         input.session.model.text.len() + 2 < usize::MAX,
+        input.session.undo_stack.entries.len() < usize::MAX,
+        input.session.model@.composition.is_some() ==>
+            input.session.model@.text.len()
+                + input.session.model@.composition.unwrap().provisional.len()
+                < usize::MAX,
         input.viewport.scroll_line as u64 + input.viewport.visible_lines as u64 <= usize::MAX as u64,
     ensures
         result.session.view_session().model
@@ -99,33 +104,33 @@ pub fn text_input_handle_key_exec(
                 input.session.view_session(), input.config@, event@).clipboard,
         result.session.model.wf_spec(),
 {
-    // Check if key is allowed by config
-    let allowed = match &event.kind {
-        RuntimeKeyEventKind::Enter => {
-            // Single-line: block Enter
-            match input.config.max_lines {
-                Some(1) => false,
-                _ => true,
-            }
-        },
-        _ if !input.config.editable => {
-            // Read-only: only movement/copy
-            match &event.kind {
-                RuntimeKeyEventKind::Left
-                | RuntimeKeyEventKind::Right
-                | RuntimeKeyEventKind::Up
-                | RuntimeKeyEventKind::Down
-                | RuntimeKeyEventKind::Home
-                | RuntimeKeyEventKind::End
-                | RuntimeKeyEventKind::SelectAll
-                | RuntimeKeyEventKind::Copy => true,
-                _ => false,
-            }
-        },
-        _ => true,
+    // Mirror spec key_allowed_by_config structure exactly.
+    let is_enter = match &event.kind {
+        RuntimeKeyEventKind::Enter => true,
+        _ => false,
     };
-
-    assert(allowed == key_allowed_by_config(input.config@, event@.kind));
+    let is_single_line = match input.config.max_lines {
+        Some(1) => true,
+        _ => false,
+    };
+    let is_movement = match &event.kind {
+        RuntimeKeyEventKind::Left
+        | RuntimeKeyEventKind::Right
+        | RuntimeKeyEventKind::Up
+        | RuntimeKeyEventKind::Down
+        | RuntimeKeyEventKind::Home
+        | RuntimeKeyEventKind::End
+        | RuntimeKeyEventKind::SelectAll
+        | RuntimeKeyEventKind::Copy => true,
+        _ => false,
+    };
+    let allowed = if is_enter && is_single_line {
+        false
+    } else if !input.config.editable && !is_movement {
+        false
+    } else {
+        true
+    };
 
     if !allowed {
         return input;

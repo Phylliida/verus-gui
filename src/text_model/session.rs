@@ -18,6 +18,7 @@ pub struct TextEditSession {
     pub undo_stack: UndoStack,
     pub last_was_insert: bool,
     pub clipboard: Seq<char>,
+    pub history: Seq<Seq<char>>,
 }
 
 /// Create a new session from a model with empty undo and clipboard.
@@ -27,6 +28,7 @@ pub open spec fn new_session(model: TextModel) -> TextEditSession {
         undo_stack: empty_undo_stack(),
         last_was_insert: false,
         clipboard: Seq::empty(),
+        history: seq![model.text],
     }
 }
 
@@ -34,6 +36,8 @@ pub open spec fn new_session(model: TextModel) -> TextEditSession {
 pub open spec fn session_wf(s: TextEditSession) -> bool {
     &&& s.model.wf()
     &&& undo_stack_wf(s.undo_stack)
+    &&& undo_history_valid(s.undo_stack, s.history)
+    &&& s.history[s.undo_stack.position as int] =~= s.model.text
 }
 
 /// Whether a key event kind is a character insertion (Char, Enter, Tab).
@@ -63,6 +67,22 @@ pub open spec fn session_record_edit(
     push_undo_or_merge(session.undo_stack, entry, merge)
 }
 
+/// Update history after a push_undo_or_merge operation.
+pub open spec fn update_history_for_push(
+    stack: UndoStack, history: Seq<Seq<char>>,
+    entry: UndoEntry, new_text: Seq<char>, merge: bool,
+) -> Seq<Seq<char>> {
+    if merge && can_undo(stack)
+        && can_merge_entries(stack.entries[(stack.position - 1) as int], entry)
+    {
+        // Merge: drop history[position], append new_text after history[0..position]
+        history.subrange(0, stack.position as int).push(new_text)
+    } else {
+        // Push: truncate to position+1 entries, append new_text
+        history.subrange(0, stack.position as int + 1).push(new_text)
+    }
+}
+
 /// Apply a key event to the entire session: dispatches via dispatch_key,
 /// then handles undo/redo/clipboard at the session level.
 pub open spec fn apply_key_to_session(
@@ -90,34 +110,39 @@ pub open spec fn apply_key_to_session(
                 session.model, sel_start, sel_end,
                 new_text_for_entry, new_styles_for_entry, new_focus);
             let new_stack = push_undo_or_merge(session.undo_stack, entry, merge);
+            let new_history = update_history_for_push(
+                session.undo_stack, session.history, entry, new_model.text, merge);
             TextEditSession {
                 model: new_model,
                 undo_stack: new_stack,
                 last_was_insert: is_insert_key(event.kind),
                 clipboard: session.clipboard,
+                history: new_history,
             }
         },
         KeyAction::External(ExternalAction::Undo) => {
-            if can_undo(session.undo_stack) {
+            if can_undo(session.undo_stack) && session.model.composition.is_none() {
                 let (new_stack, new_model) = apply_undo(session.undo_stack, session.model);
                 TextEditSession {
                     model: new_model,
                     undo_stack: new_stack,
                     last_was_insert: false,
                     clipboard: session.clipboard,
+                    history: session.history,
                 }
             } else {
                 session
             }
         },
         KeyAction::External(ExternalAction::Redo) => {
-            if can_redo(session.undo_stack) {
+            if can_redo(session.undo_stack) && session.model.composition.is_none() {
                 let (new_stack, new_model) = apply_redo(session.undo_stack, session.model);
                 TextEditSession {
                     model: new_model,
                     undo_stack: new_stack,
                     last_was_insert: false,
                     clipboard: session.clipboard,
+                    history: session.history,
                 }
             } else {
                 session
@@ -134,11 +159,14 @@ pub open spec fn apply_key_to_session(
                     Seq::empty(), Seq::empty(), sel_start);
                 let new_stack = push_undo_or_merge(
                     session.undo_stack, entry, false);
+                let new_history = update_history_for_push(
+                    session.undo_stack, session.history, entry, new_model.text, false);
                 TextEditSession {
                     model: new_model,
                     undo_stack: new_stack,
                     last_was_insert: false,
                     clipboard,
+                    history: new_history,
                 }
             } else {
                 session
