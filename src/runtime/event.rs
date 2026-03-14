@@ -277,7 +277,17 @@ pub fn dispatch_key_exec(
     model: RuntimeTextModel,
     event: &RuntimeKeyEvent,
 ) -> (result: RuntimeKeyAction)
-    requires model.wf_spec(),
+    requires
+        model.wf_spec(),
+        model.text.len() + 2 < usize::MAX,
+    ensures
+        match (result, dispatch_key(model@, event@)) {
+            (RuntimeKeyAction::NewModel(rm), KeyAction::NewModel(_sm)) =>
+                rm@ == _sm && rm.wf_spec(),
+            (RuntimeKeyAction::External(ea), KeyAction::External(eb)) => ea === eb,
+            (RuntimeKeyAction::None, KeyAction::None) => true,
+            _ => false,
+        },
 {
     use crate::runtime::text_model::*;
 

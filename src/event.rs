@@ -315,14 +315,22 @@ pub open spec fn dispatch_key(model: TextModel, event: KeyEvent) -> KeyAction {
             KeyAction::NewModel(insert_char(model, '\t'))
         },
         KeyEventKind::Backspace => {
-            if event.modifiers.ctrl {
+            if has_selection(model.anchor, model.focus) {
+                KeyAction::NewModel(delete_selection(model))
+            } else if model.focus == 0 {
+                KeyAction::None
+            } else if event.modifiers.ctrl {
                 KeyAction::NewModel(delete_word_backward(model))
             } else {
                 KeyAction::NewModel(delete_backward(model))
             }
         },
         KeyEventKind::Delete => {
-            if event.modifiers.ctrl {
+            if has_selection(model.anchor, model.focus) {
+                KeyAction::NewModel(delete_selection(model))
+            } else if model.focus >= model.text.len() {
+                KeyAction::None
+            } else if event.modifiers.ctrl {
                 KeyAction::NewModel(delete_word_forward(model))
             } else {
                 KeyAction::NewModel(delete_forward(model))
@@ -336,13 +344,25 @@ pub open spec fn dispatch_key(model: TextModel, event: KeyEvent) -> KeyAction {
         KeyEventKind::Cut => KeyAction::External(ExternalAction::Cut),
         KeyEventKind::Copy => KeyAction::External(ExternalAction::Copy),
         KeyEventKind::ComposeStart => {
-            KeyAction::NewModel(compose_start(model))
+            if model.composition.is_some() {
+                KeyAction::None
+            } else {
+                KeyAction::NewModel(compose_start(model))
+            }
         },
         KeyEventKind::ComposeUpdate(text, cursor) => {
-            KeyAction::NewModel(compose_update(model, text, cursor))
+            if model.composition.is_none() || cursor > text.len() {
+                KeyAction::None
+            } else {
+                KeyAction::NewModel(compose_update(model, text, cursor))
+            }
         },
         KeyEventKind::ComposeCommit => {
-            KeyAction::NewModel(compose_commit(model))
+            if model.composition.is_none() {
+                KeyAction::None
+            } else {
+                KeyAction::NewModel(compose_commit(model))
+            }
         },
         KeyEventKind::ComposeCancel => {
             KeyAction::NewModel(compose_cancel(model))

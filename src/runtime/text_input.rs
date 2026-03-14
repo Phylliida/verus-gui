@@ -5,6 +5,7 @@ use crate::text_model::viewport::*;
 use crate::text_input::*;
 use crate::event::*;
 use crate::runtime::text_model::*;
+use crate::text_model::session::*;
 use crate::runtime::session::*;
 use crate::runtime::event::*;
 
@@ -50,13 +51,19 @@ pub struct RuntimeTextInput {
 }
 
 /// Create a new text input with default viewport.
-#[verifier::external_body]
 pub fn new_text_input_exec(
     model: RuntimeTextModel,
     config: RuntimeTextInputConfig,
     visible_lines: usize,
 ) -> (out: RuntimeTextInput)
     requires model.wf_spec(),
+    ensures
+        out.session.wf_spec(),
+        out.session.view_session() == new_session(model@),
+        out.config@ == config@,
+        out.viewport@ == (TextViewport { scroll_line: 0, visible_lines: visible_lines as nat }),
+        out.cursor_visible == true,
+        out.blink_counter == 0,
 {
     RuntimeTextInput {
         session: new_session_exec(model),
@@ -77,6 +84,20 @@ pub fn text_input_handle_key_exec(
     mut input: RuntimeTextInput,
     event: &RuntimeKeyEvent,
 ) -> (result: RuntimeTextInput)
+    requires
+        input.session.wf_spec(),
+        input.session.model.text.len() + 2 < usize::MAX,
+    ensures
+        result.session.view_session().model
+            == text_input_handle_key(
+                input.session.view_session(), input.config@, event@).model,
+        result.session.view_session().last_was_insert
+            == text_input_handle_key(
+                input.session.view_session(), input.config@, event@).last_was_insert,
+        result.session.view_session().clipboard
+            == text_input_handle_key(
+                input.session.view_session(), input.config@, event@).clipboard,
+        result.session.model.wf_spec(),
 {
     // Check if key is allowed by config
     let allowed = match &event.kind {

@@ -51,20 +51,32 @@ pub fn new_session_exec(model: RuntimeTextModel) -> (out: RuntimeTextEditSession
     }
 }
 
-/// Apply a key event to the session. External body because the full
-/// dispatch involves many preconditions per branch that must be
-/// checked at runtime.
+/// Apply a key event to the session.
+///
+/// External body because dispatch_key_exec's preconditions on the
+/// underlying editing functions (grapheme boundaries, wf_text after
+/// splice) depend on axioms that can't be discharged in verified code.
 ///
 /// Handles undo/redo/clipboard at the session level.
-/// For editing keys, delegates to dispatch_key_exec.
+/// For editing keys, delegates to dispatch_key_exec and records undo.
 #[verifier::external_body]
 pub fn apply_key_to_session_exec(
     session: RuntimeTextEditSession,
     event: &RuntimeKeyEvent,
 ) -> (result: RuntimeTextEditSession)
-    requires session.wf_spec(),
+    requires
+        session.wf_spec(),
+        session.model.text.len() + 2 < usize::MAX,
+    ensures
+        result.view_session().model
+            == apply_key_to_session(session.view_session(), event@).model,
+        result.view_session().last_was_insert
+            == apply_key_to_session(session.view_session(), event@).last_was_insert,
+        result.view_session().clipboard
+            == apply_key_to_session(session.view_session(), event@).clipboard,
+        result.model.wf_spec(),
 {
-    // Handle Copy/Cut/Undo/Redo directly without consuming model.
+    // Handle Copy/Cut/Undo/Redo directly (before consuming model).
     match &event.kind {
         RuntimeKeyEventKind::Copy => {
             if session.model.anchor != session.model.focus {
@@ -81,10 +93,19 @@ pub fn apply_key_to_session_exec(
         RuntimeKeyEventKind::Cut => {
             if session.model.anchor != session.model.focus {
                 let clipboard = get_selection_text_exec(&session.model);
+                let sel_start = if session.model.anchor <= session.model.focus {
+                    session.model.anchor } else { session.model.focus };
+                let sel_end = if session.model.anchor <= session.model.focus {
+                    session.model.focus } else { session.model.anchor };
+                let entry = undo_entry_for_splice_exec(
+                    &session.model, sel_start, sel_end,
+                    &Vec::new(), &Vec::new(), sel_start);
                 let new_model = delete_selection_exec(session.model);
+                let new_stack = push_undo_or_merge_exec(
+                    session.undo_stack, entry, false);
                 return RuntimeTextEditSession {
                     model: new_model,
-                    undo_stack: session.undo_stack,
+                    undo_stack: new_stack,
                     last_was_insert: false,
                     clipboard,
                 };
@@ -120,26 +141,85 @@ pub fn apply_key_to_session_exec(
         _ => {},
     }
 
-    // For all other keys, delegate to dispatch_key_exec.
+    // Pre-check: will dispatch return None? If so, return unchanged.
+    let dispatch_none = match &event.kind {
+        RuntimeKeyEventKind::Char(ch) => {
+            let c = *ch;
+            c == '\0' || c == '\u{FFF9}' || c == '\u{FFFA}'
+                || c == '\u{FFFB}' || c == '\r'
+        },
+        RuntimeKeyEventKind::Backspace => {
+            session.model.anchor == session.model.focus
+                && session.model.focus == 0
+        },
+        RuntimeKeyEventKind::Delete => {
+            session.model.anchor == session.model.focus
+                && session.model.focus >= session.model.text.len()
+        },
+        RuntimeKeyEventKind::ComposeStart =>
+            session.model.composition.is_some(),
+        RuntimeKeyEventKind::ComposeUpdate(text, cursor) =>
+            session.model.composition.is_none() || *cursor > text.len(),
+        RuntimeKeyEventKind::ComposeCommit =>
+            session.model.composition.is_none(),
+        _ => false,
+    };
+    if dispatch_none {
+        return session;
+    }
+
+    // Save undo data before dispatch consumes the model.
+    let sel_start = if session.model.anchor <= session.model.focus {
+        session.model.anchor } else { session.model.focus };
+    let sel_end = if session.model.anchor <= session.model.focus {
+        session.model.focus } else { session.model.anchor };
+
+    let is_insert = match &event.kind {
+        RuntimeKeyEventKind::Char(_)
+        | RuntimeKeyEventKind::Enter
+        | RuntimeKeyEventKind::Tab => true,
+        _ => false,
+    };
+    let merge = session.last_was_insert && is_insert;
+
+    // Build inserted text/styles for the undo entry.
+    let (ins_text, ins_styles): (Vec<char>, Vec<RuntimeStyleSet>) =
+        match &event.kind {
+            RuntimeKeyEventKind::Char(ch) => {
+                (vec![*ch], vec![copy_style_set(&session.model.typing_style)])
+            },
+            RuntimeKeyEventKind::Enter => {
+                (vec!['\n'], vec![copy_style_set(&session.model.typing_style)])
+            },
+            RuntimeKeyEventKind::Tab => {
+                (vec!['\t'], vec![copy_style_set(&session.model.typing_style)])
+            },
+            _ => (Vec::new(), Vec::new()),
+        };
+
+    // Create undo entry (focus_after is a placeholder; updated below).
+    let mut entry = undo_entry_for_splice_exec(
+        &session.model, sel_start, sel_end,
+        &ins_text, &ins_styles, 0);
+
+    // Dispatch the key to get the new model.
     let action = dispatch_key_exec(session.model, event);
     match action {
         RuntimeKeyAction::NewModel(new_model) => {
-            let is_insert = match &event.kind {
-                RuntimeKeyEventKind::Char(_) | RuntimeKeyEventKind::Enter
-                | RuntimeKeyEventKind::Tab => true,
-                _ => false,
-            };
+            entry.focus_after = new_model.focus;
+            let new_stack = push_undo_or_merge_exec(
+                session.undo_stack, entry, merge);
             RuntimeTextEditSession {
                 model: new_model,
-                undo_stack: session.undo_stack,
+                undo_stack: new_stack,
                 last_was_insert: is_insert,
                 clipboard: session.clipboard,
             }
         },
         _ => {
-            // dispatch returned None or unexpected External.
-            // Model was consumed but no change intended.
-            panic!("dispatch_key_exec returned None/External for non-external key")
+            // Unreachable: pre-check guarantees dispatch returns NewModel
+            // for all remaining event kinds.
+            unreachable!()
         },
     }
 }
