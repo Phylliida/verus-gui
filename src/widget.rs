@@ -118,6 +118,19 @@ pub enum Widget<T: OrderedRing> {
         viewport: Size<T>,
         children: Seq<Widget<T>>,
     },
+    /// Text input: leaf widget whose size comes from pre-computed text metrics.
+    /// The text_input_id references an external TextEditSession.
+    TextInput {
+        preferred_size: Size<T>,
+        text_input_id: nat,
+        config: TextInputConfig,
+    },
+}
+
+/// Configuration for text input key filtering.
+pub struct TextInputConfig {
+    pub multiline: bool,
+    pub max_length: Option<nat>,
 }
 
 // ── Convenience constructors ──────────────────────────────────────
@@ -562,6 +575,14 @@ pub open spec fn layout_widget<T: OrderedField>(
                 );
                 layout_listview_body(limits, child_sizes, spacing, scroll_y, viewport, cn, first)
             },
+            Widget::TextInput { preferred_size, .. } => {
+                Node {
+                    x: T::zero(),
+                    y: T::zero(),
+                    size: limits.resolve(preferred_size),
+                    children: Seq::empty(),
+                }
+            },
         }
     }
 }
@@ -605,6 +626,7 @@ pub open spec fn get_children<T: OrderedRing>(widget: Widget<T>) -> Seq<Widget<T
         Widget::AspectRatio { child, .. } => Seq::empty().push(*child),
         Widget::ScrollView { child, .. } => Seq::empty().push(*child),
         Widget::ListView { children, .. } => children,
+        Widget::TextInput { .. } => Seq::empty(),
     }
 }
 
@@ -1044,6 +1066,9 @@ pub proof fn lemma_layout_widget_fuel_monotone<T: OrderedField>(
                 max: viewport,
             };
             lemma_layout_widget_fuel_monotone(child_limits, *child, (fuel - 1) as nat);
+        },
+        Widget::TextInput { .. } => {
+            // Leaf-like: no recursion, both fuel levels produce same result
         },
         Widget::ListView { spacing, scroll_y, viewport, children } => {
             let gc = get_children(widget);

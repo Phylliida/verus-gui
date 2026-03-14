@@ -223,7 +223,8 @@ fn session_handle_cut_exec(
     let sel_end = if session.model.anchor <= session.model.focus {
         session.model.focus } else { session.model.anchor };
     proof {
-        axiom_splice_delete_wf(session.model@.text, sel_start as nat, sel_end as nat);
+        lemma_empty_seq_wf();
+        axiom_splice_wf(session.model@.text, sel_start as nat, sel_end as nat, Seq::<char>::empty());
     }
     let entry = undo_entry_for_splice_exec(
         &session.model, sel_start, sel_end,

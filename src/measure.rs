@@ -159,6 +159,9 @@ pub open spec fn measure_widget<T: OrderedField>(
             Widget::ListView { spacing, scroll_y, viewport, children } => {
                 limits.resolve(viewport)
             },
+            Widget::TextInput { preferred_size, .. } => {
+                limits.resolve(preferred_size)
+            },
         }
     }
 }
@@ -518,6 +521,9 @@ pub proof fn lemma_measure_is_layout_size<T: OrderedField>(
             Widget::ListView { spacing, scroll_y, viewport, children } => {
                 // measure = limits.resolve(viewport) = layout_widget(...).size
                 // Output size depends only on viewport, not children
+            },
+            Widget::TextInput { preferred_size, .. } => {
+                // Both return limits.resolve(preferred_size)
             },
         }
     }

@@ -367,6 +367,9 @@ pub proof fn lemma_layout_widget_respects_limits<T: OrderedField>(
         Widget::ListView { spacing, scroll_y, viewport, children } => {
             lemma_resolve_bounds(limits, viewport);
         },
+        Widget::TextInput { preferred_size, .. } => {
+            lemma_resolve_bounds(limits, preferred_size);
+        },
     }
 }
 

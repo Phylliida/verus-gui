@@ -207,6 +207,9 @@ pub fn measure_widget_exec(
                 // measure = limits.resolve(viewport), children don't affect output
                 limits.resolve_exec(viewport.copy_size())
             },
+            RuntimeWidget::TextInput { preferred_size, text_input_id, config, model } => {
+                limits.resolve_exec(preferred_size.copy_size())
+            },
         }
     }
 }

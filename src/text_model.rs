@@ -193,45 +193,48 @@ pub proof fn axiom_line_break_valid(text: Seq<char>)
 // Splice axioms (trusted: validated by the unicode-segmentation runtime)
 // ──────────────────────────────────────────────────────────────────────
 
-/// Inserting a single permitted character between grapheme boundaries
-/// preserves wf_text and creates a grapheme boundary after the char.
+/// Splicing well-formed replacement text at grapheme boundaries
+/// preserves wf_text and creates a grapheme boundary after the replacement.
+/// Subsumes both single-char insert and deletion.
 #[verifier::external_body]
-pub proof fn axiom_splice_char_wf(
-    text: Seq<char>, start: nat, end: nat, ch: char,
+pub proof fn axiom_splice_wf(
+    text: Seq<char>, start: nat, end: nat, replacement: Seq<char>,
 )
     requires
         wf_text(text),
+        wf_text(replacement),
         is_grapheme_boundary(text, start),
         is_grapheme_boundary(text, end),
         start <= end,
         end <= text.len(),
+    ensures
+        wf_text(seq_splice(text, start as int, end as int, replacement)),
+        is_grapheme_boundary(
+            seq_splice(text, start as int, end as int, replacement),
+            start + replacement.len()),
+{}
+
+/// A single permitted non-CR character is wf_text.
+pub proof fn lemma_single_permitted_char_wf(ch: char)
+    requires
         is_permitted(ch),
         ch != '\r',
     ensures
-        wf_text(seq_splice(text, start as int, end as int, seq![ch])),
-        is_grapheme_boundary(
-            seq_splice(text, start as int, end as int, seq![ch]),
-            start + 1),
-{}
+        wf_text(seq![ch]),
+{
+    assert forall|i: int| 0 <= i < seq![ch].len() implies is_permitted(#[trigger] seq![ch][i]) by {
+        assert(seq![ch][0] == ch);
+    };
+    assert forall|i: int| 0 <= i < seq![ch].len() implies seq![ch][i] != '\r' by {
+        assert(seq![ch][0] == ch);
+    };
+}
 
-/// Deleting between grapheme boundaries preserves wf_text and
-/// the start position remains a grapheme boundary.
-#[verifier::external_body]
-pub proof fn axiom_splice_delete_wf(
-    text: Seq<char>, start: nat, end: nat,
-)
-    requires
-        wf_text(text),
-        is_grapheme_boundary(text, start),
-        is_grapheme_boundary(text, end),
-        start <= end,
-        end <= text.len(),
-    ensures
-        wf_text(seq_splice(text, start as int, end as int, Seq::<char>::empty())),
-        is_grapheme_boundary(
-            seq_splice(text, start as int, end as int, Seq::<char>::empty()),
-            start),
-{}
+/// The empty sequence is wf_text.
+pub proof fn lemma_empty_seq_wf()
+    ensures wf_text(Seq::<char>::empty()),
+{
+}
 
 /// Committing an IME composition preserves wf_text and creates a
 /// grapheme boundary after the committed text.

@@ -1337,4 +1337,141 @@ pub proof fn lemma_scalar_lerp_midpoint<T: OrderedField>(a: T, b: T)
     );
 }
 
+// ── Symmetry proofs ──────────────────────────────────────────────
+
+/// scalar_lerp(a, b, t) ≡ scalar_lerp(b, a, 1-t).
+///
+/// Proof: scalar_lerp(a,b,t) = convex(b,a,t) ≡ convex(a,b,1-t) = scalar_lerp(b,a,1-t).
+pub proof fn lemma_scalar_lerp_symmetry<T: OrderedField>(a: T, b: T, t: T)
+    ensures
+        scalar_lerp::<T>(a, b, t).eqv(scalar_lerp::<T>(b, a, T::one().sub(t))),
+{
+    // scalar_lerp(a,b,t) = convex(b,a,t)
+    // scalar_lerp(b,a,1-t) = convex(a,b,1-t)
+    // lemma_convex_complement(b,a,t): convex(b,a,t) ≡ convex(a,b,1-t)
+    lemma_convex_complement::<T>(b, a, t);
+}
+
+/// lerp_size(a, b, t) componentwise ≡ lerp_size(b, a, 1-t).
+pub proof fn lemma_lerp_size_symmetry<T: OrderedField>(a: Size<T>, b: Size<T>, t: T)
+    ensures
+        lerp_size(a, b, t).width.eqv(lerp_size(b, a, T::one().sub(t)).width),
+        lerp_size(a, b, t).height.eqv(lerp_size(b, a, T::one().sub(t)).height),
+{
+    lemma_scalar_lerp_symmetry::<T>(a.width, b.width, t);
+    lemma_scalar_lerp_symmetry::<T>(a.height, b.height, t);
+}
+
+/// lerp_size bounds: a ≤ b componentwise and 0 ≤ t ≤ 1 implies a ≤ lerp(a,b,t) ≤ b componentwise.
+pub proof fn lemma_lerp_size_bounds<T: OrderedField>(a: Size<T>, b: Size<T>, t: T)
+    requires
+        a.width.le(b.width),
+        a.height.le(b.height),
+        T::zero().le(t),
+        t.le(T::one()),
+    ensures
+        a.width.le(lerp_size(a, b, t).width),
+        lerp_size(a, b, t).width.le(b.width),
+        a.height.le(lerp_size(a, b, t).height),
+        lerp_size(a, b, t).height.le(b.height),
+{
+    lemma_scalar_lerp_bounds::<T>(a.width, b.width, t);
+    lemma_scalar_lerp_bounds::<T>(a.height, b.height, t);
+}
+
+/// children_match_deep is symmetric.
+pub proof fn lemma_children_match_deep_symmetric<T: OrderedRing>(
+    a: Node<T>, b: Node<T>, depth: nat,
+)
+    requires children_match_deep(a, b, depth),
+    ensures children_match_deep(b, a, depth),
+    decreases depth,
+{
+    if depth > 0 {
+        assert forall|i: int| 0 <= i < b.children.len() implies
+            children_match_deep(b.children[i], a.children[i], (depth - 1) as nat)
+        by {
+            lemma_children_match_deep_symmetric::<T>(
+                a.children[i], b.children[i], (depth - 1) as nat,
+            );
+        };
+    }
+}
+
+/// lerp_node(a, b, t, fuel) is deeply eqv to lerp_node(b, a, 1-t, fuel).
+pub proof fn lemma_lerp_node_symmetry_deep<T: OrderedField>(
+    a: Node<T>, b: Node<T>, t: T, fuel: nat,
+)
+    requires
+        fuel > 0,
+        children_match_deep(a, b, (fuel - 1) as nat),
+    ensures
+        nodes_deeply_eqv(
+            lerp_node(a, b, t, fuel),
+            lerp_node(b, a, T::one().sub(t), fuel),
+            (fuel - 1) as nat,
+        ),
+    decreases fuel,
+{
+    // children_match_deep gives a.children.len() == b.children.len()
+    // Both lerp_node calls enter the interpolation case
+    lemma_scalar_lerp_symmetry::<T>(a.x, b.x, t);
+    lemma_scalar_lerp_symmetry::<T>(a.y, b.y, t);
+    lemma_scalar_lerp_symmetry::<T>(a.size.width, b.size.width, t);
+    lemma_scalar_lerp_symmetry::<T>(a.size.height, b.size.height, t);
+    if fuel > 1 {
+        assert forall|i: int| 0 <= i < a.children.len() implies
+            nodes_deeply_eqv(
+                lerp_node(a.children[i], b.children[i], t, (fuel - 1) as nat),
+                lerp_node(b.children[i], a.children[i], T::one().sub(t), (fuel - 1) as nat),
+                (fuel - 2) as nat,
+            )
+        by {
+            lemma_lerp_node_symmetry_deep::<T>(
+                a.children[i], b.children[i], t, (fuel - 1) as nat,
+            );
+        };
+    }
+}
+
+/// lerp_node bounds: a ≤ b componentwise and 0 ≤ t ≤ 1 implies a ≤ lerp(a,b,t) ≤ b componentwise.
+pub proof fn lemma_lerp_node_bounds_deep<T: OrderedField>(
+    a: Node<T>, b: Node<T>, t: T, fuel: nat,
+)
+    requires
+        fuel > 0,
+        nodes_componentwise_le(a, b, (fuel - 1) as nat),
+        T::zero().le(t),
+        t.le(T::one()),
+    ensures
+        nodes_componentwise_le(a, lerp_node(a, b, t, fuel), (fuel - 1) as nat),
+        nodes_componentwise_le(lerp_node(a, b, t, fuel), b, (fuel - 1) as nat),
+    decreases fuel,
+{
+    // nodes_componentwise_le gives a.children.len() == b.children.len()
+    // lerp_node enters interpolation case
+    lemma_scalar_lerp_bounds::<T>(a.x, b.x, t);
+    lemma_scalar_lerp_bounds::<T>(a.y, b.y, t);
+    lemma_scalar_lerp_bounds::<T>(a.size.width, b.size.width, t);
+    lemma_scalar_lerp_bounds::<T>(a.size.height, b.size.height, t);
+    if fuel > 1 {
+        assert forall|i: int| 0 <= i < a.children.len() implies
+            nodes_componentwise_le(
+                a.children[i],
+                lerp_node(a.children[i], b.children[i], t, (fuel - 1) as nat),
+                (fuel - 2) as nat,
+            )
+            && nodes_componentwise_le(
+                lerp_node(a.children[i], b.children[i], t, (fuel - 1) as nat),
+                b.children[i],
+                (fuel - 2) as nat,
+            )
+        by {
+            lemma_lerp_node_bounds_deep::<T>(
+                a.children[i], b.children[i], t, (fuel - 1) as nat,
+            );
+        };
+    }
+}
+
 } // verus!

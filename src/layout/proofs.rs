@@ -1913,6 +1913,9 @@ pub proof fn lemma_layout_respects_limits<T: OrderedField>(
         Widget::ListView { spacing, scroll_y, viewport, children } => {
             lemma_resolve_bounds(limits, viewport);
         },
+        Widget::TextInput { preferred_size, .. } => {
+            lemma_resolve_bounds(limits, preferred_size);
+        },
     }
 }
 
@@ -3673,6 +3676,7 @@ pub open spec fn widget_wf<T: OrderedField>(
             Widget::ListView { spacing, scroll_y, viewport, children } =>
                 viewport.is_nonneg()
                 && T::zero().le(scroll_y),
+            Widget::TextInput { .. } => true,
         }
     }
 }
@@ -3718,6 +3722,7 @@ pub open spec fn widget_cwb_ok<T: OrderedRing>(widget: Widget<T>, fuel: nat) -> 
                 widget_cwb_ok(*child, (fuel - 1) as nat),
             // ListView positions children with scroll offset → can be negative
             Widget::ListView { .. } => false,
+            Widget::TextInput { .. } => true,
         }
     }
 }
@@ -3822,6 +3827,9 @@ pub proof fn lemma_layout_widget_cwb<T: OrderedField>(
         Widget::ListView { .. } => {
             // Excluded by widget_cwb_ok (returns false for ListView)
             assert(false);
+        },
+        Widget::TextInput { .. } => {
+            // Leaf-like: empty children → cwb trivially
         },
     }
 }
@@ -3975,6 +3983,7 @@ pub open spec fn widget_size_monotone_ok<T: OrderedRing>(
                 widget_size_monotone_ok(*child, (fuel - 1) as nat),
             Widget::ScrollView { .. } => true,
             Widget::ListView { .. } => true,
+            Widget::TextInput { .. } => true,
         }
     }
 }
@@ -4048,6 +4057,7 @@ pub closed spec fn widget_monotone_wf<T: OrderedField>(
             Widget::Wrap { .. } => true,
             Widget::ScrollView { .. } => true,
             Widget::ListView { .. } => true,
+            Widget::TextInput { .. } => true,
         }
     }
 }
@@ -4413,6 +4423,9 @@ pub proof fn lemma_layout_widget_monotone<T: OrderedField>(
         Widget::ListView { spacing, scroll_y, viewport, children } => {
             // Output = limits.resolve(viewport), same viewport for both.
             lemma_resolve_monotone_max(limits1, limits2, viewport);
+        },
+        Widget::TextInput { preferred_size, .. } => {
+            lemma_resolve_monotone_max(limits1, limits2, preferred_size);
         },
     }
 }

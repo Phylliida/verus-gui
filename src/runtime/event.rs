@@ -286,7 +286,8 @@ fn dispatch_insert_char_exec(
     let sel_start = if model.anchor <= model.focus { model.anchor } else { model.focus };
     let sel_end = if model.anchor <= model.focus { model.focus } else { model.anchor };
     proof {
-        axiom_splice_char_wf(model@.text, sel_start as nat, sel_end as nat, ch);
+        lemma_single_permitted_char_wf(ch);
+        axiom_splice_wf(model@.text, sel_start as nat, sel_end as nat, seq![ch]);
     }
     RuntimeKeyAction::NewModel(insert_char_exec(model, ch))
 }
@@ -314,7 +315,8 @@ fn dispatch_backspace_exec(
         let sel_start = if model.anchor <= model.focus { model.anchor } else { model.focus };
         let sel_end = if model.anchor <= model.focus { model.focus } else { model.anchor };
         proof {
-            axiom_splice_delete_wf(model@.text, sel_start as nat, sel_end as nat);
+            lemma_empty_seq_wf();
+            axiom_splice_wf(model@.text, sel_start as nat, sel_end as nat, Seq::<char>::empty());
         }
         RuntimeKeyAction::NewModel(delete_selection_exec(model))
     } else if model.focus == 0 {
@@ -323,14 +325,16 @@ fn dispatch_backspace_exec(
         proof {
             axiom_prev_word_boundary_valid(model@.text, model@.focus);
             let prev = prev_boundary_in(word_start_boundaries(model@.text), model@.focus);
-            axiom_splice_delete_wf(model@.text, prev, model@.focus);
+            lemma_empty_seq_wf();
+            axiom_splice_wf(model@.text, prev, model@.focus, Seq::<char>::empty());
         }
         RuntimeKeyAction::NewModel(delete_word_backward_exec(model))
     } else {
         proof {
             axiom_prev_grapheme_boundary_valid(model@.text, model@.focus);
             let prev = prev_grapheme_boundary(model@.text, model@.focus);
-            axiom_splice_delete_wf(model@.text, prev, model@.focus);
+            lemma_empty_seq_wf();
+            axiom_splice_wf(model@.text, prev, model@.focus, Seq::<char>::empty());
         }
         RuntimeKeyAction::NewModel(delete_backward_exec(model))
     }
@@ -359,7 +363,8 @@ fn dispatch_delete_exec(
         let sel_start = if model.anchor <= model.focus { model.anchor } else { model.focus };
         let sel_end = if model.anchor <= model.focus { model.focus } else { model.anchor };
         proof {
-            axiom_splice_delete_wf(model@.text, sel_start as nat, sel_end as nat);
+            lemma_empty_seq_wf();
+            axiom_splice_wf(model@.text, sel_start as nat, sel_end as nat, Seq::<char>::empty());
         }
         RuntimeKeyAction::NewModel(delete_selection_exec(model))
     } else if model.focus >= model.text.len() {
@@ -368,14 +373,16 @@ fn dispatch_delete_exec(
         proof {
             axiom_next_word_boundary_valid(model@.text, model@.focus);
             let next = next_boundary_in(word_end_boundaries(model@.text), model@.focus);
-            axiom_splice_delete_wf(model@.text, model@.focus, next);
+            lemma_empty_seq_wf();
+            axiom_splice_wf(model@.text, model@.focus, next, Seq::<char>::empty());
         }
         RuntimeKeyAction::NewModel(delete_word_forward_exec(model))
     } else {
         proof {
             axiom_next_grapheme_boundary_valid(model@.text, model@.focus);
             let next = next_grapheme_boundary(model@.text, model@.focus);
-            axiom_splice_delete_wf(model@.text, model@.focus, next);
+            lemma_empty_seq_wf();
+            axiom_splice_wf(model@.text, model@.focus, next, Seq::<char>::empty());
         }
         RuntimeKeyAction::NewModel(delete_forward_exec(model))
     }

@@ -47,6 +47,24 @@ pub struct RuntimeAbsoluteChild {
     pub child: RuntimeWidget,
 }
 
+/// Runtime text input configuration.
+pub struct RuntimeTextInputConfig {
+    pub multiline: bool,
+    pub max_length: Option<usize>,
+}
+
+impl RuntimeTextInputConfig {
+    pub open spec fn model(&self) -> TextInputConfig {
+        TextInputConfig {
+            multiline: self.multiline,
+            max_length: match self.max_length {
+                Some(n) => Some(n as nat),
+                None => None,
+            },
+        }
+    }
+}
+
 /// Runtime Widget tree mirroring the spec Widget enum.
 pub enum RuntimeWidget {
     Leaf {
@@ -139,6 +157,12 @@ pub enum RuntimeWidget {
         children: Vec<RuntimeWidget>,
         model: Ghost<Widget<RationalModel>>,
     },
+    TextInput {
+        preferred_size: RuntimeSize,
+        text_input_id: usize,
+        config: RuntimeTextInputConfig,
+        model: Ghost<Widget<RationalModel>>,
+    },
 }
 
 impl RuntimeFlexItem {
@@ -171,6 +195,7 @@ impl RuntimeWidget {
             RuntimeWidget::AspectRatio { model, .. } => model@,
             RuntimeWidget::ScrollView { model, .. } => model@,
             RuntimeWidget::ListView { model, .. } => model@,
+            RuntimeWidget::TextInput { model, .. } => model@,
         }
     }
 
@@ -315,6 +340,14 @@ impl RuntimeWidget {
                     children: Seq::new(children@.len() as nat, |i: int| children@[i].model()),
                 }
             },
+            RuntimeWidget::TextInput { preferred_size, text_input_id, config, model } => {
+                &&& preferred_size.wf_spec()
+                &&& model@ == Widget::TextInput {
+                    preferred_size: preferred_size@,
+                    text_input_id: *text_input_id as nat,
+                    config: config.model(),
+                }
+            },
         }
     }
 
@@ -375,6 +408,7 @@ impl RuntimeWidget {
                     forall|i: int| 0 <= i < children@.len() ==>
                         (#[trigger] children@[i]).wf_spec((fuel - 1) as nat)
                 },
+                RuntimeWidget::TextInput { .. } => true,
             }
         }
     }
@@ -929,6 +963,12 @@ pub fn layout_widget_exec(
                 }
                 layout_listview_widget_exec(limits, spacing, scroll_y,
                     viewport, children, fuel)
+            },
+            RuntimeWidget::TextInput { preferred_size, text_input_id, config, model } => {
+                let resolved = limits.resolve_exec(preferred_size.copy_size());
+                let x = RuntimeRational::from_int(0);
+                let y = RuntimeRational::from_int(0);
+                RuntimeNode::leaf_exec(x, y, resolved)
             },
         }
     }
