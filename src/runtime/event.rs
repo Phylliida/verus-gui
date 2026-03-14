@@ -262,17 +262,278 @@ fn key_to_move_direction_exec(event: &RuntimeKeyEvent) -> (result: Option<MoveDi
     }
 }
 
+// ── Key dispatch helpers (split for rlimit) ─────────────────────
+
+/// Handle Char/Enter/Tab insertion.
+fn dispatch_insert_char_exec(
+    model: RuntimeTextModel, ch: char,
+) -> (result: RuntimeKeyAction)
+    requires
+        model.wf_spec(),
+        model.text.len() + 2 < usize::MAX,
+        is_permitted(ch),
+        ch != '\r',
+    ensures
+        match (result, KeyAction::NewModel(insert_char(model@, ch))) {
+            (RuntimeKeyAction::NewModel(rm), KeyAction::NewModel(sm)) =>
+                rm@ == sm && rm.wf_spec(),
+            _ => false,
+        },
+{
+    use crate::runtime::text_model::*;
+    let sel_start = if model.anchor <= model.focus { model.anchor } else { model.focus };
+    let sel_end = if model.anchor <= model.focus { model.focus } else { model.anchor };
+    proof {
+        axiom_splice_char_wf(model@.text, sel_start as nat, sel_end as nat, ch);
+    }
+    RuntimeKeyAction::NewModel(insert_char_exec(model, ch))
+}
+
+/// Handle Backspace key.
+fn dispatch_backspace_exec(
+    model: RuntimeTextModel, ctrl: bool,
+) -> (result: RuntimeKeyAction)
+    requires
+        model.wf_spec(),
+        model.text.len() + 2 < usize::MAX,
+    ensures
+        match (result, dispatch_key(model@,
+            KeyEvent { kind: KeyEventKind::Backspace, modifiers: Modifiers { shift: false, ctrl, alt: false } }))
+        {
+            (RuntimeKeyAction::NewModel(rm), KeyAction::NewModel(sm)) =>
+                rm@ == sm && rm.wf_spec(),
+            (RuntimeKeyAction::None, KeyAction::None) => true,
+            _ => false,
+        },
+{
+    use crate::runtime::text_model::*;
+    if model.anchor != model.focus {
+        let sel_start = if model.anchor <= model.focus { model.anchor } else { model.focus };
+        let sel_end = if model.anchor <= model.focus { model.focus } else { model.anchor };
+        proof {
+            axiom_splice_delete_wf(model@.text, sel_start as nat, sel_end as nat);
+        }
+        RuntimeKeyAction::NewModel(delete_selection_exec(model))
+    } else if model.focus == 0 {
+        RuntimeKeyAction::None
+    } else if ctrl {
+        proof {
+            axiom_prev_word_boundary_valid(model@.text, model@.focus);
+            let prev = prev_boundary_in(word_start_boundaries(model@.text), model@.focus);
+            axiom_splice_delete_wf(model@.text, prev, model@.focus);
+        }
+        RuntimeKeyAction::NewModel(delete_word_backward_exec(model))
+    } else {
+        proof {
+            axiom_prev_grapheme_boundary_valid(model@.text, model@.focus);
+            let prev = prev_grapheme_boundary(model@.text, model@.focus);
+            axiom_splice_delete_wf(model@.text, prev, model@.focus);
+        }
+        RuntimeKeyAction::NewModel(delete_backward_exec(model))
+    }
+}
+
+/// Handle Delete key.
+fn dispatch_delete_exec(
+    model: RuntimeTextModel, ctrl: bool,
+) -> (result: RuntimeKeyAction)
+    requires
+        model.wf_spec(),
+        model.text.len() + 2 < usize::MAX,
+    ensures
+        match (result, dispatch_key(model@,
+            KeyEvent { kind: KeyEventKind::Delete, modifiers: Modifiers { shift: false, ctrl, alt: false } }))
+        {
+            (RuntimeKeyAction::NewModel(rm), KeyAction::NewModel(sm)) =>
+                rm@ == sm && rm.wf_spec(),
+            (RuntimeKeyAction::None, KeyAction::None) => true,
+            _ => false,
+        },
+{
+    use crate::runtime::text_model::*;
+    if model.anchor != model.focus {
+        let sel_start = if model.anchor <= model.focus { model.anchor } else { model.focus };
+        let sel_end = if model.anchor <= model.focus { model.focus } else { model.anchor };
+        proof {
+            axiom_splice_delete_wf(model@.text, sel_start as nat, sel_end as nat);
+        }
+        RuntimeKeyAction::NewModel(delete_selection_exec(model))
+    } else if model.focus >= model.text.len() {
+        RuntimeKeyAction::None
+    } else if ctrl {
+        proof {
+            axiom_next_word_boundary_valid(model@.text, model@.focus);
+            let next = next_boundary_in(word_end_boundaries(model@.text), model@.focus);
+            axiom_splice_delete_wf(model@.text, model@.focus, next);
+        }
+        RuntimeKeyAction::NewModel(delete_word_forward_exec(model))
+    } else {
+        proof {
+            axiom_next_grapheme_boundary_valid(model@.text, model@.focus);
+            let next = next_grapheme_boundary(model@.text, model@.focus);
+            axiom_splice_delete_wf(model@.text, model@.focus, next);
+        }
+        RuntimeKeyAction::NewModel(delete_forward_exec(model))
+    }
+}
+
+/// Handle ComposeStart.
+fn dispatch_compose_start_exec(
+    model: RuntimeTextModel,
+) -> (result: RuntimeKeyAction)
+    requires
+        model.wf_spec(),
+    ensures
+        match (result, dispatch_key(model@,
+            KeyEvent { kind: KeyEventKind::ComposeStart, modifiers: Modifiers { shift: false, ctrl: false, alt: false } }))
+        {
+            (RuntimeKeyAction::NewModel(rm), KeyAction::NewModel(sm)) =>
+                rm@ == sm && rm.wf_spec(),
+            (RuntimeKeyAction::None, KeyAction::None) => true,
+            _ => false,
+        },
+{
+    use crate::runtime::text_model::*;
+    if model.composition.is_some() {
+        RuntimeKeyAction::None
+    } else {
+        RuntimeKeyAction::NewModel(compose_start_exec(model))
+    }
+}
+
+/// Handle ComposeUpdate.
+fn dispatch_compose_update_exec(
+    model: RuntimeTextModel,
+    text: &Vec<char>,
+    cursor: usize,
+) -> (result: RuntimeKeyAction)
+    requires
+        model.wf_spec(),
+    ensures
+        match (result, dispatch_key(model@,
+            KeyEvent { kind: KeyEventKind::ComposeUpdate(text@, cursor as nat), modifiers: Modifiers { shift: false, ctrl: false, alt: false } }))
+        {
+            (RuntimeKeyAction::NewModel(rm), KeyAction::NewModel(sm)) =>
+                rm@ == sm && rm.wf_spec(),
+            (RuntimeKeyAction::None, KeyAction::None) => true,
+            _ => false,
+        },
+{
+    use crate::runtime::text_model::*;
+    if model.composition.is_none() || cursor > text.len() {
+        RuntimeKeyAction::None
+    } else {
+        let mut prov: Vec<char> = Vec::new();
+        let mut pi: usize = 0;
+        while pi < text.len()
+            invariant
+                pi <= text@.len(),
+                prov@.len() == pi as nat,
+                forall|k: int| 0 <= k < pi ==> prov@[k] == text@[k],
+            decreases text@.len() - pi,
+        {
+            prov.push(text[pi]);
+            pi += 1;
+        }
+        assert(prov@ =~= text@);
+        RuntimeKeyAction::NewModel(compose_update_exec(model, prov, cursor))
+    }
+}
+
+/// Handle ComposeCommit.
+fn dispatch_compose_commit_exec(
+    model: RuntimeTextModel,
+) -> (result: RuntimeKeyAction)
+    requires
+        model.wf_spec(),
+        model@.composition.is_some() ==>
+            model@.text.len() + model@.composition.unwrap().provisional.len()
+                < usize::MAX,
+    ensures
+        match (result, dispatch_key(model@,
+            KeyEvent { kind: KeyEventKind::ComposeCommit, modifiers: Modifiers { shift: false, ctrl: false, alt: false } }))
+        {
+            (RuntimeKeyAction::NewModel(rm), KeyAction::NewModel(sm)) =>
+                rm@ == sm && rm.wf_spec(),
+            (RuntimeKeyAction::None, KeyAction::None) => true,
+            _ => false,
+        },
+{
+    use crate::runtime::text_model::*;
+    if model.composition.is_none() {
+        RuntimeKeyAction::None
+    } else {
+        proof {
+            let c = model@.composition.unwrap();
+            axiom_compose_commit_wf(
+                model@.text, c.range_start, c.range_end, c.provisional);
+            assert(c.range_start <= c.range_end);
+            assert(c.range_end <= model@.text.len());
+            assert(model@.text.len() + c.provisional.len() < usize::MAX);
+            assert(model@.text.len() - (c.range_end - c.range_start) + c.provisional.len()
+                <= model@.text.len() + c.provisional.len());
+        }
+        RuntimeKeyAction::NewModel(compose_commit_exec(model))
+    }
+}
+
+/// Handle ComposeCancel.
+fn dispatch_compose_cancel_exec(
+    model: RuntimeTextModel,
+) -> (result: RuntimeKeyAction)
+    requires
+        model.wf_spec(),
+    ensures
+        match (result, dispatch_key(model@,
+            KeyEvent { kind: KeyEventKind::ComposeCancel, modifiers: Modifiers { shift: false, ctrl: false, alt: false } }))
+        {
+            (RuntimeKeyAction::NewModel(rm), KeyAction::NewModel(sm)) =>
+                rm@ == sm && rm.wf_spec(),
+            _ => false,
+        },
+{
+    use crate::runtime::text_model::*;
+    RuntimeKeyAction::NewModel(compose_cancel_exec(model))
+}
+
+/// Handle movement keys (arrow, home, end).
+fn dispatch_movement_exec(
+    model: RuntimeTextModel,
+    event: &RuntimeKeyEvent,
+    dir: MoveDirection,
+) -> (result: RuntimeKeyAction)
+    requires
+        model.wf_spec(),
+        model.text.len() + 2 < usize::MAX,
+        key_to_move_direction(event@) == Some(dir),
+    ensures
+        match (result, dispatch_key(model@, event@)) {
+            (RuntimeKeyAction::NewModel(rm), KeyAction::NewModel(sm)) =>
+                rm@ == sm && rm.wf_spec(),
+            _ => false,
+        },
+{
+    use crate::runtime::text_model::*;
+    proof {
+        axiom_movement_valid(
+            model@.text, model@.focus, model@.focus_affinity,
+            model@.preferred_column, dir);
+    }
+    if event.modifiers.shift {
+        RuntimeKeyAction::NewModel(extend_selection_exec(model, dir))
+    } else {
+        RuntimeKeyAction::NewModel(move_cursor_exec(model, dir))
+    }
+}
+
 // ── Key dispatch exec ────────────────────────────────────────────
 
 /// Dispatch a keyboard event to the text model.
 /// Returns None for events not handled, External for undo/clipboard,
 /// or NewModel with the updated model.
 ///
-/// Note: this is external_body because the full dispatch_key spec
-/// involves many preconditions per branch that must be checked at runtime.
-/// The exec function checks runtime preconditions and delegates to
-/// the corresponding exec editing functions.
-#[verifier::external_body]
+/// Verified against the spec `dispatch_key`. Delegates to per-category
+/// helpers to keep each function within rlimit.
 pub fn dispatch_key_exec(
     model: RuntimeTextModel,
     event: &RuntimeKeyEvent,
@@ -280,6 +541,9 @@ pub fn dispatch_key_exec(
     requires
         model.wf_spec(),
         model.text.len() + 2 < usize::MAX,
+        model@.composition.is_some() ==>
+            model@.text.len() + model@.composition.unwrap().provisional.len()
+                < usize::MAX,
     ensures
         match (result, dispatch_key(model@, event@)) {
             (RuntimeKeyAction::NewModel(rm), KeyAction::NewModel(_sm)) =>
@@ -289,73 +553,29 @@ pub fn dispatch_key_exec(
             _ => false,
         },
 {
-    use crate::runtime::text_model::*;
-
     match &event.kind {
         RuntimeKeyEventKind::Char(ch) => {
             let ch = *ch;
             if ch == '\0' || ch == '\u{FFF9}' || ch == '\u{FFFA}' || ch == '\u{FFFB}' || ch == '\r' {
-                return RuntimeKeyAction::None;
+                RuntimeKeyAction::None
+            } else {
+                dispatch_insert_char_exec(model, ch)
             }
-            // Check splice preconditions
-            let sel_start = if model.anchor <= model.focus { model.anchor } else { model.focus };
-            let sel_end = if model.anchor <= model.focus { model.focus } else { model.anchor };
-            if model.text.len() + 1 >= usize::MAX && sel_start == sel_end {
-                return RuntimeKeyAction::None;
-            }
-            RuntimeKeyAction::NewModel(insert_char_exec(model, ch))
         },
         RuntimeKeyEventKind::Enter => {
-            let sel_start = if model.anchor <= model.focus { model.anchor } else { model.focus };
-            let sel_end = if model.anchor <= model.focus { model.focus } else { model.anchor };
-            if model.text.len() + 1 >= usize::MAX && sel_start == sel_end {
-                return RuntimeKeyAction::None;
-            }
-            RuntimeKeyAction::NewModel(insert_char_exec(model, '\n'))
+            dispatch_insert_char_exec(model, '\n')
         },
         RuntimeKeyEventKind::Tab => {
-            let sel_start = if model.anchor <= model.focus { model.anchor } else { model.focus };
-            let sel_end = if model.anchor <= model.focus { model.focus } else { model.anchor };
-            if model.text.len() + 1 >= usize::MAX && sel_start == sel_end {
-                return RuntimeKeyAction::None;
-            }
-            RuntimeKeyAction::NewModel(insert_char_exec(model, '\t'))
+            dispatch_insert_char_exec(model, '\t')
         },
         RuntimeKeyEventKind::Backspace => {
-            if model.anchor != model.focus {
-                RuntimeKeyAction::NewModel(delete_selection_exec(model))
-            } else if model.focus == 0 {
-                RuntimeKeyAction::None
-            } else if event.modifiers.ctrl {
-                if model.text.len() == 0 {
-                    RuntimeKeyAction::None
-                } else {
-                    RuntimeKeyAction::NewModel(delete_word_backward_exec(model))
-                }
-            } else {
-                if model.text.len() == 0 {
-                    RuntimeKeyAction::None
-                } else {
-                    RuntimeKeyAction::NewModel(delete_backward_exec(model))
-                }
-            }
+            dispatch_backspace_exec(model, event.modifiers.ctrl)
         },
         RuntimeKeyEventKind::Delete => {
-            if model.anchor != model.focus {
-                RuntimeKeyAction::NewModel(delete_selection_exec(model))
-            } else if model.focus >= model.text.len() {
-                RuntimeKeyAction::None
-            } else if event.modifiers.ctrl {
-                if model.text.len() == 0 {
-                    RuntimeKeyAction::None
-                } else {
-                    RuntimeKeyAction::NewModel(delete_word_forward_exec(model))
-                }
-            } else {
-                RuntimeKeyAction::NewModel(delete_forward_exec(model))
-            }
+            dispatch_delete_exec(model, event.modifiers.ctrl)
         },
         RuntimeKeyEventKind::SelectAll => {
+            use crate::runtime::text_model::*;
             RuntimeKeyAction::NewModel(select_all_exec(model))
         },
         RuntimeKeyEventKind::Undo => RuntimeKeyAction::External(ExternalAction::Undo),
@@ -363,47 +583,21 @@ pub fn dispatch_key_exec(
         RuntimeKeyEventKind::Cut => RuntimeKeyAction::External(ExternalAction::Cut),
         RuntimeKeyEventKind::Copy => RuntimeKeyAction::External(ExternalAction::Copy),
         RuntimeKeyEventKind::ComposeStart => {
-            if model.composition.is_some() {
-                return RuntimeKeyAction::None;
-            }
-            RuntimeKeyAction::NewModel(compose_start_exec(model))
+            dispatch_compose_start_exec(model)
         },
         RuntimeKeyEventKind::ComposeUpdate(text, cursor) => {
-            if model.composition.is_none() || *cursor > text.len() {
-                return RuntimeKeyAction::None;
-            }
-            // Copy text since we can't move it out of the ref
-            let mut prov: Vec<char> = Vec::new();
-            let mut pi: usize = 0;
-            while pi < text.len() {
-                prov.push(text[pi]);
-                pi += 1;
-            }
-            RuntimeKeyAction::NewModel(compose_update_exec(model, prov, *cursor))
+            dispatch_compose_update_exec(model, text, *cursor)
         },
         RuntimeKeyEventKind::ComposeCommit => {
-            if model.composition.is_none() {
-                return RuntimeKeyAction::None;
-            }
-            RuntimeKeyAction::NewModel(compose_commit_exec(model))
+            dispatch_compose_commit_exec(model)
         },
         RuntimeKeyEventKind::ComposeCancel => {
-            RuntimeKeyAction::NewModel(compose_cancel_exec(model))
+            dispatch_compose_cancel_exec(model)
         },
         _ => {
-            // Arrow/Home/End keys
             let dir_opt = key_to_move_direction_exec(event);
             match dir_opt {
-                Some(dir) => {
-                    if model.text.len() >= usize::MAX {
-                        return RuntimeKeyAction::None;
-                    }
-                    if event.modifiers.shift {
-                        RuntimeKeyAction::NewModel(extend_selection_exec(model, dir))
-                    } else {
-                        RuntimeKeyAction::NewModel(move_cursor_exec(model, dir))
-                    }
-                },
+                Some(dir) => dispatch_movement_exec(model, event, dir),
                 None => RuntimeKeyAction::None,
             }
         },

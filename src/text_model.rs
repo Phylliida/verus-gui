@@ -1,4 +1,5 @@
 use vstd::prelude::*;
+use crate::text_model::cursor::{MoveDirection, resolve_movement};
 
 verus! {
 
@@ -186,6 +187,147 @@ pub proof fn axiom_word_end_boundaries_valid(text: Seq<char>)
 pub proof fn axiom_line_break_valid(text: Seq<char>)
     requires text.len() > 0,
     ensures valid_boundaries(text, line_break_opportunities(text)),
+{}
+
+// ──────────────────────────────────────────────────────────────────────
+// Splice axioms (trusted: validated by the unicode-segmentation runtime)
+// ──────────────────────────────────────────────────────────────────────
+
+/// Inserting a single permitted character between grapheme boundaries
+/// preserves wf_text and creates a grapheme boundary after the char.
+#[verifier::external_body]
+pub proof fn axiom_splice_char_wf(
+    text: Seq<char>, start: nat, end: nat, ch: char,
+)
+    requires
+        wf_text(text),
+        is_grapheme_boundary(text, start),
+        is_grapheme_boundary(text, end),
+        start <= end,
+        end <= text.len(),
+        is_permitted(ch),
+        ch != '\r',
+    ensures
+        wf_text(seq_splice(text, start as int, end as int, seq![ch])),
+        is_grapheme_boundary(
+            seq_splice(text, start as int, end as int, seq![ch]),
+            start + 1),
+{}
+
+/// Deleting between grapheme boundaries preserves wf_text and
+/// the start position remains a grapheme boundary.
+#[verifier::external_body]
+pub proof fn axiom_splice_delete_wf(
+    text: Seq<char>, start: nat, end: nat,
+)
+    requires
+        wf_text(text),
+        is_grapheme_boundary(text, start),
+        is_grapheme_boundary(text, end),
+        start <= end,
+        end <= text.len(),
+    ensures
+        wf_text(seq_splice(text, start as int, end as int, Seq::<char>::empty())),
+        is_grapheme_boundary(
+            seq_splice(text, start as int, end as int, Seq::<char>::empty()),
+            start),
+{}
+
+/// Committing an IME composition preserves wf_text and creates a
+/// grapheme boundary after the committed text.
+#[verifier::external_body]
+pub proof fn axiom_compose_commit_wf(
+    text: Seq<char>, range_start: nat, range_end: nat, provisional: Seq<char>,
+)
+    requires
+        wf_text(text),
+        is_grapheme_boundary(text, range_start),
+        is_grapheme_boundary(text, range_end),
+        range_start <= range_end,
+        range_end <= text.len(),
+    ensures
+        wf_text(seq_splice(text, range_start as int, range_end as int, provisional)),
+        is_grapheme_boundary(
+            seq_splice(text, range_start as int, range_end as int, provisional),
+            range_start + provisional.len()),
+{}
+
+/// resolve_movement always produces a valid position that is a
+/// grapheme boundary within the text.
+#[verifier::external_body]
+pub proof fn axiom_movement_valid(
+    text: Seq<char>, focus: nat, affinity: Affinity,
+    pref_col: Option<nat>, dir: MoveDirection,
+)
+    requires
+        wf_text(text),
+        focus <= text.len(),
+        is_grapheme_boundary(text, focus),
+    ensures
+        resolve_movement(text, focus, affinity, pref_col, dir).0 <= text.len(),
+        is_grapheme_boundary(
+            text,
+            resolve_movement(text, focus, affinity, pref_col, dir).0),
+{}
+
+/// prev_grapheme_boundary returns a grapheme boundary <= pos.
+#[verifier::external_body]
+pub proof fn axiom_prev_grapheme_boundary_valid(text: Seq<char>, pos: nat)
+    requires
+        wf_text(text),
+        text.len() > 0,
+        pos <= text.len(),
+        is_grapheme_boundary(text, pos),
+    ensures
+        prev_grapheme_boundary(text, pos) <= pos,
+        is_grapheme_boundary(text, prev_grapheme_boundary(text, pos)),
+{}
+
+/// next_grapheme_boundary returns a grapheme boundary >= pos
+/// that is within text bounds.
+#[verifier::external_body]
+pub proof fn axiom_next_grapheme_boundary_valid(text: Seq<char>, pos: nat)
+    requires
+        wf_text(text),
+        text.len() > 0,
+        pos <= text.len(),
+        is_grapheme_boundary(text, pos),
+    ensures
+        next_grapheme_boundary(text, pos) >= pos,
+        next_grapheme_boundary(text, pos) <= text.len(),
+        is_grapheme_boundary(text, next_grapheme_boundary(text, pos)),
+{}
+
+/// prev_boundary_in(word_start_boundaries) returns a grapheme boundary.
+#[verifier::external_body]
+pub proof fn axiom_prev_word_boundary_valid(text: Seq<char>, pos: nat)
+    requires
+        wf_text(text),
+        text.len() > 0,
+        pos <= text.len(),
+        is_grapheme_boundary(text, pos),
+    ensures
+        prev_boundary_in(word_start_boundaries(text), pos) <= pos,
+        is_grapheme_boundary(
+            text,
+            prev_boundary_in(word_start_boundaries(text), pos)),
+{}
+
+/// next_boundary_in(word_end_boundaries) returns a grapheme boundary
+/// within text bounds.
+#[verifier::external_body]
+pub proof fn axiom_next_word_boundary_valid(text: Seq<char>, pos: nat)
+    requires
+        wf_text(text),
+        text.len() > 0,
+        pos <= text.len(),
+        is_grapheme_boundary(text, pos),
+    ensures
+        next_boundary_in(word_end_boundaries(text), pos) >= pos,
+        next_boundary_in(word_end_boundaries(text), pos) <= text.len(),
+        is_grapheme_boundary(
+            text,
+            next_boundary_in(word_end_boundaries(text), pos)),
 {}
 
 // ──────────────────────────────────────────────────────────────────────
