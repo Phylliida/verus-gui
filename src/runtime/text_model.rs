@@ -2869,7 +2869,6 @@ pub fn scroll_to_cursor_exec(
     }
 }
 
-#[verifier::external_body]
 pub fn scroll_by_exec(
     vp: RuntimeTextViewport, delta: i64, total_lines: usize,
 ) -> (result: RuntimeTextViewport)
@@ -2877,17 +2876,67 @@ pub fn scroll_by_exec(
         total_lines < usize::MAX,
     ensures result@ == scroll_by(vp@, delta as int, total_lines as nat),
 {
-    let new_scroll: i64 = (vp.scroll_line as i64).saturating_add(delta);
-    let clamped: usize = if new_scroll < 0 {
-        0
-    } else if total_lines == 0 {
-        0
-    } else if new_scroll >= total_lines as i64 {
-        total_lines - 1
+    let ghost ns: int = (vp.scroll_line as int) + (delta as int);
+
+    if total_lines == 0 {
+        proof { assert(scroll_by(vp@, delta as int, 0) ==
+            TextViewport { scroll_line: 0, ..vp@ }); }
+        RuntimeTextViewport { scroll_line: 0, ..vp }
+    } else if delta == 0 {
+        if vp.scroll_line >= total_lines {
+            RuntimeTextViewport { scroll_line: total_lines - 1, ..vp }
+        } else {
+            vp
+        }
+    } else if delta > 0 {
+        // ns = scroll_line + delta > scroll_line >= 0, so ns >= 0
+        let d: usize = delta as usize;
+        proof { assert(ns == vp.scroll_line as int + d as int); }
+        if d > total_lines - 1 {
+            // d >= total_lines, so ns >= total_lines
+            RuntimeTextViewport { scroll_line: total_lines - 1, ..vp }
+        } else if vp.scroll_line > total_lines - 1 - d {
+            // scroll_line + d > total_lines - 1
+            RuntimeTextViewport { scroll_line: total_lines - 1, ..vp }
+        } else {
+            proof { assert(ns == (vp.scroll_line + d) as int); }
+            RuntimeTextViewport { scroll_line: vp.scroll_line + d, ..vp }
+        }
+    } else if delta == i64::MIN {
+        // |delta| = 2^63, scroll_line is usize
+        proof { assert(delta as int == i64::MIN as int); }
+        if vp.scroll_line <= i64::MAX as usize {
+            // scroll_line <= 2^63 - 1, |delta| = 2^63 > scroll_line, so ns < 0
+            proof { assert(ns < 0); }
+            RuntimeTextViewport { scroll_line: 0, ..vp }
+        } else {
+            // scroll_line > 2^63 - 1, i.e. scroll_line >= 2^63
+            // ns = scroll_line - 2^63 >= 0
+            let ns_val: usize = vp.scroll_line - (i64::MAX as usize) - 1;
+            proof { assert(ns == ns_val as int); }
+            if ns_val >= total_lines {
+                RuntimeTextViewport { scroll_line: total_lines - 1, ..vp }
+            } else {
+                RuntimeTextViewport { scroll_line: ns_val, ..vp }
+            }
+        }
     } else {
-        new_scroll as usize
-    };
-    RuntimeTextViewport { scroll_line: clamped, ..vp }
+        // delta in [i64::MIN + 1, -1]
+        let abs_d: usize = (-delta) as usize;
+        proof { assert(abs_d as int == -(delta as int)); }
+        if abs_d > vp.scroll_line {
+            proof { assert(ns < 0); }
+            RuntimeTextViewport { scroll_line: 0, ..vp }
+        } else {
+            let ns_val: usize = vp.scroll_line - abs_d;
+            proof { assert(ns == ns_val as int); }
+            if ns_val >= total_lines {
+                RuntimeTextViewport { scroll_line: total_lines - 1, ..vp }
+            } else {
+                RuntimeTextViewport { scroll_line: ns_val, ..vp }
+            }
+        }
+    }
 }
 
 // ──────────────────────────────────────────────────────────────────────
