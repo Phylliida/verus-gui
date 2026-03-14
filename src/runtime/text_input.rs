@@ -79,7 +79,6 @@ pub fn new_text_input_exec(
 
 /// Handle a key event on the text input.
 /// Filters keys per config, delegates to session, scrolls to cursor.
-#[verifier::external_body]
 pub fn text_input_handle_key_exec(
     mut input: RuntimeTextInput,
     event: &RuntimeKeyEvent,
@@ -87,6 +86,7 @@ pub fn text_input_handle_key_exec(
     requires
         input.session.wf_spec(),
         input.session.model.text.len() + 2 < usize::MAX,
+        input.viewport.scroll_line as u64 + input.viewport.visible_lines as u64 <= usize::MAX as u64,
     ensures
         result.session.view_session().model
             == text_input_handle_key(
@@ -125,6 +125,8 @@ pub fn text_input_handle_key_exec(
         _ => true,
     };
 
+    assert(allowed == key_allowed_by_config(input.config@, event@.kind));
+
     if !allowed {
         return input;
     }
@@ -142,9 +144,12 @@ pub fn text_input_handle_key_exec(
                 line
             },
             None => {
+                let aff = match input.session.model.focus_affinity {
+                    Affinity::Upstream => Affinity::Upstream,
+                    Affinity::Downstream => Affinity::Downstream,
+                };
                 let (line, _col) = text_pos_to_visual_exec(
-                    &input.session.model.text, pos,
-                    input.session.model.focus_affinity);
+                    &input.session.model.text, pos, aff);
                 line
             },
         }
