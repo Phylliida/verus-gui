@@ -160,6 +160,7 @@ pub enum RuntimeKeyEventKind {
     Redo,
     Cut,
     Copy,
+    Paste,
     ComposeStart,
     ComposeUpdate(Vec<char>, usize),
     ComposeCommit,
@@ -186,6 +187,7 @@ impl View for RuntimeKeyEventKind {
             RuntimeKeyEventKind::Redo => KeyEventKind::Redo,
             RuntimeKeyEventKind::Cut => KeyEventKind::Cut,
             RuntimeKeyEventKind::Copy => KeyEventKind::Copy,
+            RuntimeKeyEventKind::Paste => KeyEventKind::Paste,
             RuntimeKeyEventKind::ComposeStart => KeyEventKind::ComposeStart,
             RuntimeKeyEventKind::ComposeUpdate(text, cursor) =>
                 KeyEventKind::ComposeUpdate(text@, *cursor as nat),
@@ -556,23 +558,41 @@ pub fn dispatch_key_exec(
     match &event.kind {
         RuntimeKeyEventKind::Char(ch) => {
             let ch = *ch;
-            if ch == '\0' || ch == '\u{FFF9}' || ch == '\u{FFFA}' || ch == '\u{FFFB}' || ch == '\r' {
+            if model.composition.is_some() {
+                RuntimeKeyAction::None
+            } else if ch == '\0' || ch == '\u{FFF9}' || ch == '\u{FFFA}' || ch == '\u{FFFB}' || ch == '\r' {
                 RuntimeKeyAction::None
             } else {
                 dispatch_insert_char_exec(model, ch)
             }
         },
         RuntimeKeyEventKind::Enter => {
-            dispatch_insert_char_exec(model, '\n')
+            if model.composition.is_some() {
+                RuntimeKeyAction::None
+            } else {
+                dispatch_insert_char_exec(model, '\n')
+            }
         },
         RuntimeKeyEventKind::Tab => {
-            dispatch_insert_char_exec(model, '\t')
+            if model.composition.is_some() {
+                RuntimeKeyAction::None
+            } else {
+                dispatch_insert_char_exec(model, '\t')
+            }
         },
         RuntimeKeyEventKind::Backspace => {
-            dispatch_backspace_exec(model, event.modifiers.ctrl)
+            if model.composition.is_some() {
+                RuntimeKeyAction::None
+            } else {
+                dispatch_backspace_exec(model, event.modifiers.ctrl)
+            }
         },
         RuntimeKeyEventKind::Delete => {
-            dispatch_delete_exec(model, event.modifiers.ctrl)
+            if model.composition.is_some() {
+                RuntimeKeyAction::None
+            } else {
+                dispatch_delete_exec(model, event.modifiers.ctrl)
+            }
         },
         RuntimeKeyEventKind::SelectAll => {
             use crate::runtime::text_model::*;
@@ -582,6 +602,7 @@ pub fn dispatch_key_exec(
         RuntimeKeyEventKind::Redo => RuntimeKeyAction::External(ExternalAction::Redo),
         RuntimeKeyEventKind::Cut => RuntimeKeyAction::External(ExternalAction::Cut),
         RuntimeKeyEventKind::Copy => RuntimeKeyAction::External(ExternalAction::Copy),
+        RuntimeKeyEventKind::Paste => RuntimeKeyAction::External(ExternalAction::Paste),
         RuntimeKeyEventKind::ComposeStart => {
             dispatch_compose_start_exec(model)
         },

@@ -279,6 +279,30 @@ pub open spec fn apply_key_to_session(
                 session
             }
         },
+        KeyAction::External(ExternalAction::Paste) => {
+            let clean = canonicalize_newlines(filter_permitted(session.clipboard));
+            if clean.len() > 0 || has_selection(session.model.anchor, session.model.focus) {
+                let (sel_start, sel_end) = selection_range(
+                    session.model.anchor, session.model.focus);
+                let clean_styles = seq_repeat(session.model.typing_style, clean.len());
+                let new_model = paste(session.model, session.clipboard, Seq::empty());
+                let entry = undo_entry_for_splice(
+                    session.model, sel_start, sel_end,
+                    clean, clean_styles, sel_start + clean.len());
+                let new_stack = push_undo_or_merge(session.undo_stack, entry, false);
+                let new_history = update_history_for_push(
+                    session.undo_stack, session.history, entry, new_model.text, false);
+                TextEditSession {
+                    model: new_model,
+                    undo_stack: new_stack,
+                    last_was_insert: false,
+                    clipboard: session.clipboard,
+                    history: new_history,
+                }
+            } else {
+                session
+            }
+        },
         KeyAction::None => session,
     }
 }

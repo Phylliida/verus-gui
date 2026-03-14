@@ -322,6 +322,11 @@ fn session_handle_text_edit_exec(
                 + session.model@.composition.unwrap().provisional.len()
                 < usize::MAX,
         is_text_edit_key(event@.kind, session.model@),
+        // dispatch returns NewModel (caller checked dispatch_none):
+        match dispatch_key(session.model@, event@) {
+            KeyAction::NewModel(_) => true,
+            _ => false,
+        },
     ensures
         result.view_session().model
             == apply_key_to_session(session.view_session(), event@).model,
@@ -448,6 +453,10 @@ fn session_handle_text_edit_exec(
             let ghost new_history = update_history_for_push(
                 old_stack, old_history, entry@, new_model@.text, merge);
             proof {
+                // Key fact: undo params produce same text as dispatch
+                assert(seq_splice(old_model.text,
+                    undo_start as int, undo_end as int, ins_text@)
+                    =~= new_model@.text);
                 // Prove entry_describes_transition
                 lemma_entry_for_splice_describes_transition(
                     old_model, undo_start as nat, undo_end as nat,
@@ -543,16 +552,22 @@ pub fn apply_key_to_session_exec(
     let dispatch_none = match &event.kind {
         RuntimeKeyEventKind::Char(ch) => {
             let c = *ch;
-            c == '\0' || c == '\u{FFF9}' || c == '\u{FFFA}'
+            session.model.composition.is_some()
+                || c == '\0' || c == '\u{FFF9}' || c == '\u{FFFA}'
                 || c == '\u{FFFB}' || c == '\r'
         },
+        RuntimeKeyEventKind::Enter | RuntimeKeyEventKind::Tab => {
+            session.model.composition.is_some()
+        },
         RuntimeKeyEventKind::Backspace => {
-            session.model.anchor == session.model.focus
-                && session.model.focus == 0
+            session.model.composition.is_some()
+                || (session.model.anchor == session.model.focus
+                    && session.model.focus == 0)
         },
         RuntimeKeyEventKind::Delete => {
-            session.model.anchor == session.model.focus
-                && session.model.focus >= session.model.text.len()
+            session.model.composition.is_some()
+                || (session.model.anchor == session.model.focus
+                    && session.model.focus >= session.model.text.len())
         },
         RuntimeKeyEventKind::ComposeStart =>
             session.model.composition.is_some(),

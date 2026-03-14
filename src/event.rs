@@ -236,6 +236,7 @@ pub enum KeyEventKind {
     Redo,
     Cut,
     Copy,
+    Paste,
     // IME composition events
     ComposeStart,
     ComposeUpdate(Seq<char>, nat),
@@ -296,26 +297,39 @@ pub enum ExternalAction {
     Redo,
     Cut,
     Copy,
+    Paste,
 }
 
 /// Dispatch a keyboard event to a text model operation.
 pub open spec fn dispatch_key(model: TextModel, event: KeyEvent) -> KeyAction {
     match event.kind {
         KeyEventKind::Char(ch) => {
-            if is_permitted(ch) && ch != '\r' {
+            if model.composition.is_some() {
+                KeyAction::None
+            } else if is_permitted(ch) && ch != '\r' {
                 KeyAction::NewModel(insert_char(model, ch))
             } else {
                 KeyAction::None
             }
         },
         KeyEventKind::Enter => {
-            KeyAction::NewModel(insert_char(model, '\n'))
+            if model.composition.is_some() {
+                KeyAction::None
+            } else {
+                KeyAction::NewModel(insert_char(model, '\n'))
+            }
         },
         KeyEventKind::Tab => {
-            KeyAction::NewModel(insert_char(model, '\t'))
+            if model.composition.is_some() {
+                KeyAction::None
+            } else {
+                KeyAction::NewModel(insert_char(model, '\t'))
+            }
         },
         KeyEventKind::Backspace => {
-            if has_selection(model.anchor, model.focus) {
+            if model.composition.is_some() {
+                KeyAction::None
+            } else if has_selection(model.anchor, model.focus) {
                 KeyAction::NewModel(delete_selection(model))
             } else if model.focus == 0 {
                 KeyAction::None
@@ -326,7 +340,9 @@ pub open spec fn dispatch_key(model: TextModel, event: KeyEvent) -> KeyAction {
             }
         },
         KeyEventKind::Delete => {
-            if has_selection(model.anchor, model.focus) {
+            if model.composition.is_some() {
+                KeyAction::None
+            } else if has_selection(model.anchor, model.focus) {
                 KeyAction::NewModel(delete_selection(model))
             } else if model.focus >= model.text.len() {
                 KeyAction::None
@@ -343,6 +359,7 @@ pub open spec fn dispatch_key(model: TextModel, event: KeyEvent) -> KeyAction {
         KeyEventKind::Redo => KeyAction::External(ExternalAction::Redo),
         KeyEventKind::Cut => KeyAction::External(ExternalAction::Cut),
         KeyEventKind::Copy => KeyAction::External(ExternalAction::Copy),
+        KeyEventKind::Paste => KeyAction::External(ExternalAction::Paste),
         KeyEventKind::ComposeStart => {
             if model.composition.is_some() {
                 KeyAction::None
