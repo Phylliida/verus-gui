@@ -83,6 +83,104 @@ pub open spec fn update_history_for_push(
     }
 }
 
+/// Whether a key event kind is a text-modifying operation that needs an undo entry.
+pub open spec fn is_text_edit_key(kind: KeyEventKind, model: TextModel) -> bool {
+    match kind {
+        KeyEventKind::Char(_) | KeyEventKind::Enter | KeyEventKind::Tab => true,
+        KeyEventKind::Backspace | KeyEventKind::Delete => true,
+        KeyEventKind::ComposeCommit => true,
+        _ => false,
+    }
+}
+
+/// Compute the actual splice parameters for an undo entry, per operation kind.
+pub open spec fn undo_splice_params(
+    kind: KeyEventKind, model: TextModel,
+) -> (nat, nat, Seq<char>, Seq<StyleSet>) {
+    let (sel_start, sel_end) = selection_range(model.anchor, model.focus);
+    match kind {
+        KeyEventKind::Char(ch) => (sel_start, sel_end, seq![ch],
+            seq![model.typing_style]),
+        KeyEventKind::Enter => (sel_start, sel_end, seq!['\n'],
+            seq![model.typing_style]),
+        KeyEventKind::Tab => (sel_start, sel_end, seq!['\t'],
+            seq![model.typing_style]),
+        KeyEventKind::Backspace => {
+            if has_selection(model.anchor, model.focus) {
+                (sel_start, sel_end, Seq::empty(), Seq::empty())
+            } else if model.focus == 0 {
+                // No-op (dispatch returns None), unreachable in NewModel
+                (0, 0, Seq::empty(), Seq::empty())
+            } else {
+                // dispatch_key checks ctrl modifier, but we only have KeyEventKind here.
+                // The ctrl case is handled by Backspace kind at dispatch level.
+                // Actually, dispatch_key checks event.modifiers.ctrl which we don't have here.
+                // We need to pass modifiers. Let's use the full event instead.
+                // For now, use the non-ctrl case (prev_grapheme).
+                // The ctrl case will be a separate match in the full function.
+                let prev = prev_grapheme_boundary(model.text, model.focus);
+                (prev, model.focus, Seq::empty(), Seq::empty())
+            }
+        },
+        KeyEventKind::Delete => {
+            if has_selection(model.anchor, model.focus) {
+                (sel_start, sel_end, Seq::empty(), Seq::empty())
+            } else if model.focus >= model.text.len() {
+                (0, 0, Seq::empty(), Seq::empty())
+            } else {
+                let next = next_grapheme_boundary(model.text, model.focus);
+                (model.focus, next, Seq::empty(), Seq::empty())
+            }
+        },
+        KeyEventKind::ComposeCommit => {
+            match model.composition {
+                Some(c) => (c.range_start, c.range_end, c.provisional,
+                    seq_repeat(model.typing_style, c.provisional.len())),
+                None => (0, 0, Seq::empty(), Seq::empty()),
+            }
+        },
+        _ => (0, 0, Seq::empty(), Seq::empty()),
+    }
+}
+
+/// Compute undo splice params, taking modifiers into account for word deletion.
+pub open spec fn undo_splice_params_full(
+    event: KeyEvent, model: TextModel,
+) -> (nat, nat, Seq<char>, Seq<StyleSet>) {
+    let (sel_start, sel_end) = selection_range(model.anchor, model.focus);
+    match event.kind {
+        KeyEventKind::Backspace => {
+            if has_selection(model.anchor, model.focus) {
+                (sel_start, sel_end, Seq::empty(), Seq::empty())
+            } else if model.focus == 0 {
+                (0, 0, Seq::empty(), Seq::empty())
+            } else if event.modifiers.ctrl {
+                let prev = prev_boundary_in(
+                    word_start_boundaries(model.text), model.focus);
+                (prev, model.focus, Seq::empty(), Seq::empty())
+            } else {
+                let prev = prev_grapheme_boundary(model.text, model.focus);
+                (prev, model.focus, Seq::empty(), Seq::empty())
+            }
+        },
+        KeyEventKind::Delete => {
+            if has_selection(model.anchor, model.focus) {
+                (sel_start, sel_end, Seq::empty(), Seq::empty())
+            } else if model.focus >= model.text.len() {
+                (0, 0, Seq::empty(), Seq::empty())
+            } else if event.modifiers.ctrl {
+                let next = next_boundary_in(
+                    word_end_boundaries(model.text), model.focus);
+                (model.focus, next, Seq::empty(), Seq::empty())
+            } else {
+                let next = next_grapheme_boundary(model.text, model.focus);
+                (model.focus, next, Seq::empty(), Seq::empty())
+            }
+        },
+        _ => undo_splice_params(event.kind, model),
+    }
+}
+
 /// Apply a key event to the entire session: dispatches via dispatch_key,
 /// then handles undo/redo/clipboard at the session level.
 pub open spec fn apply_key_to_session(
@@ -91,33 +189,32 @@ pub open spec fn apply_key_to_session(
 ) -> TextEditSession {
     match dispatch_key(session.model, event) {
         KeyAction::NewModel(new_model) => {
-            let merge = session.last_was_insert && is_insert_key(event.kind);
-            let (sel_start, sel_end) = selection_range(session.model.anchor, session.model.focus);
-            // Build the undo entry for this edit
-            let new_text_for_entry = match event.kind {
-                KeyEventKind::Char(ch) => seq![ch],
-                KeyEventKind::Enter => seq!['\n'],
-                KeyEventKind::Tab => seq!['\t'],
-                _ => Seq::empty(),  // deletes have empty new_text
-            };
-            let new_styles_for_entry = if new_text_for_entry.len() > 0 {
-                seq_repeat(session.model.typing_style, new_text_for_entry.len())
+            if is_text_edit_key(event.kind, session.model) {
+                let merge = session.last_was_insert && is_insert_key(event.kind);
+                let (entry_start, entry_end, entry_new_text, entry_new_styles) =
+                    undo_splice_params_full(event, session.model);
+                let entry = undo_entry_for_splice(
+                    session.model, entry_start, entry_end,
+                    entry_new_text, entry_new_styles, new_model.focus);
+                let new_stack = push_undo_or_merge(session.undo_stack, entry, merge);
+                let new_history = update_history_for_push(
+                    session.undo_stack, session.history, entry, new_model.text, merge);
+                TextEditSession {
+                    model: new_model,
+                    undo_stack: new_stack,
+                    last_was_insert: is_insert_key(event.kind),
+                    clipboard: session.clipboard,
+                    history: new_history,
+                }
             } else {
-                Seq::empty()
-            };
-            let new_focus = new_model.focus;
-            let entry = undo_entry_for_splice(
-                session.model, sel_start, sel_end,
-                new_text_for_entry, new_styles_for_entry, new_focus);
-            let new_stack = push_undo_or_merge(session.undo_stack, entry, merge);
-            let new_history = update_history_for_push(
-                session.undo_stack, session.history, entry, new_model.text, merge);
-            TextEditSession {
-                model: new_model,
-                undo_stack: new_stack,
-                last_was_insert: is_insert_key(event.kind),
-                clipboard: session.clipboard,
-                history: new_history,
+                // Non-text-modifying operation: no undo entry
+                TextEditSession {
+                    model: new_model,
+                    last_was_insert: false,
+                    undo_stack: session.undo_stack,
+                    clipboard: session.clipboard,
+                    history: session.history,
+                }
             }
         },
         KeyAction::External(ExternalAction::Undo) => {

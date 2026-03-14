@@ -826,4 +826,55 @@ pub proof fn lemma_redo_history_position(
     // redo splice = seq_splice(before, start, start+removed.len(), inserted) =~= after
 }
 
+/// Given a model and splice parameters, the undo entry describes the transition
+/// from model.text to the spliced text.
+pub proof fn lemma_entry_for_splice_describes_transition(
+    model: TextModel, start: nat, end: nat,
+    new_text: Seq<char>, new_styles: Seq<StyleSet>, new_focus: nat,
+)
+    requires
+        model.wf(),
+        start <= end,
+        end <= model.text.len(),
+        new_text.len() == new_styles.len(),
+        ({
+            let text_prime = seq_splice(model.text, start as int, end as int, new_text);
+            &&& wf_text(text_prime)
+            &&& new_focus <= text_prime.len()
+            &&& is_grapheme_boundary(text_prime, new_focus)
+            &&& text_prime.len() < usize::MAX
+        }),
+        model.text.len() < usize::MAX,
+    ensures
+        entry_describes_transition(
+            undo_entry_for_splice(model, start, end, new_text, new_styles, new_focus),
+            model.text,
+            seq_splice(model.text, start as int, end as int, new_text)),
+{
+    let entry = undo_entry_for_splice(model, start, end, new_text, new_styles, new_focus);
+    let before = model.text;
+    let after = seq_splice(model.text, start as int, end as int, new_text);
+
+    // entry.start = start
+    // entry.removed_text = model.text[start..end), len = end - start
+    // entry.inserted_text = new_text
+    // remove_end = start + (end - start) = end
+    assert(entry.removed_text.len() == end - start);
+    let remove_end = entry.start + entry.removed_text.len();
+    assert(remove_end == end);
+
+    // before[start..end) =~= entry.removed_text (by definition)
+    assert(before.subrange(start as int, end as int) =~= entry.removed_text);
+
+    // after =~= seq_splice(before, start, remove_end, inserted)
+    assert(after =~= seq_splice(before, entry.start as int, remove_end as int, entry.inserted_text));
+
+    // focus_before = model.focus <= model.text.len() = before.len()
+    // focus_after = new_focus <= after.len() (from precondition)
+    lemma_seq_splice_len(before, start as int, end as int, new_text);
+
+    // wf_text, grapheme_boundary from preconditions
+    // is_grapheme_boundary(before, model.focus) from model.wf()
+}
+
 } // verus!

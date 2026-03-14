@@ -198,7 +198,7 @@ pub fn copy_paragraph_style(s: &RuntimeParagraphStyle) -> (out: RuntimeParagraph
     }
 }
 
-fn copy_char_vec(v: &Vec<char>) -> (out: Vec<char>)
+pub fn copy_char_vec(v: &Vec<char>) -> (out: Vec<char>)
     ensures out@ == v@,
 {
     let mut out: Vec<char> = Vec::new();

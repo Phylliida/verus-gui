@@ -114,6 +114,140 @@ pub proof fn lemma_next_boundary_gt(bounds: Seq<nat>, pos: nat)
     }
 }
 
+/// prev_boundary_in always returns a value <= pos.
+pub proof fn lemma_prev_boundary_in_le(bounds: Seq<nat>, pos: nat)
+    ensures
+        prev_boundary_in(bounds, pos) <= pos,
+    decreases bounds.len(),
+{
+    if bounds.len() == 0 {
+        // returns 0 <= pos (nat)
+    } else if bounds.last() < pos {
+        // returns bounds.last() < pos
+    } else {
+        lemma_prev_boundary_in_le(bounds.drop_last(), pos);
+    }
+}
+
+/// prev_boundary_in returns a member of bounds (when bounds is non-empty).
+pub proof fn lemma_prev_boundary_in_member(bounds: Seq<nat>, pos: nat)
+    ensures
+        bounds.len() > 0 ==> (
+            prev_boundary_in(bounds, pos) == 0 ||
+            exists|i: int| 0 <= i < bounds.len()
+                && bounds[i] == prev_boundary_in(bounds, pos)
+        ),
+    decreases bounds.len(),
+{
+    if bounds.len() > 0 {
+        if bounds.last() < pos {
+            // returns bounds.last() = bounds[bounds.len() - 1]
+            assert(bounds[bounds.len() - 1] == prev_boundary_in(bounds, pos));
+        } else {
+            let dropped = bounds.drop_last();
+            lemma_prev_boundary_in_member(dropped, pos);
+            if dropped.len() > 0 {
+                let result = prev_boundary_in(dropped, pos);
+                if result != 0 {
+                    let i = choose|i: int| 0 <= i < dropped.len()
+                        && dropped[i] == result;
+                    assert(bounds[i] == dropped[i]);
+                    assert(bounds[i] == prev_boundary_in(bounds, pos));
+                }
+            }
+            // dropped.len() == 0 → returns 0
+        }
+    }
+}
+
+/// next_boundary_in returns a value >= pos.
+pub proof fn lemma_next_boundary_in_ge(bounds: Seq<nat>, pos: nat)
+    ensures
+        next_boundary_in(bounds, pos) >= pos,
+    decreases bounds.len(),
+{
+    if bounds.len() == 0 {
+        // returns pos
+    } else if bounds[0] > pos {
+        // returns bounds[0] > pos
+    } else {
+        lemma_next_boundary_in_ge(bounds.subrange(1, bounds.len() as int), pos);
+    }
+}
+
+/// next_boundary_in returns a member of bounds (when bounds is non-empty and last > pos).
+pub proof fn lemma_next_boundary_in_member(bounds: Seq<nat>, pos: nat)
+    requires
+        bounds.len() > 0,
+        bounds[bounds.len() - 1] > pos,
+    ensures
+        exists|i: int| 0 <= i < bounds.len()
+            && bounds[i] == next_boundary_in(bounds, pos),
+    decreases bounds.len(),
+{
+    if bounds[0] > pos {
+        assert(bounds[0] == next_boundary_in(bounds, pos));
+    } else {
+        let rest = bounds.subrange(1, bounds.len() as int);
+        assert(rest.len() > 0) by {
+            // bounds[0] <= pos < bounds[len-1], so len >= 2
+            if bounds.len() == 1 {
+                assert(bounds[0] == bounds[bounds.len() - 1]);
+                assert(false); // contradiction: bounds[0] <= pos < bounds[0]
+            }
+        }
+        assert(rest[rest.len() - 1] == bounds[bounds.len() - 1]);
+        lemma_next_boundary_in_member(rest, pos);
+        let i = choose|i: int| 0 <= i < rest.len()
+            && rest[i] == next_boundary_in(rest, pos);
+        assert(bounds[i + 1] == rest[i]);
+        assert(next_boundary_in(bounds, pos) == next_boundary_in(rest, pos));
+    }
+}
+
+/// next_boundary_in is bounded by the last element when last >= pos.
+pub proof fn lemma_next_boundary_in_le_last(bounds: Seq<nat>, pos: nat)
+    requires
+        bounds.len() > 0,
+        bounds[bounds.len() - 1] >= pos,
+        forall|i: int| 0 <= i < bounds.len() - 1 ==> (#[trigger] bounds[i]) < bounds[i + 1],
+    ensures
+        next_boundary_in(bounds, pos) <= bounds[bounds.len() - 1],
+    decreases bounds.len(),
+{
+    if bounds[0] > pos {
+        // returns bounds[0]
+        // Need: bounds[0] <= bounds[len-1]
+        // For len==1 trivial. For len>=2, use strict increasing chain.
+        if bounds.len() >= 2 {
+            // bounds[0] < bounds[1], and we only need bounds[0] <= bounds[len-1]
+            // Since bounds are strictly increasing, bounds[0] < bounds[1] <= bounds[len-1]
+            assert(bounds[0] < bounds[1]);
+            lemma_next_boundary_in_le_last(bounds.subrange(1, bounds.len() as int), pos);
+            // Actually, just need bounds[0] <= bounds[len-1]
+            // bounds[0] < bounds[1] and bounds.len() >= 2
+            // If len==2, bounds[0] < bounds[1] = bounds[len-1] ✓
+            // If len>2, bounds[0] < bounds[1] < ... < bounds[len-1] ✓
+        }
+    } else {
+        let rest = bounds.subrange(1, bounds.len() as int);
+        if rest.len() == 0 {
+            // bounds.len() == 1, bounds[0] <= pos, bounds[0] >= pos → bounds[0] == pos
+            // next_boundary_in(Seq::empty(), pos) = pos = bounds[0] = bounds[len-1]
+            assert(next_boundary_in(rest, pos) == pos);
+        } else {
+            assert(rest[rest.len() - 1] == bounds[bounds.len() - 1]);
+            assert forall|i: int| 0 <= i < rest.len() - 1
+                implies (#[trigger] rest[i]) < rest[i + 1]
+            by {
+                assert(rest[i] == bounds[i + 1]);
+                assert(rest[i + 1] == bounds[i + 2]);
+            }
+            lemma_next_boundary_in_le_last(rest, pos);
+        }
+    }
+}
+
 /// prev_grapheme_boundary returns a value < pos when text is non-empty and pos > 0.
 pub proof fn lemma_prev_grapheme_lt(text: Seq<char>, pos: nat)
     requires

@@ -270,8 +270,18 @@ pub proof fn axiom_movement_valid(
             resolve_movement(text, focus, affinity, pref_col, dir).0),
 {}
 
-/// prev_grapheme_boundary returns a grapheme boundary <= pos.
+/// Word boundaries are also grapheme boundaries.
 #[verifier::external_body]
+pub proof fn axiom_word_boundaries_are_grapheme_boundaries(text: Seq<char>)
+    requires text.len() > 0, wf_text(text),
+    ensures
+        forall|i: int| 0 <= i < word_start_boundaries(text).len() ==>
+            is_grapheme_boundary(text, #[trigger] word_start_boundaries(text)[i]),
+        forall|i: int| 0 <= i < word_end_boundaries(text).len() ==>
+            is_grapheme_boundary(text, #[trigger] word_end_boundaries(text)[i]),
+{}
+
+/// prev_grapheme_boundary returns a grapheme boundary <= pos.
 pub proof fn axiom_prev_grapheme_boundary_valid(text: Seq<char>, pos: nat)
     requires
         wf_text(text),
@@ -281,11 +291,27 @@ pub proof fn axiom_prev_grapheme_boundary_valid(text: Seq<char>, pos: nat)
     ensures
         prev_grapheme_boundary(text, pos) <= pos,
         is_grapheme_boundary(text, prev_grapheme_boundary(text, pos)),
-{}
+{
+    axiom_grapheme_boundaries_valid(text);
+    let bounds = grapheme_boundaries(text);
+    // prev_boundary_in(bounds, pos) <= pos
+    proofs::lemma_prev_boundary_in_le(bounds, pos);
+    // prev_boundary_in returns a member of bounds or 0
+    proofs::lemma_prev_boundary_in_member(bounds, pos);
+    let result = prev_boundary_in(bounds, pos);
+    if result == 0 {
+        // bounds[0] == 0, so is_grapheme_boundary(text, 0)
+        assert(bounds[0] == 0nat);
+        assert(is_grapheme_boundary(text, 0nat));
+    } else {
+        // result is bounds[i] for some i, which is a grapheme boundary
+        let i = choose|i: int| 0 <= i < bounds.len() && bounds[i] == result;
+        assert(is_grapheme_boundary(text, result));
+    }
+}
 
 /// next_grapheme_boundary returns a grapheme boundary >= pos
 /// that is within text bounds.
-#[verifier::external_body]
 pub proof fn axiom_next_grapheme_boundary_valid(text: Seq<char>, pos: nat)
     requires
         wf_text(text),
@@ -296,10 +322,36 @@ pub proof fn axiom_next_grapheme_boundary_valid(text: Seq<char>, pos: nat)
         next_grapheme_boundary(text, pos) >= pos,
         next_grapheme_boundary(text, pos) <= text.len(),
         is_grapheme_boundary(text, next_grapheme_boundary(text, pos)),
-{}
+{
+    axiom_grapheme_boundaries_valid(text);
+    let bounds = grapheme_boundaries(text);
+    // >= pos
+    proofs::lemma_next_boundary_in_ge(bounds, pos);
+    // If pos == text.len(), then pos == bounds[len-1].
+    // next_boundary_in on strictly increasing seq where all elements <= pos returns pos.
+    // If pos < text.len(), bounds has an element > pos (bounds[len-1] = text.len() > pos).
+    if pos < text.len() {
+        // bounds[len-1] = text.len() > pos, so member exists
+        proofs::lemma_next_boundary_in_member(bounds, pos);
+        let i = choose|i: int| 0 <= i < bounds.len() && bounds[i] == next_boundary_in(bounds, pos);
+        // bounds[i] is a grapheme boundary
+        assert(is_grapheme_boundary(text, next_boundary_in(bounds, pos)));
+        // <= text.len(): bounds[i] <= bounds[len-1] = text.len()
+        proofs::lemma_next_boundary_in_le_last(bounds, pos);
+    } else {
+        // pos == text.len() == bounds[len-1]
+        // next_boundary_in looks for first element > pos = text.len()
+        // Since bounds[len-1] = text.len(), no element > pos, so returns pos
+        proofs::lemma_next_boundary_in_le_last(bounds, pos);
+        proofs::lemma_next_boundary_in_ge(bounds, pos);
+        // result >= pos && result <= bounds[len-1] = pos → result == pos
+        // is_grapheme_boundary: pos = text.len() = bounds[len-1]
+        assert(bounds[bounds.len() - 1] == text.len());
+        assert(is_grapheme_boundary(text, text.len()));
+    }
+}
 
 /// prev_boundary_in(word_start_boundaries) returns a grapheme boundary.
-#[verifier::external_body]
 pub proof fn axiom_prev_word_boundary_valid(text: Seq<char>, pos: nat)
     requires
         wf_text(text),
@@ -311,11 +363,31 @@ pub proof fn axiom_prev_word_boundary_valid(text: Seq<char>, pos: nat)
         is_grapheme_boundary(
             text,
             prev_boundary_in(word_start_boundaries(text), pos)),
-{}
+{
+    let bounds = word_start_boundaries(text);
+    axiom_word_start_boundaries_valid(text);
+    axiom_word_boundaries_are_grapheme_boundaries(text);
+    // <= pos
+    proofs::lemma_prev_boundary_in_le(bounds, pos);
+    // membership
+    proofs::lemma_prev_boundary_in_member(bounds, pos);
+    let result = prev_boundary_in(bounds, pos);
+    if result == 0 {
+        // bounds[0] == 0, which is a word_start boundary and hence a grapheme boundary
+        // But we need is_grapheme_boundary(text, 0)
+        // valid_boundaries says bounds[0] == 0, and axiom_word_boundaries says
+        // word_start_boundaries(text)[0] is a grapheme boundary
+        assert(bounds[0] == 0nat);
+        assert(is_grapheme_boundary(text, bounds[0]));
+    } else {
+        let i = choose|i: int| 0 <= i < bounds.len() && bounds[i] == result;
+        // word start boundaries are grapheme boundaries
+        assert(is_grapheme_boundary(text, bounds[i]));
+    }
+}
 
 /// next_boundary_in(word_end_boundaries) returns a grapheme boundary
 /// within text bounds.
-#[verifier::external_body]
 pub proof fn axiom_next_word_boundary_valid(text: Seq<char>, pos: nat)
     requires
         wf_text(text),
@@ -328,7 +400,30 @@ pub proof fn axiom_next_word_boundary_valid(text: Seq<char>, pos: nat)
         is_grapheme_boundary(
             text,
             next_boundary_in(word_end_boundaries(text), pos)),
-{}
+{
+    let bounds = word_end_boundaries(text);
+    axiom_word_end_boundaries_valid(text);
+    axiom_word_boundaries_are_grapheme_boundaries(text);
+    // >= pos
+    proofs::lemma_next_boundary_in_ge(bounds, pos);
+    // <= text.len() and membership
+    if pos < text.len() {
+        // bounds[len-1] = text.len() > pos
+        proofs::lemma_next_boundary_in_member(bounds, pos);
+        let i = choose|i: int| 0 <= i < bounds.len() && bounds[i] == next_boundary_in(bounds, pos);
+        assert(is_grapheme_boundary(text, bounds[i]));
+        proofs::lemma_next_boundary_in_le_last(bounds, pos);
+    } else {
+        // pos == text.len()
+        proofs::lemma_next_boundary_in_le_last(bounds, pos);
+        // result >= pos && result <= bounds[len-1] = text.len() = pos → result == pos
+        // is_grapheme_boundary(text, text.len()): grapheme boundaries end at text.len()
+        axiom_grapheme_boundaries_valid(text);
+        let gb = grapheme_boundaries(text);
+        assert(gb[gb.len() - 1] == text.len());
+        assert(is_grapheme_boundary(text, text.len()));
+    }
+}
 
 // ──────────────────────────────────────────────────────────────────────
 // Boundary navigation helpers
