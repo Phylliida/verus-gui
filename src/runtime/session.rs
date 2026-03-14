@@ -2,6 +2,7 @@ use vstd::prelude::*;
 use crate::text_model::*;
 use crate::text_model::operations::*;
 use crate::text_model::undo::*;
+use crate::text_model::undo_proofs::*;
 use crate::text_model::session::*;
 use crate::event::*;
 use crate::runtime::text_model::*;
@@ -18,6 +19,7 @@ pub struct RuntimeTextEditSession {
     pub undo_stack: RuntimeUndoStack,
     pub last_was_insert: bool,
     pub clipboard: Vec<char>,
+    pub history: Ghost<Seq<Seq<char>>>,
 }
 
 impl RuntimeTextEditSession {
@@ -27,6 +29,7 @@ impl RuntimeTextEditSession {
             undo_stack: self.undo_stack@,
             last_was_insert: self.last_was_insert,
             clipboard: self.clipboard@,
+            history: self.history@,
         }
     }
 
@@ -43,26 +46,26 @@ pub fn new_session_exec(model: RuntimeTextModel) -> (out: RuntimeTextEditSession
         out.view_session() == new_session(model@),
         out.wf_spec(),
 {
+    let ghost init_text = model@.text;
     RuntimeTextEditSession {
         model,
         undo_stack: empty_undo_stack_exec(),
         last_was_insert: false,
         clipboard: Vec::new(),
+        history: Ghost(Seq::empty().push(init_text)),
     }
 }
 
-// ── Undo/Redo helpers (external_body: need undo consistency invariant) ──
+// ── Undo/Redo helpers ───────────────────────────────────────────────
 
-/// Apply undo at the session level. External body because
-/// apply_undo_exec's precondition (wf_text after undo splice)
-/// requires an undo consistency invariant we don't yet track.
-#[verifier::external_body]
+/// Apply undo at the session level. Now verified via ghost history.
 fn session_apply_undo_exec(
     session: RuntimeTextEditSession,
 ) -> (result: RuntimeTextEditSession)
     requires
         session.wf_spec(),
         can_undo(session.undo_stack@),
+        session.model@.composition.is_none(),
     ensures
         result.view_session().model
             == apply_key_to_session(session.view_session(),
@@ -74,25 +77,36 @@ fn session_apply_undo_exec(
             == apply_key_to_session(session.view_session(),
                 KeyEvent { kind: KeyEventKind::Undo, modifiers: Modifiers { shift: false, ctrl: false, alt: false } }).clipboard,
         result.model.wf_spec(),
+        result.wf_spec(),
 {
+    proof {
+        lemma_undo_preconditions_from_history(
+            session.undo_stack@, session.history@, session.model@.text);
+    }
     let (new_stack, new_model) = apply_undo_exec(
         session.undo_stack, session.model);
+    proof {
+        lemma_undo_maintains_history(session.undo_stack@, session.history@);
+        lemma_undo_history_position(
+            session.undo_stack@, session.history@, session.view_session().model);
+    }
     RuntimeTextEditSession {
         model: new_model,
         undo_stack: new_stack,
         last_was_insert: false,
         clipboard: session.clipboard,
+        history: session.history,
     }
 }
 
-/// Apply redo at the session level. External body for same reason as undo.
-#[verifier::external_body]
+/// Apply redo at the session level. Now verified via ghost history.
 fn session_apply_redo_exec(
     session: RuntimeTextEditSession,
 ) -> (result: RuntimeTextEditSession)
     requires
         session.wf_spec(),
         can_redo(session.undo_stack@),
+        session.model@.composition.is_none(),
     ensures
         result.view_session().model
             == apply_key_to_session(session.view_session(),
@@ -104,21 +118,32 @@ fn session_apply_redo_exec(
             == apply_key_to_session(session.view_session(),
                 KeyEvent { kind: KeyEventKind::Redo, modifiers: Modifiers { shift: false, ctrl: false, alt: false } }).clipboard,
         result.model.wf_spec(),
+        result.wf_spec(),
 {
+    proof {
+        lemma_redo_preconditions_from_history(
+            session.undo_stack@, session.history@, session.model@.text);
+    }
     let (new_stack, new_model) = apply_redo_exec(
         session.undo_stack, session.model);
+    proof {
+        lemma_redo_maintains_history(session.undo_stack@, session.history@);
+        lemma_redo_history_position(
+            session.undo_stack@, session.history@, session.view_session().model);
+    }
     RuntimeTextEditSession {
         model: new_model,
         undo_stack: new_stack,
         last_was_insert: false,
         clipboard: session.clipboard,
+        history: session.history,
     }
 }
 
 /// Helper for unreachable branches — requires false so can never be called
 /// in valid execution. Used to satisfy Rust's type checker.
 #[verifier::external_body]
-fn dead_session(undo_stack: RuntimeUndoStack, clipboard: Vec<char>) -> (out: RuntimeTextEditSession)
+fn dead_session(undo_stack: RuntimeUndoStack, clipboard: Vec<char>, history: Ghost<Seq<Seq<char>>>) -> (out: RuntimeTextEditSession)
     requires false,
 { unreachable!() }
 
@@ -126,8 +151,8 @@ fn dead_session(undo_stack: RuntimeUndoStack, clipboard: Vec<char>) -> (out: Run
 
 /// Apply a key event to the session.
 ///
-/// Verified for all branches except Undo/Redo (which delegate to
-/// external_body helpers due to undo consistency requirements).
+/// Fully verified including Undo/Redo via ghost history tracking.
+#[verifier::rlimit(50)]
 pub fn apply_key_to_session_exec(
     session: RuntimeTextEditSession,
     event: &RuntimeKeyEvent,
@@ -159,6 +184,7 @@ pub fn apply_key_to_session_exec(
                     last_was_insert: session.last_was_insert,
                     model: session.model,
                     undo_stack: session.undo_stack,
+                    history: session.history,
                 };
             }
             return session;
@@ -176,31 +202,46 @@ pub fn apply_key_to_session_exec(
                 let entry = undo_entry_for_splice_exec(
                     &session.model, sel_start, sel_end,
                     &Vec::new(), &Vec::new(), sel_start);
+                let ghost old_stack = session.undo_stack@;
+                let ghost old_history = session.history@;
                 let new_model = delete_selection_exec(session.model);
                 let new_stack = push_undo_or_merge_exec(
                     session.undo_stack, entry, false);
+                let ghost new_history = update_history_for_push(
+                    old_stack, old_history, entry@, new_model@.text, false);
                 return RuntimeTextEditSession {
                     model: new_model,
                     undo_stack: new_stack,
                     last_was_insert: false,
                     clipboard,
+                    history: Ghost(new_history),
                 };
             }
             return session;
         },
         RuntimeKeyEventKind::Undo => {
             if can_undo_exec(&session.undo_stack) {
-                return session_apply_undo_exec(session);
+                if session.model.composition.is_none() {
+                    return session_apply_undo_exec(session);
+                }
             }
             return session;
         },
         RuntimeKeyEventKind::Redo => {
             if can_redo_exec(&session.undo_stack) {
-                return session_apply_redo_exec(session);
+                if session.model.composition.is_none() {
+                    return session_apply_redo_exec(session);
+                }
             }
             return session;
         },
         _ => {},
+    }
+
+    // Focus Z3 — session_wf expanded context no longer needed past early returns
+    proof {
+        assert(session.model.wf_spec());
+        assert(session.undo_stack.wf_spec());
     }
 
     // Pre-check: will dispatch return None? If so, return unchanged.
@@ -268,24 +309,30 @@ pub fn apply_key_to_session_exec(
     // Save clipboard before model is consumed.
     let clipboard = session.clipboard;
     let undo_stack = session.undo_stack;
+    let ghost old_stack = undo_stack@;
+    let ghost old_history = session.history@;
+    let history = session.history;
     let action = dispatch_key_exec(session.model, event);
     match action {
         RuntimeKeyAction::NewModel(new_model) => {
             entry.focus_after = new_model.focus;
             let new_stack = push_undo_or_merge_exec(
                 undo_stack, entry, merge);
+            let ghost new_history = update_history_for_push(
+                old_stack, old_history, entry@, new_model@.text, merge);
             RuntimeTextEditSession {
                 model: new_model,
                 undo_stack: new_stack,
                 last_was_insert: is_insert,
                 clipboard,
+                history: Ghost(new_history),
             }
         },
         _ => {
             // Unreachable: Copy/Cut/Undo/Redo return early above,
             // dispatch_none pre-check covers all None cases.
             proof { assert(false); }
-            dead_session(undo_stack, clipboard)
+            dead_session(undo_stack, clipboard, history)
         },
     }
 }
