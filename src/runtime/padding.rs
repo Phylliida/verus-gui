@@ -2,6 +2,7 @@ use vstd::prelude::*;
 use verus_rational::RuntimeRational;
 use crate::runtime::{RationalModel, copy_rational};
 use crate::padding::Padding;
+use crate::layout::Axis;
 
 verus! {
 
@@ -78,6 +79,62 @@ impl RuntimePadding {
             out@ == self@.vertical(),
     {
         self.top.add(&self.bottom)
+    }
+
+    /// Main-axis padding at runtime.
+    pub fn main_padding_exec(&self, axis: &Axis) -> (out: RuntimeRational)
+        requires
+            self.wf_spec(),
+        ensures
+            out.wf_spec(),
+            out@ == self@.main_padding(*axis),
+    {
+        match axis {
+            Axis::Vertical => self.vertical_exec(),
+            Axis::Horizontal => self.horizontal_exec(),
+        }
+    }
+
+    /// Cross-axis padding at runtime.
+    pub fn cross_padding_exec(&self, axis: &Axis) -> (out: RuntimeRational)
+        requires
+            self.wf_spec(),
+        ensures
+            out.wf_spec(),
+            out@ == self@.cross_padding(*axis),
+    {
+        match axis {
+            Axis::Vertical => self.horizontal_exec(),
+            Axis::Horizontal => self.vertical_exec(),
+        }
+    }
+
+    /// Main-axis start padding at runtime.
+    pub fn main_start_exec(&self, axis: &Axis) -> (out: RuntimeRational)
+        requires
+            self.wf_spec(),
+        ensures
+            out.wf_spec(),
+            out@ == self@.main_start(*axis),
+    {
+        match axis {
+            Axis::Vertical => copy_rational(&self.top),
+            Axis::Horizontal => copy_rational(&self.left),
+        }
+    }
+
+    /// Cross-axis start padding at runtime.
+    pub fn cross_start_exec(&self, axis: &Axis) -> (out: RuntimeRational)
+        requires
+            self.wf_spec(),
+        ensures
+            out.wf_spec(),
+            out@ == self@.cross_start(*axis),
+    {
+        match axis {
+            Axis::Vertical => copy_rational(&self.left),
+            Axis::Horizontal => copy_rational(&self.top),
+        }
     }
 }
 

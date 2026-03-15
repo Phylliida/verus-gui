@@ -4565,4 +4565,817 @@ proof fn lemma_absolute_max_bottom_monotone<T: OrderedRing>(
     }
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// ── Unified linear layout proofs (axis-parameterized) ────────────────
+// ══════════════════════════════════════════════════════════════════════
+
+/// sum_main(sizes, axis, 0) ≡ zero.
+pub proof fn lemma_sum_main_zero<T: OrderedRing>(sizes: Seq<Size<T>>, axis: Axis)
+    ensures
+        sum_main(sizes, axis, 0).eqv(T::zero()),
+{
+    T::axiom_eqv_reflexive(T::zero());
+}
+
+/// If all main-axis dimensions are non-negative, sum_main is non-negative.
+pub proof fn lemma_sum_main_nonneg<T: OrderedRing>(
+    sizes: Seq<Size<T>>,
+    axis: Axis,
+    n: nat,
+)
+    requires
+        n <= sizes.len(),
+        forall|i: int| 0 <= i < sizes.len() ==> T::zero().le(sizes[i].main_dim(axis)),
+    ensures
+        T::zero().le(sum_main(sizes, axis, n)),
+    decreases n,
+{
+    if n == 0 {
+        T::axiom_le_reflexive(T::zero());
+    } else {
+        lemma_sum_main_nonneg(sizes, axis, (n - 1) as nat);
+        verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_add_both::<T>(
+            T::zero(), sum_main(sizes, axis, (n - 1) as nat),
+            T::zero(), sizes[(n - 1) as int].main_dim(axis),
+        );
+        T::axiom_add_zero_right(T::zero());
+        T::axiom_eqv_symmetric(T::zero().add(T::zero()), T::zero());
+        T::axiom_eqv_reflexive(
+            sum_main(sizes, axis, (n - 1) as nat).add(sizes[(n - 1) as int].main_dim(axis))
+        );
+        T::axiom_le_congruence(
+            T::zero().add(T::zero()), T::zero(),
+            sum_main(sizes, axis, (n - 1) as nat).add(sizes[(n - 1) as int].main_dim(axis)),
+            sum_main(sizes, axis, (n - 1) as nat).add(sizes[(n - 1) as int].main_dim(axis)),
+        );
+    }
+}
+
+/// sum_main is monotone: i <= j implies sum_main(sizes, axis, i) <= sum_main(sizes, axis, j).
+pub proof fn lemma_sum_main_monotone<T: OrderedRing>(
+    sizes: Seq<Size<T>>,
+    axis: Axis,
+    i: nat,
+    j: nat,
+)
+    requires
+        i <= j,
+        j <= sizes.len(),
+        forall|k: int| 0 <= k < sizes.len() ==> T::zero().le(sizes[k].main_dim(axis)),
+    ensures
+        sum_main(sizes, axis, i).le(sum_main(sizes, axis, j)),
+    decreases j - i,
+{
+    if i == j {
+        T::axiom_le_reflexive(sum_main(sizes, axis, i));
+    } else {
+        lemma_sum_main_monotone(sizes, axis, i, (j - 1) as nat);
+        lemma_le_add_nonneg(
+            sum_main(sizes, axis, (j - 1) as nat),
+            sizes[(j - 1) as int].main_dim(axis),
+        );
+        T::axiom_le_transitive(
+            sum_main(sizes, axis, i),
+            sum_main(sizes, axis, (j - 1) as nat),
+            sum_main(sizes, axis, (j - 1) as nat).add(sizes[(j - 1) as int].main_dim(axis)),
+        );
+    }
+}
+
+/// sum_main gives the same result when the first `count` elements are identical.
+pub proof fn lemma_sum_main_ext_equal<T: OrderedRing>(
+    a: Seq<Size<T>>,
+    b: Seq<Size<T>>,
+    axis: Axis,
+    count: nat,
+)
+    requires
+        count <= a.len(),
+        count <= b.len(),
+        forall|j: int| 0 <= j < count ==> a[j] == b[j],
+    ensures
+        sum_main(a, axis, count) == sum_main(b, axis, count),
+    decreases count,
+{
+    if count == 0 {
+    } else {
+        lemma_sum_main_ext_equal(a, b, axis, (count - 1) as nat);
+    }
+}
+
+/// sum_main is monotone in pointwise-larger main-axis dimensions.
+pub proof fn lemma_sum_main_pointwise_monotone<T: OrderedRing>(
+    sizes1: Seq<Size<T>>,
+    sizes2: Seq<Size<T>>,
+    axis: Axis,
+    count: nat,
+)
+    requires
+        sizes1.len() == sizes2.len(),
+        count <= sizes1.len(),
+        forall|i: int| 0 <= i < sizes1.len() as int ==>
+            sizes1[i].main_dim(axis).le(sizes2[i].main_dim(axis)),
+    ensures
+        sum_main(sizes1, axis, count).le(sum_main(sizes2, axis, count)),
+    decreases count,
+{
+    if count > 0 {
+        lemma_sum_main_pointwise_monotone::<T>(sizes1, sizes2, axis, (count - 1) as nat);
+        verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_add_both::<T>(
+            sum_main(sizes1, axis, (count - 1) as nat),
+            sum_main(sizes2, axis, (count - 1) as nat),
+            sizes1[(count - 1) as int].main_dim(axis),
+            sizes2[(count - 1) as int].main_dim(axis),
+        );
+    } else {
+        T::axiom_le_reflexive(T::zero());
+    }
+}
+
+/// The linear content main-axis dimension is non-negative.
+pub proof fn lemma_linear_content_main_nonneg<T: OrderedRing>(
+    child_sizes: Seq<Size<T>>,
+    axis: Axis,
+    spacing: T,
+)
+    requires
+        T::zero().le(spacing),
+        forall|i: int| 0 <= i < child_sizes.len() ==> T::zero().le(child_sizes[i].main_dim(axis)),
+    ensures
+        T::zero().le(linear_content_main(child_sizes, axis, spacing)),
+{
+    if child_sizes.len() == 0 {
+        T::axiom_le_reflexive(T::zero());
+    } else {
+        lemma_sum_main_nonneg(child_sizes, axis, child_sizes.len() as nat);
+        lemma_repeated_add_nonneg(spacing, (child_sizes.len() - 1) as nat);
+        verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_add_both::<T>(
+            T::zero(), sum_main(child_sizes, axis, child_sizes.len() as nat),
+            T::zero(), repeated_add(spacing, (child_sizes.len() - 1) as nat),
+        );
+        T::axiom_add_zero_right(T::zero());
+        T::axiom_eqv_symmetric(T::zero().add(T::zero()), T::zero());
+        let total = sum_main(child_sizes, axis, child_sizes.len() as nat)
+            .add(repeated_add(spacing, (child_sizes.len() - 1) as nat));
+        T::axiom_eqv_reflexive(total);
+        T::axiom_le_congruence(
+            T::zero().add(T::zero()), T::zero(),
+            total, total,
+        );
+    }
+}
+
+/// Adding a child increases linear content main dimension.
+pub proof fn lemma_linear_content_main_monotone<T: OrderedRing>(
+    child_sizes: Seq<Size<T>>,
+    new_size: Size<T>,
+    axis: Axis,
+    spacing: T,
+)
+    requires
+        T::zero().le(spacing),
+        T::zero().le(new_size.main_dim(axis)),
+        forall|j: int| 0 <= j < child_sizes.len() ==> T::zero().le(child_sizes[j].main_dim(axis)),
+    ensures
+        linear_content_main(child_sizes, axis, spacing).le(
+            linear_content_main(child_sizes.push(new_size), axis, spacing)
+        ),
+{
+    let n = child_sizes.len();
+    let ext = child_sizes.push(new_size);
+    assert(ext.len() == n + 1);
+
+    if n == 0 {
+        lemma_linear_content_main_nonneg(ext, axis, spacing);
+    } else {
+        lemma_sum_main_ext_equal::<T>(child_sizes, ext, axis, n as nat);
+
+        let sm_n = sum_main(child_sizes, axis, n as nat);
+        let ra_nm1 = repeated_add(spacing, (n - 1) as nat);
+
+        lemma_le_add_nonneg::<T>(sm_n, new_size.main_dim(axis));
+        lemma_le_add_nonneg::<T>(ra_nm1, spacing);
+
+        verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_add_both::<T>(
+            sm_n, sm_n.add(new_size.main_dim(axis)),
+            ra_nm1, ra_nm1.add(spacing),
+        );
+
+        assert(linear_content_main(child_sizes, axis, spacing) == sm_n.add(ra_nm1));
+        assert(sum_main(ext, axis, (n + 1) as nat) ==
+            sum_main(ext, axis, n as nat).add(ext[n as int].main_dim(axis)));
+        assert(ext[n as int] == new_size);
+        assert(linear_content_main(ext, axis, spacing) ==
+            sum_main(ext, axis, (n + 1) as nat).add(repeated_add(spacing, n as nat)));
+    }
+}
+
+/// child_main_position(ps, sizes, axis, sp, i) ≡ ps + sum_main(sizes, axis, i) + repeated_add(sp, i).
+pub proof fn lemma_child_main_position_identity<T: OrderedRing>(
+    ps: T,
+    sizes: Seq<Size<T>>,
+    axis: Axis,
+    sp: T,
+    i: nat,
+)
+    requires
+        i <= sizes.len(),
+    ensures
+        child_main_position(ps, sizes, axis, sp, i).eqv(
+            ps.add(sum_main(sizes, axis, i)).add(repeated_add(sp, i))
+        ),
+    decreases i,
+{
+    if i == 0 {
+        T::axiom_add_zero_right(ps);
+        T::axiom_eqv_symmetric(ps.add(T::zero()), ps);
+        T::axiom_add_zero_right(ps.add(T::zero()));
+        T::axiom_eqv_symmetric(
+            ps.add(T::zero()).add(T::zero()),
+            ps.add(T::zero()),
+        );
+        T::axiom_eqv_transitive(
+            ps,
+            ps.add(T::zero()),
+            ps.add(T::zero()).add(T::zero()),
+        );
+    } else {
+        lemma_child_main_position_identity(ps, sizes, axis, sp, (i - 1) as nat);
+
+        let prev = child_main_position(ps, sizes, axis, sp, (i - 1) as nat);
+        let sm = sum_main(sizes, axis, (i - 1) as nat);
+        let ra = repeated_add(sp, (i - 1) as nat);
+        let d = sizes[(i - 1) as int].main_dim(axis);
+
+        T::axiom_add_congruence_left(prev, ps.add(sm).add(ra), d);
+        T::axiom_add_congruence_left(prev.add(d), ps.add(sm).add(ra).add(d), sp);
+
+        T::axiom_add_associative(ps.add(sm).add(ra), d, sp);
+        verus_algebra::lemmas::additive_group_lemmas::lemma_add_rearrange_2x2::<T>(
+            ps.add(sm), ra, d, sp,
+        );
+        T::axiom_add_associative(ps, sm, d);
+        T::axiom_add_congruence_left(
+            ps.add(sm).add(d), ps.add(sm.add(d)), ra.add(sp),
+        );
+
+        T::axiom_eqv_transitive(
+            ps.add(sm).add(ra).add(d).add(sp),
+            ps.add(sm).add(ra).add(d.add(sp)),
+            ps.add(sm).add(d).add(ra.add(sp)),
+        );
+        T::axiom_eqv_transitive(
+            ps.add(sm).add(ra).add(d).add(sp),
+            ps.add(sm).add(d).add(ra.add(sp)),
+            ps.add(sm.add(d)).add(ra.add(sp)),
+        );
+
+        T::axiom_eqv_transitive(
+            prev.add(d).add(sp),
+            ps.add(sm).add(ra).add(d).add(sp),
+            ps.add(sm.add(d)).add(ra.add(sp)),
+        );
+    }
+}
+
+/// Consecutive children don't overlap on main axis.
+pub proof fn lemma_linear_children_nonoverlapping<T: OrderedRing>(
+    padding_start: T,
+    child_sizes: Seq<Size<T>>,
+    axis: Axis,
+    spacing: T,
+    i: nat,
+)
+    requires
+        (i + 1) < child_sizes.len(),
+        T::zero().le(spacing),
+    ensures
+        child_main_position(padding_start, child_sizes, axis, spacing, i)
+            .add(child_sizes[i as int].main_dim(axis))
+            .le(
+                child_main_position(padding_start, child_sizes, axis, spacing, i + 1)
+            ),
+{
+    let x = child_main_position(padding_start, child_sizes, axis, spacing, i)
+        .add(child_sizes[i as int].main_dim(axis));
+
+    T::axiom_le_add_monotone(T::zero(), spacing, x);
+
+    T::axiom_add_commutative(T::zero(), x);
+    T::axiom_add_zero_right(x);
+    T::axiom_eqv_transitive(T::zero().add(x), x.add(T::zero()), x);
+
+    T::axiom_add_commutative(spacing, x);
+
+    T::axiom_le_congruence(
+        T::zero().add(x), x,
+        spacing.add(x), x.add(spacing),
+    );
+}
+
+/// Main-axis lower bound: padding_start <= child_main_position.
+pub proof fn lemma_linear_child_main_lower_bound<T: OrderedRing>(
+    padding_start: T,
+    child_sizes: Seq<Size<T>>,
+    axis: Axis,
+    spacing: T,
+    i: nat,
+)
+    requires
+        i < child_sizes.len(),
+        T::zero().le(spacing),
+        forall|j: int| 0 <= j < child_sizes.len() ==> T::zero().le(child_sizes[j].main_dim(axis)),
+    ensures
+        padding_start.le(child_main_position(padding_start, child_sizes, axis, spacing, i)),
+    decreases i,
+{
+    if i == 0 {
+        T::axiom_le_reflexive(padding_start);
+    } else {
+        lemma_linear_child_main_lower_bound(padding_start, child_sizes, axis, spacing, (i - 1) as nat);
+        let prev = child_main_position(padding_start, child_sizes, axis, spacing, (i - 1) as nat);
+        let d = child_sizes[(i - 1) as int].main_dim(axis);
+
+        lemma_le_add_nonneg(prev, d);
+        lemma_le_add_nonneg(prev.add(d), spacing);
+
+        T::axiom_le_transitive(prev, prev.add(d), prev.add(d).add(spacing));
+        T::axiom_le_transitive(padding_start, prev, prev.add(d).add(spacing));
+    }
+}
+
+/// Main-axis upper bound: child end <= start + content_main.
+pub proof fn lemma_linear_child_main_upper_bound<T: OrderedRing>(
+    ps: T,
+    sizes: Seq<Size<T>>,
+    axis: Axis,
+    sp: T,
+    i: nat,
+)
+    requires
+        sizes.len() > 0,
+        i < sizes.len(),
+        T::zero().le(sp),
+        forall|j: int| 0 <= j < sizes.len() ==> T::zero().le(sizes[j].main_dim(axis)),
+    ensures
+        child_main_position(ps, sizes, axis, sp, i)
+            .add(sizes[i as int].main_dim(axis))
+            .le(ps.add(linear_content_main(sizes, axis, sp))),
+{
+    let n = sizes.len() as nat;
+    let d = sizes[i as int].main_dim(axis);
+
+    lemma_child_main_position_identity(ps, sizes, axis, sp, i);
+
+    T::axiom_add_congruence_left(
+        child_main_position(ps, sizes, axis, sp, i),
+        ps.add(sum_main(sizes, axis, i)).add(repeated_add(sp, i)),
+        d,
+    );
+
+    lemma_add_swap_last(ps.add(sum_main(sizes, axis, i)), repeated_add(sp, i), d);
+    T::axiom_add_associative(ps, sum_main(sizes, axis, i), d);
+    T::axiom_add_congruence_left(
+        ps.add(sum_main(sizes, axis, i)).add(d),
+        ps.add(sum_main(sizes, axis, i).add(d)),
+        repeated_add(sp, i),
+    );
+    T::axiom_eqv_transitive(
+        ps.add(sum_main(sizes, axis, i)).add(repeated_add(sp, i)).add(d),
+        ps.add(sum_main(sizes, axis, i)).add(d).add(repeated_add(sp, i)),
+        ps.add(sum_main(sizes, axis, i).add(d)).add(repeated_add(sp, i)),
+    );
+
+    T::axiom_eqv_transitive(
+        child_main_position(ps, sizes, axis, sp, i).add(d),
+        ps.add(sum_main(sizes, axis, i)).add(repeated_add(sp, i)).add(d),
+        ps.add(sum_main(sizes, axis, i).add(d)).add(repeated_add(sp, i)),
+    );
+
+    lemma_sum_main_monotone(sizes, axis, (i + 1) as nat, n);
+    lemma_repeated_add_monotone(sp, i, (n - 1) as nat);
+
+    verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_add_both::<T>(
+        sum_main(sizes, axis, (i + 1) as nat), sum_main(sizes, axis, n),
+        repeated_add(sp, i), repeated_add(sp, (n - 1) as nat),
+    );
+
+    T::axiom_le_add_monotone(
+        sum_main(sizes, axis, (i + 1) as nat).add(repeated_add(sp, i)),
+        sum_main(sizes, axis, n).add(repeated_add(sp, (n - 1) as nat)),
+        ps,
+    );
+    T::axiom_add_commutative(
+        sum_main(sizes, axis, (i + 1) as nat).add(repeated_add(sp, i)), ps,
+    );
+    T::axiom_add_commutative(
+        sum_main(sizes, axis, n).add(repeated_add(sp, (n - 1) as nat)), ps,
+    );
+    T::axiom_le_congruence(
+        sum_main(sizes, axis, (i + 1) as nat).add(repeated_add(sp, i)).add(ps),
+        ps.add(sum_main(sizes, axis, (i + 1) as nat).add(repeated_add(sp, i))),
+        sum_main(sizes, axis, n).add(repeated_add(sp, (n - 1) as nat)).add(ps),
+        ps.add(sum_main(sizes, axis, n).add(repeated_add(sp, (n - 1) as nat))),
+    );
+
+    T::axiom_add_associative(
+        ps, sum_main(sizes, axis, (i + 1) as nat), repeated_add(sp, i),
+    );
+    T::axiom_eqv_symmetric(
+        ps.add(sum_main(sizes, axis, (i + 1) as nat)).add(repeated_add(sp, i)),
+        ps.add(sum_main(sizes, axis, (i + 1) as nat).add(repeated_add(sp, i))),
+    );
+    verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
+        ps.add(sum_main(sizes, axis, (i + 1) as nat).add(repeated_add(sp, i))),
+        ps.add(sum_main(sizes, axis, (i + 1) as nat)).add(repeated_add(sp, i)),
+        ps.add(sum_main(sizes, axis, n).add(repeated_add(sp, (n - 1) as nat))),
+    );
+
+    T::axiom_eqv_symmetric(
+        child_main_position(ps, sizes, axis, sp, i).add(d),
+        ps.add(sum_main(sizes, axis, i).add(d)).add(repeated_add(sp, i)),
+    );
+    verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
+        ps.add(sum_main(sizes, axis, (i + 1) as nat)).add(repeated_add(sp, i)),
+        child_main_position(ps, sizes, axis, sp, i).add(d),
+        ps.add(sum_main(sizes, axis, n).add(repeated_add(sp, (n - 1) as nat))),
+    );
+}
+
+/// Length of linear_children sequence.
+pub proof fn lemma_linear_children_len<T: OrderedField>(
+    padding: Padding<T>,
+    spacing: T,
+    alignment: Alignment,
+    child_sizes: Seq<Size<T>>,
+    axis: Axis,
+    available_cross: T,
+    index: nat,
+)
+    requires
+        index <= child_sizes.len(),
+    ensures
+        linear_children(padding, spacing, alignment, child_sizes, axis, available_cross, index).len()
+            == child_sizes.len() - index,
+    decreases child_sizes.len() - index,
+{
+    if index >= child_sizes.len() {
+    } else {
+        lemma_linear_children_len(padding, spacing, alignment, child_sizes, axis, available_cross, index + 1);
+    }
+}
+
+/// Element access into linear_children (shifted).
+proof fn lemma_linear_children_element_shifted<T: OrderedField>(
+    padding: Padding<T>,
+    spacing: T,
+    alignment: Alignment,
+    child_sizes: Seq<Size<T>>,
+    axis: Axis,
+    available_cross: T,
+    start: nat,
+    k: nat,
+)
+    requires
+        start <= k,
+        k < child_sizes.len(),
+    ensures
+        ({
+            let cross_offset = padding.cross_start(axis).add(
+                align_offset(alignment, available_cross, child_sizes[k as int].cross_dim(axis))
+            );
+            let main_offset = child_main_position(
+                padding.main_start(axis), child_sizes, axis, spacing, k,
+            );
+            let (x, y) = match axis {
+                Axis::Vertical => (cross_offset, main_offset),
+                Axis::Horizontal => (main_offset, cross_offset),
+            };
+            linear_children(padding, spacing, alignment, child_sizes, axis, available_cross, start)[(k - start) as int]
+                == Node::leaf(x, y, child_sizes[k as int])
+        }),
+    decreases k - start,
+{
+    if start == k {
+    } else {
+        lemma_linear_children_len(padding, spacing, alignment, child_sizes, axis, available_cross, start + 1);
+        lemma_linear_children_len(padding, spacing, alignment, child_sizes, axis, available_cross, start);
+
+        lemma_linear_children_element_shifted(padding, spacing, alignment, child_sizes, axis, available_cross, start + 1, k);
+
+        let tail = linear_children(padding, spacing, alignment, child_sizes, axis, available_cross, start + 1);
+        let lc = linear_children(padding, spacing, alignment, child_sizes, axis, available_cross, start);
+        assert(lc[(k - start) as int] == tail[((k - start) as int) - 1]);
+    }
+}
+
+/// Element access into linear_children at index k from the beginning.
+pub proof fn lemma_linear_children_element<T: OrderedField>(
+    padding: Padding<T>,
+    spacing: T,
+    alignment: Alignment,
+    child_sizes: Seq<Size<T>>,
+    axis: Axis,
+    available_cross: T,
+    k: nat,
+)
+    requires
+        k < child_sizes.len(),
+    ensures
+        ({
+            let cross_offset = padding.cross_start(axis).add(
+                align_offset(alignment, available_cross, child_sizes[k as int].cross_dim(axis))
+            );
+            let main_offset = child_main_position(
+                padding.main_start(axis), child_sizes, axis, spacing, k,
+            );
+            let (x, y) = match axis {
+                Axis::Vertical => (cross_offset, main_offset),
+                Axis::Horizontal => (main_offset, cross_offset),
+            };
+            linear_children(padding, spacing, alignment, child_sizes, axis, available_cross, 0)[k as int]
+                == Node::leaf(x, y, child_sizes[k as int])
+        }),
+{
+    lemma_linear_children_element_shifted(padding, spacing, alignment, child_sizes, axis, available_cross, 0, k);
+}
+
+/// Linear children within bounds proof (unified column/row CWB).
+pub proof fn lemma_linear_children_within_bounds<T: OrderedField>(
+    limits: Limits<T>,
+    padding: Padding<T>,
+    spacing: T,
+    alignment: Alignment,
+    children: Seq<Widget<T>>,
+    axis: Axis,
+    fuel: nat,
+)
+    requires
+        limits.wf(),
+        fuel > 1,
+        padding.is_nonneg(),
+        T::zero().le(spacing),
+        padding.horizontal().add(limits.min.width).le(limits.max.width),
+        padding.vertical().add(limits.min.height).le(limits.max.height),
+        ({
+            let h = padding.horizontal();
+            let v = padding.vertical();
+            let inner = limits.shrink(h, v);
+            let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
+            let child_sizes = Seq::new(cn.len(), |i: int| cn[i].size);
+            padding.main_padding(axis).add(linear_content_main(child_sizes, axis, spacing))
+                .le(limits.max.main_dim(axis))
+        }),
+    ensures
+        ({
+            let h = padding.horizontal();
+            let v = padding.vertical();
+            let inner = limits.shrink(h, v);
+            let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
+            let child_sizes = Seq::new(cn.len(), |i: int| cn[i].size);
+            linear_layout(limits, padding, spacing, alignment, child_sizes, axis)
+                .children_within_bounds()
+        }),
+{
+    let h = padding.horizontal();
+    let v = padding.vertical();
+    let inner = limits.shrink(h, v);
+    let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
+    let child_sizes = Seq::new(cn.len(), |i: int| cn[i].size);
+    let avail_cross = limits.max.cross_dim(axis).sub(padding.cross_padding(axis));
+    let content_main = linear_content_main(child_sizes, axis, spacing);
+    let total_main = padding.main_padding(axis).add(content_main);
+    let input_size = Size::from_axes(axis, total_main, limits.max.cross_dim(axis));
+
+    // Padding sums are nonneg
+    lemma_nonneg_sum(padding.left, padding.right);
+    lemma_nonneg_sum(padding.top, padding.bottom);
+
+    // inner.wf() + shrink bounds (always shrink by (h, v))
+    lemma_shrink_wf(limits, h, v);
+    lemma_add_comm_le(h, limits.min.width, limits.max.width);
+    lemma_add_comm_le(v, limits.min.height, limits.max.height);
+    lemma_shrink_max_bound(limits, h, v);
+
+    // inner.max.cross_dim(axis) ≤ avail_cross
+    // For Vertical: cross=width, avail_cross = max.w - h, inner.max.w + h ≤ max.w
+    // For Horizontal: cross=height, avail_cross = max.h - v, inner.max.h + v ≤ max.h
+    match axis {
+        Axis::Vertical => {
+            verus_algebra::lemmas::additive_group_lemmas::lemma_sub_then_add_cancel::<T>(
+                limits.max.width, h,
+            );
+            T::axiom_eqv_symmetric(avail_cross.add(h), limits.max.width);
+            verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_right::<T>(
+                inner.max.width.add(h), limits.max.width, avail_cross.add(h),
+            );
+            lemma_le_add_cancel_right(inner.max.width, avail_cross, h);
+        },
+        Axis::Horizontal => {
+            verus_algebra::lemmas::additive_group_lemmas::lemma_sub_then_add_cancel::<T>(
+                limits.max.height, v,
+            );
+            T::axiom_eqv_symmetric(avail_cross.add(v), limits.max.height);
+            verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_right::<T>(
+                inner.max.height.add(v), limits.max.height, avail_cross.add(v),
+            );
+            lemma_le_add_cancel_right(inner.max.height, avail_cross, v);
+        },
+    }
+
+    // Each child: cross_dim ≤ avail_cross and both dims nonneg
+    assert forall|k: int| 0 <= k < cn.len() implies
+        child_sizes[k].cross_dim(axis).le(avail_cross)
+        && T::zero().le(child_sizes[k].width)
+        && T::zero().le(child_sizes[k].height)
+        && T::zero().le(child_sizes[k].main_dim(axis))
+    by {
+        lemma_layout_respects_limits(inner, children[k], (fuel - 1) as nat);
+        match axis {
+            Axis::Vertical => {
+                T::axiom_le_transitive(child_sizes[k].width, inner.max.width, avail_cross);
+            },
+            Axis::Horizontal => {
+                T::axiom_le_transitive(child_sizes[k].height, inner.max.height, avail_cross);
+            },
+        }
+        T::axiom_le_transitive(T::zero(), inner.min.width, child_sizes[k].width);
+        T::axiom_le_transitive(T::zero(), inner.min.height, child_sizes[k].height);
+    };
+
+    // Resolve: cross dimension is fixed at max, so resolves to max
+    T::axiom_le_reflexive(limits.max.cross_dim(axis));
+    lemma_resolve_ge_input(limits, input_size);
+
+    match axis {
+        Axis::Vertical => {
+            // resolve.w ≡ max.w
+            lemma_resolve_le_max_width(limits, input_size);
+            T::axiom_le_antisymmetric(limits.resolve(input_size).width, limits.max.width);
+        },
+        Axis::Horizontal => {
+            // resolve.h ≡ max.h
+            lemma_resolve_le_max_height(limits, input_size);
+            T::axiom_le_antisymmetric(limits.resolve(input_size).height, limits.max.height);
+        },
+    }
+
+    // cross_start + avail_cross ≤ max_cross
+    match axis {
+        Axis::Vertical => {
+            // left + avail_w ≤ max.w
+            lemma_le_add_nonneg(padding.left, padding.right);
+            T::axiom_le_add_monotone(padding.left, h, avail_cross);
+            T::axiom_add_commutative(h, avail_cross);
+            verus_algebra::lemmas::additive_group_lemmas::lemma_sub_then_add_cancel::<T>(
+                limits.max.width, h,
+            );
+            verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_right::<T>(
+                padding.left.add(avail_cross), h.add(avail_cross), avail_cross.add(h),
+            );
+            T::axiom_le_transitive(
+                padding.left.add(avail_cross), avail_cross.add(h), limits.max.width,
+            );
+        },
+        Axis::Horizontal => {
+            // top + avail_h ≤ max.h
+            lemma_le_add_nonneg(padding.top, padding.bottom);
+            T::axiom_le_add_monotone(padding.top, v, avail_cross);
+            T::axiom_add_commutative(v, avail_cross);
+            verus_algebra::lemmas::additive_group_lemmas::lemma_sub_then_add_cancel::<T>(
+                limits.max.height, v,
+            );
+            verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_right::<T>(
+                padding.top.add(avail_cross), v.add(avail_cross), avail_cross.add(v),
+            );
+            T::axiom_le_transitive(
+                padding.top.add(avail_cross), avail_cross.add(v), limits.max.height,
+            );
+        },
+    }
+
+    // main_start + content_main ≤ total_main
+    match axis {
+        Axis::Vertical => {
+            lemma_le_add_nonneg(padding.top, padding.bottom);
+            T::axiom_le_add_monotone(padding.top, v, content_main);
+        },
+        Axis::Horizontal => {
+            lemma_le_add_nonneg(padding.left, padding.right);
+            T::axiom_le_add_monotone(padding.left, h, content_main);
+        },
+    }
+
+    // Linear children structure
+    lemma_linear_children_len(padding, spacing, alignment, child_sizes, axis, avail_cross, 0);
+
+    reveal(linear_layout);
+    let layout = linear_layout(limits, padding, spacing, alignment, child_sizes, axis);
+
+    let cs = padding.cross_start(axis);
+    let ms = padding.main_start(axis);
+
+    // Per-child bounds
+    assert forall|i: int| 0 <= i < cn.len() implies
+        T::zero().le(layout.children[i].x)
+        && T::zero().le(layout.children[i].y)
+        && layout.children[i].x.add(cn[i].size.width).le(layout.size.width)
+        && layout.children[i].y.add(cn[i].size.height).le(layout.size.height)
+    by {
+        lemma_linear_children_element(
+            padding, spacing, alignment, child_sizes, axis, avail_cross, i as nat,
+        );
+
+        // Cross-axis lower: 0 ≤ cross_start ≤ cross_start + align_offset = cross_pos
+        lemma_column_child_x_lower_bound(
+            cs, alignment, avail_cross, child_sizes[i].cross_dim(axis),
+        );
+
+        // Cross-axis upper: cross_pos + cross_dim ≤ cross_start + avail_cross
+        lemma_column_child_x_upper_bound(
+            cs, alignment, avail_cross, child_sizes[i].cross_dim(axis),
+        );
+
+        // Main-axis lower: 0 ≤ main_start ≤ child_main_position
+        lemma_linear_child_main_lower_bound(ms, child_sizes, axis, spacing, i as nat);
+
+        // Main-axis upper
+        if cn.len() > 0 {
+            lemma_linear_child_main_upper_bound(ms, child_sizes, axis, spacing, i as nat);
+        }
+
+        // Map cross/main bounds to x/y bounds depending on axis
+        match axis {
+            Axis::Vertical => {
+                // x = cross, y = main
+                T::axiom_le_transitive(T::zero(), padding.left, layout.children[i].x);
+                T::axiom_le_transitive(T::zero(), padding.top, layout.children[i].y);
+                // x + w ≤ left + avail_w ≤ max.w ≡ parent.w
+                T::axiom_le_transitive(
+                    layout.children[i].x.add(child_sizes[i].width),
+                    padding.left.add(avail_cross),
+                    limits.max.width,
+                );
+                T::axiom_eqv_symmetric(
+                    limits.resolve(input_size).width, limits.max.width,
+                );
+                verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_right::<T>(
+                    layout.children[i].x.add(child_sizes[i].width),
+                    limits.max.width,
+                    limits.resolve(input_size).width,
+                );
+                // y + h ≤ top + content_h ≤ total_h ≤ resolve.h
+                if cn.len() > 0 {
+                    T::axiom_le_transitive(
+                        layout.children[i].y.add(child_sizes[i].height),
+                        padding.top.add(content_main),
+                        total_main,
+                    );
+                    T::axiom_le_transitive(
+                        layout.children[i].y.add(child_sizes[i].height),
+                        total_main,
+                        limits.resolve(input_size).height,
+                    );
+                }
+            },
+            Axis::Horizontal => {
+                // x = main, y = cross
+                T::axiom_le_transitive(T::zero(), padding.left, layout.children[i].x);
+                T::axiom_le_transitive(T::zero(), padding.top, layout.children[i].y);
+                // x + w ≤ left + content_w ≤ total_w ≤ resolve.w
+                if cn.len() > 0 {
+                    T::axiom_le_transitive(
+                        layout.children[i].x.add(child_sizes[i].width),
+                        padding.left.add(content_main),
+                        total_main,
+                    );
+                    T::axiom_le_transitive(
+                        layout.children[i].x.add(child_sizes[i].width),
+                        total_main,
+                        limits.resolve(input_size).width,
+                    );
+                }
+                // y + h ≤ top + avail_h ≤ max.h ≡ parent.h
+                T::axiom_le_transitive(
+                    layout.children[i].y.add(child_sizes[i].height),
+                    padding.top.add(avail_cross),
+                    limits.max.height,
+                );
+                T::axiom_eqv_symmetric(
+                    limits.resolve(input_size).height, limits.max.height,
+                );
+                verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_right::<T>(
+                    layout.children[i].y.add(child_sizes[i].height),
+                    limits.max.height,
+                    limits.resolve(input_size).height,
+                );
+            },
+        }
+
+        assert(child_sizes[i] === cn[i].size);
+    };
+
+    lemma_merge_layout_cwb(layout, cn);
+}
+
 } // verus!

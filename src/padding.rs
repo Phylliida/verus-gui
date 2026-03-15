@@ -39,6 +39,38 @@ impl<T: OrderedRing> Padding<T> {
         && T::zero().le(self.bottom)
         && T::zero().le(self.left)
     }
+
+    /// Total main-axis padding: vertical() for Vertical, horizontal() for Horizontal.
+    pub open spec fn main_padding(self, axis: crate::layout::Axis) -> T {
+        match axis {
+            crate::layout::Axis::Vertical => self.vertical(),
+            crate::layout::Axis::Horizontal => self.horizontal(),
+        }
+    }
+
+    /// Total cross-axis padding: horizontal() for Vertical, vertical() for Horizontal.
+    pub open spec fn cross_padding(self, axis: crate::layout::Axis) -> T {
+        match axis {
+            crate::layout::Axis::Vertical => self.horizontal(),
+            crate::layout::Axis::Horizontal => self.vertical(),
+        }
+    }
+
+    /// Main-axis start padding: top for Vertical, left for Horizontal.
+    pub open spec fn main_start(self, axis: crate::layout::Axis) -> T {
+        match axis {
+            crate::layout::Axis::Vertical => self.top,
+            crate::layout::Axis::Horizontal => self.left,
+        }
+    }
+
+    /// Cross-axis start padding: left for Vertical, top for Horizontal.
+    pub open spec fn cross_start(self, axis: crate::layout::Axis) -> T {
+        match axis {
+            crate::layout::Axis::Vertical => self.left,
+            crate::layout::Axis::Horizontal => self.top,
+        }
+    }
 }
 
 } // verus!

@@ -2,6 +2,7 @@ use vstd::prelude::*;
 use verus_rational::RuntimeRational;
 use crate::runtime::{RationalModel, copy_rational};
 use crate::size::Size;
+use crate::layout::Axis;
 
 verus! {
 
@@ -67,6 +68,49 @@ impl RuntimeSize {
             width: copy_rational(&self.width),
             height: copy_rational(&self.height),
             model: Ghost(self@),
+        }
+    }
+
+    /// Main-axis dimension at runtime.
+    pub fn main_exec(&self, axis: &Axis) -> (out: RuntimeRational)
+        requires
+            self.wf_spec(),
+        ensures
+            out.wf_spec(),
+            out@ == self@.main_dim(*axis),
+    {
+        match axis {
+            Axis::Vertical => copy_rational(&self.height),
+            Axis::Horizontal => copy_rational(&self.width),
+        }
+    }
+
+    /// Cross-axis dimension at runtime.
+    pub fn cross_exec(&self, axis: &Axis) -> (out: RuntimeRational)
+        requires
+            self.wf_spec(),
+        ensures
+            out.wf_spec(),
+            out@ == self@.cross_dim(*axis),
+    {
+        match axis {
+            Axis::Vertical => copy_rational(&self.width),
+            Axis::Horizontal => copy_rational(&self.height),
+        }
+    }
+
+    /// Construct a RuntimeSize from main-axis and cross-axis values.
+    pub fn from_axes_exec(axis: &Axis, main: RuntimeRational, cross: RuntimeRational) -> (out: Self)
+        requires
+            main.wf_spec(),
+            cross.wf_spec(),
+        ensures
+            out.wf_spec(),
+            out@ == Size::<RationalModel>::from_axes(*axis, main@, cross@),
+    {
+        match axis {
+            Axis::Vertical => RuntimeSize::new(cross, main),
+            Axis::Horizontal => RuntimeSize::new(main, cross),
         }
     }
 }
