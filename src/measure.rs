@@ -379,6 +379,8 @@ pub proof fn lemma_measure_is_layout_size<T: OrderedField>(
                 assert(layout_widget(limits, widget, fuel).size == layout.size);
             },
             Widget::Stack { padding, h_align, v_align, children } => {
+                reveal(crate::layout::stack::stack_layout);
+                reveal(crate::layout::stack::stack_content_size);
                 let inner = limits.shrink(padding.horizontal(), padding.vertical());
                 lemma_measure_children_match(inner, children, (fuel - 1) as nat);
 

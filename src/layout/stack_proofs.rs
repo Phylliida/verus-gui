@@ -32,6 +32,7 @@ pub proof fn lemma_max_width_nonneg<T: OrderedRing>(
         T::zero().le(max_width(sizes, n)),
     decreases n,
 {
+    reveal(max_width);
     if n == 0 {
         T::axiom_le_reflexive(T::zero());
     } else {
@@ -61,6 +62,7 @@ pub proof fn lemma_max_height_nonneg<T: OrderedRing>(
         T::zero().le(max_height(sizes, n)),
     decreases n,
 {
+    reveal(max_height);
     if n == 0 {
         T::axiom_le_reflexive(T::zero());
     } else {
@@ -86,6 +88,7 @@ pub proof fn lemma_stack_content_size_nonneg<T: OrderedRing>(
     ensures
         stack_content_size(child_sizes).is_nonneg(),
 {
+    reveal(stack_content_size);
     lemma_max_width_nonneg(child_sizes, child_sizes.len() as nat);
     lemma_max_height_nonneg(child_sizes, child_sizes.len() as nat);
 }
@@ -125,6 +128,7 @@ proof fn lemma_max_width_contains<T: OrderedRing>(
     ensures
         sizes[i as int].width.le(max_width(sizes, (i + 1) as nat)),
 {
+    reveal(max_width);
     // max_width(sizes, i+1) = max(max_width(sizes, i), sizes[i].width) >= sizes[i].width
     lemma_max_ge_right::<T>(max_width(sizes, i), sizes[i as int].width);
 }
@@ -143,6 +147,7 @@ proof fn lemma_max_width_monotone<T: OrderedRing>(
         max_width(sizes, i).le(max_width(sizes, j)),
     decreases j - i,
 {
+    reveal(max_width);
     if i == j {
         T::axiom_le_reflexive(max_width(sizes, i));
     } else {
@@ -189,6 +194,7 @@ proof fn lemma_max_height_contains<T: OrderedRing>(
     ensures
         sizes[i as int].height.le(max_height(sizes, (i + 1) as nat)),
 {
+    reveal(max_height);
     lemma_max_ge_right::<T>(max_height(sizes, i), sizes[i as int].height);
 }
 
@@ -206,6 +212,7 @@ proof fn lemma_max_height_monotone<T: OrderedRing>(
         max_height(sizes, i).le(max_height(sizes, j)),
     decreases j - i,
 {
+    reveal(max_height);
     if i == j {
         T::axiom_le_reflexive(max_height(sizes, i));
     } else {
@@ -293,6 +300,7 @@ proof fn lemma_max_width_upper_bound<T: OrderedRing>(
         max_width(sizes, n).le(bound),
     decreases n,
 {
+    reveal(max_width);
     if n == 0 {
     } else {
         lemma_max_width_upper_bound(sizes, (n - 1) as nat, bound);
@@ -434,6 +442,7 @@ proof fn lemma_max_height_upper_bound<T: OrderedRing>(
         max_height(sizes, n).le(bound),
     decreases n,
 {
+    reveal(max_height);
     if n == 0 {
     } else {
         lemma_max_height_upper_bound(sizes, (n - 1) as nat, bound);
@@ -505,6 +514,7 @@ pub proof fn lemma_stack_content_size_swap<T: OrderedRing>(
         stack_content_size(swap_seq(sizes, i, j)).height.eqv(
             stack_content_size(sizes).height),
 {
+    reveal(stack_content_size);
     lemma_max_width_swap(sizes, i, j);
     lemma_max_height_swap(sizes, i, j);
 }
@@ -534,6 +544,9 @@ pub proof fn lemma_stack_start_children_within_bounds<T: OrderedField>(
             children,
         }, fuel).children_within_bounds(),
 {
+    reveal(stack_layout);
+    reveal(stack_content_size);
+    reveal(align_offset);
     let h = padding.horizontal();
     let v = padding.vertical();
     let inner = limits.shrink(h, v);
@@ -719,6 +732,7 @@ pub proof fn lemma_max_width_le_inputs<T: OrderedRing>(
         max_width(sizes1, n).le(max_width(sizes2, n)),
     decreases n,
 {
+    reveal(max_width);
     if n == 0 {
         T::axiom_le_reflexive(T::zero());
     } else {
@@ -772,6 +786,7 @@ pub proof fn lemma_max_height_le_inputs<T: OrderedRing>(
         max_height(sizes1, n).le(max_height(sizes2, n)),
     decreases n,
 {
+    reveal(max_height);
     if n == 0 {
         T::axiom_le_reflexive(T::zero());
     } else {

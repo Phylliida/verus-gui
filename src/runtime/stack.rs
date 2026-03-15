@@ -46,6 +46,12 @@ pub fn stack_layout_exec(
     let mut max_h = RuntimeRational::from_int(0);
     let mut i: usize = 0;
 
+    // Reveal initial step: max_width(spec_sizes, 0) == T::zero()
+    proof {
+        reveal(max_width);
+        reveal(max_height);
+    }
+
     while i < n
         invariant
             0 <= i <= n,
@@ -58,6 +64,11 @@ pub fn stack_layout_exec(
             forall|j: int| 0 <= j < child_sizes@.len() ==> spec_sizes[j] == child_sizes@[j]@,
         decreases n - i,
     {
+        proof {
+            // Unfold one step: max_width(sizes, i+1) == max(max_width(sizes, i), sizes[i].width)
+            reveal(max_width);
+            reveal(max_height);
+        }
         max_w = max_w.max(&child_sizes[i].width);
         max_h = max_h.max(&child_sizes[i].height);
         i = i + 1;
@@ -149,6 +160,8 @@ pub fn stack_layout_exec(
     };
 
     proof {
+        reveal(stack_layout);
+        reveal(stack_content_size);
         let sc = stack_children::<RationalModel>(
             padding@, *h_align, *v_align, spec_sizes,
             available_width@, available_height@, 0,

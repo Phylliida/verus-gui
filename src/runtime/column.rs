@@ -29,6 +29,7 @@ pub fn align_offset_exec(
         out.wf_spec(),
         out@ == align_offset::<RationalModel>(*alignment, available@, used@),
 {
+    proof { reveal(align_offset); }
     match alignment {
         Alignment::Start => {
             RuntimeRational::from_int(0)

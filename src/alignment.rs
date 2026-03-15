@@ -20,6 +20,7 @@ pub enum Alignment {
 /// - Start  => 0
 /// - Center => (available - used) / 2
 /// - End    => available - used
+#[verifier::opaque]
 pub open spec fn align_offset<T: OrderedField>(
     alignment: Alignment,
     available: T,

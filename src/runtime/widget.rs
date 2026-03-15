@@ -1119,6 +1119,7 @@ fn layout_container_exec(
                     padding@, spacing1@, *align1, child_sizes_seq, avail_h, 0nat);
             },
             ContainerKind::Stack => {
+                reveal(crate::layout::stack::stack_layout);
                 let avail_w = limits@.max.width.sub(padding@.horizontal());
                 let avail_h = limits@.max.height.sub(padding@.vertical());
                 lemma_stack_children_len::<RationalModel>(

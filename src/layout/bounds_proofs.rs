@@ -82,6 +82,8 @@ proof fn lemma_stack_respects_limits<T: OrderedField>(
         limits.min.le(layout_stack_body(limits, padding, h_align, v_align, child_nodes).size),
         layout_stack_body(limits, padding, h_align, v_align, child_nodes).size.le(limits.max),
 {
+    reveal(stack_layout);
+    reveal(stack_content_size);
     let child_sizes = Seq::new(child_nodes.len(), |i: int| child_nodes[i].size);
     let layout = stack_layout(limits, padding, h_align, v_align, child_sizes);
     assert(layout_stack_body(limits, padding, h_align, v_align, child_nodes).size

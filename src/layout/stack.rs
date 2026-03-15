@@ -13,6 +13,7 @@ verus! {
 // ── Helper spec functions ───────────────────────────────────────────
 
 /// Maximum width among the first `count` children.
+#[verifier::opaque]
 pub open spec fn max_width<T: OrderedRing>(
     sizes: Seq<Size<T>>,
     count: nat,
@@ -27,6 +28,7 @@ pub open spec fn max_width<T: OrderedRing>(
 }
 
 /// Maximum height among the first `count` children.
+#[verifier::opaque]
 pub open spec fn max_height<T: OrderedRing>(
     sizes: Seq<Size<T>>,
     count: nat,
@@ -41,6 +43,7 @@ pub open spec fn max_height<T: OrderedRing>(
 }
 
 /// The content size of a stack: max width x max height.
+#[verifier::opaque]
 pub open spec fn stack_content_size<T: OrderedRing>(
     child_sizes: Seq<Size<T>>,
 ) -> Size<T> {
@@ -54,6 +57,7 @@ pub open spec fn stack_content_size<T: OrderedRing>(
 
 /// Build the sequence of child Nodes for a stack layout.
 /// Each child is independently positioned via alignment on both axes.
+#[verifier::opaque]
 pub open spec fn stack_children<T: OrderedField>(
     padding: Padding<T>,
     h_align: Alignment,
@@ -89,6 +93,7 @@ pub open spec fn stack_children<T: OrderedField>(
 /// 2. Content size is max_width x max_height of children
 /// 3. Each child is independently aligned on both axes
 /// 4. Return parent Node with positioned children
+#[verifier::opaque]
 pub open spec fn stack_layout<T: OrderedField>(
     limits: Limits<T>,
     padding: Padding<T>,

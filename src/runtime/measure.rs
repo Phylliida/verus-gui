@@ -624,6 +624,11 @@ fn measure_stack_size_exec(
     let mut max_h = RuntimeRational::from_int(0);
     let mut k: usize = 0;
 
+    proof {
+        reveal(max_width);
+        reveal(max_height);
+    }
+
     while k < n
         invariant
             0 <= k <= n,
@@ -636,9 +641,17 @@ fn measure_stack_size_exec(
             forall|j: int| 0 <= j < child_sizes@.len() ==> spec_sizes[j] == child_sizes@[j]@,
         decreases n - k,
     {
+        proof {
+            reveal(max_width);
+            reveal(max_height);
+        }
         max_w = max_w.max(&child_sizes[k].width);
         max_h = max_h.max(&child_sizes[k].height);
         k = k + 1;
+    }
+
+    proof {
+        reveal(stack_content_size);
     }
 
     let total_width = pad_h.add(&max_w);

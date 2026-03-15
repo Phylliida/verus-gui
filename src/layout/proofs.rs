@@ -366,6 +366,7 @@ pub proof fn lemma_align_offset_nonneg<T: OrderedField>(
     ensures
         T::zero().le(align_offset(alignment, available, used)),
 {
+    reveal(align_offset);
     match alignment {
         Alignment::Start => {
             T::axiom_le_reflexive(T::zero());
@@ -409,6 +410,7 @@ pub proof fn lemma_align_offset_bounded<T: OrderedField>(
     ensures
         align_offset(alignment, available, used).add(used).le(available),
 {
+    reveal(align_offset);
     match alignment {
         Alignment::Start => {
             // align_offset = 0, so need 0 + used <= available
@@ -1378,6 +1380,7 @@ pub proof fn lemma_center_alignment_symmetric<T: OrderedField>(
             available.sub(used).sub(align_offset(Alignment::Center, available, used))
         ),
 {
+    reveal(align_offset);
     let x = available.sub(used);
     let h = x.div(two::<T>());
     // align_offset(Center, available, used) == h == x / two()
@@ -1578,6 +1581,7 @@ pub proof fn lemma_stack_children_len<T: OrderedField>(
         ).len() == child_sizes.len() - index,
     decreases child_sizes.len() - index,
 {
+    reveal(crate::layout::stack::stack_children);
     if index >= child_sizes.len() {
     } else {
         lemma_stack_children_len(
@@ -1641,6 +1645,7 @@ proof fn lemma_stack_children_element_shifted<T: OrderedField>(
             ),
     decreases k - start,
 {
+    reveal(crate::layout::stack::stack_children);
     if start == k {
     } else {
         lemma_stack_children_len(
@@ -1821,6 +1826,8 @@ pub proof fn lemma_layout_respects_limits<T: OrderedField>(
             lemma_resolve_bounds(limits, Size::new(total_width, limits.max.height));
         },
         Widget::Stack { padding, h_align, v_align, children } => {
+            reveal(stack_layout);
+            reveal(stack_content_size);
             let inner = limits.shrink(padding.horizontal(), padding.vertical());
             let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
             let child_sizes = Seq::new(cn.len(), |i: int| cn[i].size);
@@ -3336,6 +3343,7 @@ proof fn lemma_max_width_pointwise_monotone<T: OrderedRing>(
             crate::layout::stack::max_width(sizes2, count)),
     decreases count,
 {
+    reveal(crate::layout::stack::max_width);
     if count > 0 {
         lemma_max_width_pointwise_monotone::<T>(sizes1, sizes2, (count - 1) as nat);
         lemma_max_monotone_both::<T>(
@@ -3365,6 +3373,7 @@ proof fn lemma_max_height_pointwise_monotone<T: OrderedRing>(
             crate::layout::stack::max_height(sizes2, count)),
     decreases count,
 {
+    reveal(crate::layout::stack::max_height);
     if count > 0 {
         lemma_max_height_pointwise_monotone::<T>(sizes1, sizes2, (count - 1) as nat);
         lemma_max_monotone_both::<T>(
@@ -4244,6 +4253,8 @@ pub proof fn lemma_layout_widget_monotone<T: OrderedField>(
             );
         },
         Widget::Stack { padding, h_align, v_align, children } => {
+            reveal(crate::layout::stack::stack_layout);
+            reveal(crate::layout::stack::stack_content_size);
             let h = padding.horizontal();
             let v = padding.vertical();
             let inner1 = limits1.shrink(h, v);
