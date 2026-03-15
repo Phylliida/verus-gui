@@ -23,6 +23,16 @@ pub enum FlexDirection {
     Row,
 }
 
+impl FlexDirection {
+    /// Convert flex direction to layout axis.
+    pub open spec fn axis(self) -> Axis {
+        match self {
+            FlexDirection::Column => Axis::Vertical,
+            FlexDirection::Row => Axis::Horizontal,
+        }
+    }
+}
+
 /// A flex child with a weight.
 #[verifier::reject_recursive_types(T)]
 pub struct FlexItem<T: OrderedRing> {
@@ -179,6 +189,20 @@ pub open spec fn layout_row_body<T: OrderedField>(
     merge_layout(layout, child_nodes)
 }
 
+/// Unified linear layout body: axis-parameterized column/row.
+pub open spec fn layout_linear_body<T: OrderedField>(
+    limits: Limits<T>,
+    padding: Padding<T>,
+    spacing: T,
+    alignment: Alignment,
+    child_nodes: Seq<Node<T>>,
+    axis: Axis,
+) -> Node<T> {
+    let child_sizes = Seq::new(child_nodes.len(), |i: int| child_nodes[i].size);
+    let layout = linear_layout(limits, padding, spacing, alignment, child_sizes, axis);
+    merge_layout(layout, child_nodes)
+}
+
 /// Stack layout body.
 pub open spec fn layout_stack_body<T: OrderedField>(
     limits: Limits<T>,
@@ -232,6 +256,22 @@ pub open spec fn layout_flex_row_body<T: OrderedField>(
     let child_cross_sizes = Seq::new(child_nodes.len(), |i: int| child_nodes[i].size.height);
     let layout = flex_row_layout(limits, padding, spacing, alignment, weights, child_cross_sizes);
     merge_layout(layout, child_nodes)
+}
+
+/// Flex linear layout body (axis-parameterized): dispatches to column/row body based on axis.
+pub open spec fn layout_flex_linear_body<T: OrderedField>(
+    limits: Limits<T>,
+    padding: Padding<T>,
+    spacing: T,
+    alignment: Alignment,
+    weights: Seq<T>,
+    child_nodes: Seq<Node<T>>,
+    axis: Axis,
+) -> Node<T> {
+    match axis {
+        Axis::Vertical => layout_flex_column_body(limits, padding, spacing, alignment, weights, child_nodes),
+        Axis::Horizontal => layout_flex_row_body(limits, padding, spacing, alignment, weights, child_nodes),
+    }
 }
 
 /// Grid layout body: given pre-computed child nodes (flat, row-major), run grid_layout and merge.
@@ -326,6 +366,29 @@ pub open spec fn flex_row_widget_child_nodes<T: OrderedField>(
     })
 }
 
+/// Compute child nodes for a flex linear layout (axis-parameterized).
+/// Dispatches to column/row widget child nodes based on axis.
+pub open spec fn flex_linear_widget_child_nodes<T: OrderedField>(
+    inner: Limits<T>,
+    children: Seq<FlexItem<T>>,
+    weights: Seq<T>,
+    total_weight: T,
+    available_main: T,
+    axis: Axis,
+    fuel: nat,
+) -> Seq<Node<T>>
+    decreases fuel, 2nat,
+{
+    match axis {
+        Axis::Vertical => flex_column_widget_child_nodes(
+            inner, children, weights, total_weight, available_main, fuel,
+        ),
+        Axis::Horizontal => flex_row_widget_child_nodes(
+            inner, children, weights, total_weight, available_main, fuel,
+        ),
+    }
+}
+
 /// Compute child nodes for a grid: each child gets cell-sized limits.
 pub open spec fn grid_widget_child_nodes<T: OrderedField>(
     inner: Limits<T>,
@@ -391,12 +454,12 @@ pub open spec fn layout_widget<T: OrderedField>(
             Widget::Column { padding, spacing, alignment, children } => {
                 let inner = limits.shrink(padding.horizontal(), padding.vertical());
                 let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
-                layout_column_body(limits, padding, spacing, alignment, cn)
+                layout_linear_body(limits, padding, spacing, alignment, cn, Axis::Vertical)
             },
             Widget::Row { padding, spacing, alignment, children } => {
                 let inner = limits.shrink(padding.horizontal(), padding.vertical());
                 let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
-                layout_row_body(limits, padding, spacing, alignment, cn)
+                layout_linear_body(limits, padding, spacing, alignment, cn, Axis::Horizontal)
             },
             Widget::Stack { padding, h_align, v_align, children } => {
                 let inner = limits.shrink(padding.horizontal(), padding.vertical());
@@ -409,34 +472,21 @@ pub open spec fn layout_widget<T: OrderedField>(
                 layout_wrap_body(limits, padding, h_spacing, v_spacing, cn)
             },
             Widget::Flex { padding, spacing, alignment, direction, children } => {
+                let axis = direction.axis();
                 let inner = limits.shrink(padding.horizontal(), padding.vertical());
                 let weights = Seq::new(children.len(), |i: int| children[i].weight);
                 let total_weight = sum_weights(weights, weights.len() as nat);
                 let total_spacing = if children.len() > 0 {
                     repeated_add(spacing, (children.len() - 1) as nat)
                 } else { T::zero() };
-                match direction {
-                    FlexDirection::Column => {
-                        let available_height = inner.max.height.sub(total_spacing);
-                        let cn = flex_column_widget_child_nodes(
-                            inner, children, weights, total_weight,
-                            available_height, (fuel - 1) as nat,
-                        );
-                        layout_flex_column_body(
-                            limits, padding, spacing, alignment, weights, cn,
-                        )
-                    },
-                    FlexDirection::Row => {
-                        let available_width = inner.max.width.sub(total_spacing);
-                        let cn = flex_row_widget_child_nodes(
-                            inner, children, weights, total_weight,
-                            available_width, (fuel - 1) as nat,
-                        );
-                        layout_flex_row_body(
-                            limits, padding, spacing, alignment, weights, cn,
-                        )
-                    },
-                }
+                let available_main = inner.max.main_dim(axis).sub(total_spacing);
+                let cn = flex_linear_widget_child_nodes(
+                    inner, children, weights, total_weight,
+                    available_main, axis, (fuel - 1) as nat,
+                );
+                layout_flex_linear_body(
+                    limits, padding, spacing, alignment, weights, cn, axis,
+                )
             },
             Widget::Grid { padding, h_spacing, v_spacing, h_align, v_align,
                            col_widths, row_heights, children } => {
@@ -777,6 +827,38 @@ proof fn lemma_flex_row_child_nodes_fuel_monotone<T: OrderedField>(
     assert(old_cn =~= new_cn);
 }
 
+/// Flex linear child nodes are fuel-monotone (axis-parameterized).
+proof fn lemma_flex_linear_child_nodes_fuel_monotone<T: OrderedField>(
+    inner: Limits<T>,
+    children: Seq<FlexItem<T>>,
+    weights: Seq<T>,
+    total_weight: T,
+    available_main: T,
+    axis: Axis,
+    fuel: nat,
+)
+    requires
+        forall|i: int| 0 <= i < children.len() ==>
+            widget_converged(children[i].child, fuel),
+    ensures
+        flex_linear_widget_child_nodes(inner, children, weights, total_weight, available_main, axis, fuel)
+            == flex_linear_widget_child_nodes(inner, children, weights, total_weight, available_main, axis, fuel + 1),
+    decreases fuel, 2nat,
+{
+    match axis {
+        Axis::Vertical => {
+            lemma_flex_column_child_nodes_fuel_monotone(
+                inner, children, weights, total_weight, available_main, fuel,
+            );
+        },
+        Axis::Horizontal => {
+            lemma_flex_row_child_nodes_fuel_monotone(
+                inner, children, weights, total_weight, available_main, fuel,
+            );
+        },
+    }
+}
+
 /// Absolute child nodes are fuel-monotone.
 proof fn lemma_absolute_child_nodes_fuel_monotone<T: OrderedField>(
     inner_limits: Limits<T>,
@@ -860,10 +942,10 @@ pub proof fn lemma_layout_widget_fuel_monotone<T: OrderedField>(
             let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
             assert(cn =~= widget_child_nodes(inner, children, fuel));
             assert(layout_widget(limits, widget, fuel)
-                == layout_column_body(limits, padding, spacing, alignment, cn));
+                == layout_linear_body(limits, padding, spacing, alignment, cn, Axis::Vertical));
             assert(layout_widget(limits, widget, fuel + 1)
-                == layout_column_body(limits, padding, spacing, alignment,
-                    widget_child_nodes(inner, children, fuel)));
+                == layout_linear_body(limits, padding, spacing, alignment,
+                    widget_child_nodes(inner, children, fuel), Axis::Vertical));
         },
         Widget::Row { padding, spacing, alignment, children } => {
             assert(get_children(widget) =~= children);
@@ -874,10 +956,10 @@ pub proof fn lemma_layout_widget_fuel_monotone<T: OrderedField>(
             let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
             assert(cn =~= widget_child_nodes(inner, children, fuel));
             assert(layout_widget(limits, widget, fuel)
-                == layout_row_body(limits, padding, spacing, alignment, cn));
+                == layout_linear_body(limits, padding, spacing, alignment, cn, Axis::Horizontal));
             assert(layout_widget(limits, widget, fuel + 1)
-                == layout_row_body(limits, padding, spacing, alignment,
-                    widget_child_nodes(inner, children, fuel)));
+                == layout_linear_body(limits, padding, spacing, alignment,
+                    widget_child_nodes(inner, children, fuel), Axis::Horizontal));
         },
         Widget::Stack { padding, h_align, v_align, children } => {
             assert(get_children(widget) =~= children);
@@ -923,40 +1005,21 @@ pub proof fn lemma_layout_widget_fuel_monotone<T: OrderedField>(
                 repeated_add(spacing, (children.len() - 1) as nat)
             } else { T::zero() };
 
-            match direction {
-                FlexDirection::Column => {
-                    let ah = inner.max.height.sub(total_spacing);
-                    if children.len() > 0 {
-                        lemma_flex_column_child_nodes_fuel_monotone(
-                            inner, children, weights, total_weight, ah, (fuel - 1) as nat);
-                    }
-                    let cn = flex_column_widget_child_nodes(
-                        inner, children, weights, total_weight, ah, (fuel - 1) as nat);
-                    assert(cn =~= flex_column_widget_child_nodes(
-                        inner, children, weights, total_weight, ah, fuel));
-                    assert(layout_widget(limits, widget, fuel)
-                        == layout_flex_column_body(limits, padding, spacing, alignment, weights, cn));
-                    assert(layout_widget(limits, widget, fuel + 1)
-                        == layout_flex_column_body(limits, padding, spacing, alignment, weights,
-                            flex_column_widget_child_nodes(inner, children, weights, total_weight, ah, fuel)));
-                },
-                FlexDirection::Row => {
-                    let aw = inner.max.width.sub(total_spacing);
-                    if children.len() > 0 {
-                        lemma_flex_row_child_nodes_fuel_monotone(
-                            inner, children, weights, total_weight, aw, (fuel - 1) as nat);
-                    }
-                    let cn = flex_row_widget_child_nodes(
-                        inner, children, weights, total_weight, aw, (fuel - 1) as nat);
-                    assert(cn =~= flex_row_widget_child_nodes(
-                        inner, children, weights, total_weight, aw, fuel));
-                    assert(layout_widget(limits, widget, fuel)
-                        == layout_flex_row_body(limits, padding, spacing, alignment, weights, cn));
-                    assert(layout_widget(limits, widget, fuel + 1)
-                        == layout_flex_row_body(limits, padding, spacing, alignment, weights,
-                            flex_row_widget_child_nodes(inner, children, weights, total_weight, aw, fuel)));
-                },
+            let axis = direction.axis();
+            let am = inner.max.main_dim(axis).sub(total_spacing);
+            if children.len() > 0 {
+                lemma_flex_linear_child_nodes_fuel_monotone(
+                    inner, children, weights, total_weight, am, axis, (fuel - 1) as nat);
             }
+            let cn = flex_linear_widget_child_nodes(
+                inner, children, weights, total_weight, am, axis, (fuel - 1) as nat);
+            assert(cn =~= flex_linear_widget_child_nodes(
+                inner, children, weights, total_weight, am, axis, fuel));
+            assert(layout_widget(limits, widget, fuel)
+                == layout_flex_linear_body(limits, padding, spacing, alignment, weights, cn, axis));
+            assert(layout_widget(limits, widget, fuel + 1)
+                == layout_flex_linear_body(limits, padding, spacing, alignment, weights,
+                    flex_linear_widget_child_nodes(inner, children, weights, total_weight, am, axis, fuel), axis));
         },
         Widget::Grid { padding, h_spacing, v_spacing, h_align, v_align,
                        col_widths, row_heights, children } => {

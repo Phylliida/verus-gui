@@ -649,7 +649,12 @@ fn layout_flex_widget_exec(
                     }
                 }
 
-                // 4. merged@ == layout_flex_column_body(...)
+                // 4. Bridge: layout_widget uses flex_linear_widget_child_nodes dispatch
+                assert(spec_cn === flex_linear_widget_child_nodes(
+                    inner_spec, spec_fi, spec_weights, total_weight@,
+                    avail_spec, Axis::Vertical, (fuel - 1) as nat));
+
+                // 5. merged@ == layout_flex_column_body(...)
                 assert(merged@ == layout_flex_column_body::<RationalModel>(
                     limits@, padding@, spacing@, *alignment, spec_weights_fi, spec_cn));
             }
@@ -760,7 +765,12 @@ fn layout_flex_widget_exec(
                     }
                 }
 
-                // 4. merged@ == layout_flex_row_body(...)
+                // 4. Bridge: layout_widget uses flex_linear_widget_child_nodes dispatch
+                assert(spec_cn === flex_linear_widget_child_nodes(
+                    inner_spec, spec_fi, spec_weights, total_weight@,
+                    avail_spec, Axis::Horizontal, (fuel - 1) as nat));
+
+                // 5. merged@ == layout_flex_row_body(...)
                 assert(merged@ == layout_flex_row_body::<RationalModel>(
                     limits@, padding@, spacing@, *alignment, spec_weights_fi, spec_cn));
             }

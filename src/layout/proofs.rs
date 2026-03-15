@@ -1805,28 +1805,26 @@ pub proof fn lemma_layout_respects_limits<T: OrderedField>(
             lemma_resolve_bounds(limits, size);
         },
         Widget::Column { padding, spacing, alignment, children } => {
-            reveal(column_layout);
+            reveal(linear_layout);
             let inner = limits.shrink(padding.horizontal(), padding.vertical());
             let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
             let child_sizes = Seq::new(cn.len(), |i: int| cn[i].size);
-            let layout = column_layout(limits, padding, spacing, alignment, child_sizes);
-            // merge preserves size
+            let layout = linear_layout(limits, padding, spacing, alignment, child_sizes, Axis::Vertical);
             assert(merge_layout(layout, cn).size == layout.size);
-            // column_layout.size = limits.resolve(...)
-            let content_height = column_content_height(child_sizes, spacing);
-            let total_height = padding.vertical().add(content_height);
-            lemma_resolve_bounds(limits, Size::new(limits.max.width, total_height));
+            let content_main = linear_content_main(child_sizes, Axis::Vertical, spacing);
+            let total_main = padding.main_padding(Axis::Vertical).add(content_main);
+            lemma_resolve_bounds(limits, Size::from_axes(Axis::Vertical, total_main, limits.max.cross_dim(Axis::Vertical)));
         },
         Widget::Row { padding, spacing, alignment, children } => {
-            reveal(row_layout);
+            reveal(linear_layout);
             let inner = limits.shrink(padding.horizontal(), padding.vertical());
             let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
             let child_sizes = Seq::new(cn.len(), |i: int| cn[i].size);
-            let layout = row_layout(limits, padding, spacing, alignment, child_sizes);
+            let layout = linear_layout(limits, padding, spacing, alignment, child_sizes, Axis::Horizontal);
             assert(merge_layout(layout, cn).size == layout.size);
-            let content_width = row_content_width(child_sizes, spacing);
-            let total_width = padding.horizontal().add(content_width);
-            lemma_resolve_bounds(limits, Size::new(total_width, limits.max.height));
+            let content_main = linear_content_main(child_sizes, Axis::Horizontal, spacing);
+            let total_main = padding.main_padding(Axis::Horizontal).add(content_main);
+            lemma_resolve_bounds(limits, Size::from_axes(Axis::Horizontal, total_main, limits.max.cross_dim(Axis::Horizontal)));
         },
         Widget::Stack { padding, h_align, v_align, children } => {
             reveal(stack_layout);
@@ -2922,342 +2920,6 @@ pub proof fn lemma_resolve_monotone_input_and_max<T: OrderedRing>(
     );
 }
 
-/// Column layout has children_within_bounds when padding fits and content doesn't overflow.
-pub proof fn lemma_column_children_within_bounds<T: OrderedField>(
-    limits: Limits<T>,
-    padding: Padding<T>,
-    spacing: T,
-    alignment: Alignment,
-    children: Seq<Widget<T>>,
-    fuel: nat,
-)
-    requires
-        limits.wf(),
-        fuel > 1,
-        padding.is_nonneg(),
-        T::zero().le(spacing),
-        padding.horizontal().add(limits.min.width).le(limits.max.width),
-        padding.vertical().add(limits.min.height).le(limits.max.height),
-        ({
-            let inner = limits.shrink(padding.horizontal(), padding.vertical());
-            let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
-            let child_sizes = Seq::new(cn.len(), |i: int| cn[i].size);
-            padding.vertical().add(column_content_height(child_sizes, spacing))
-                .le(limits.max.height)
-        }),
-    ensures
-        layout_widget(limits, Widget::Column {
-            padding, spacing, alignment, children,
-        }, fuel).children_within_bounds(),
-{
-    let h = padding.horizontal();
-    let v = padding.vertical();
-    let inner = limits.shrink(h, v);
-    let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
-    let child_sizes = Seq::new(cn.len(), |i: int| cn[i].size);
-    let avail_w = limits.max.width.sub(h);
-    let content_h = column_content_height(child_sizes, spacing);
-    let total_h = v.add(content_h);
-    let input_size = Size::new(limits.max.width, total_h);
-
-    // h >= 0, v >= 0
-    lemma_nonneg_sum(padding.left, padding.right);
-    lemma_nonneg_sum(padding.top, padding.bottom);
-
-    // inner.wf() + shrink bounds
-    lemma_shrink_wf(limits, h, v);
-    lemma_add_comm_le(h, limits.min.width, limits.max.width);
-    lemma_add_comm_le(v, limits.min.height, limits.max.height);
-    lemma_shrink_max_bound(limits, h, v);
-
-    // inner.max.w <= avail_w: from shrink_max_bound + add_cancel
-    verus_algebra::lemmas::additive_group_lemmas::lemma_sub_then_add_cancel::<T>(
-        limits.max.width, h,
-    );
-    T::axiom_eqv_symmetric(avail_w.add(h), limits.max.width);
-    verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_right::<T>(
-        inner.max.width.add(h), limits.max.width, avail_w.add(h),
-    );
-    lemma_le_add_cancel_right(inner.max.width, avail_w, h);
-
-    // Each child: size <= inner.max → size <= (avail_w for width, inner.max for height)
-    // Also: child nonneg from inner min <= size
-    assert forall|k: int| 0 <= k < cn.len() implies
-        child_sizes[k].width.le(avail_w)
-        && T::zero().le(child_sizes[k].width)
-        && T::zero().le(child_sizes[k].height)
-    by {
-        lemma_layout_respects_limits(inner, children[k], (fuel - 1) as nat);
-        T::axiom_le_transitive(child_sizes[k].width, inner.max.width, avail_w);
-        T::axiom_le_transitive(T::zero(), inner.min.width, child_sizes[k].width);
-        T::axiom_le_transitive(T::zero(), inner.min.height, child_sizes[k].height);
-    };
-
-    // total_h <= max.h (from no-overflow precondition: v + content_h <= max.h)
-    // resolve(max.w, total_h) >= (max.w, total_h) since both <= max
-    T::axiom_le_reflexive(limits.max.width);
-    lemma_resolve_ge_input(limits, input_size);
-
-    // Also: resolve.w <= max.w and resolve.h <= max.h
-    lemma_resolve_le_max_width(limits, input_size);
-
-    // parent.w = resolve.w. Show resolve.w ≡ max.w (input was max.w, clamped to [min,max])
-    T::axiom_le_antisymmetric(
-        limits.resolve(input_size).width, limits.max.width,
-    );
-    // parent.w ≡ max.w now established
-
-    // left + avail_w <= max.w: left <= h (from nonneg right), h + avail_w ≡ max.w
-    lemma_le_add_nonneg(padding.left, padding.right);
-    T::axiom_le_add_monotone(padding.left, h, avail_w);
-    T::axiom_add_commutative(h, avail_w);
-    verus_algebra::lemmas::additive_group_lemmas::lemma_sub_then_add_cancel::<T>(
-        limits.max.width, h,
-    );
-    verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_right::<T>(
-        padding.left.add(avail_w), h.add(avail_w), avail_w.add(h),
-    );
-    T::axiom_le_transitive(
-        padding.left.add(avail_w), avail_w.add(h), limits.max.width,
-    );
-
-    // top + content_h <= total_h: top <= v, so top + content_h <= v + content_h = total_h
-    lemma_le_add_nonneg(padding.top, padding.bottom);
-    T::axiom_le_add_monotone(padding.top, v, content_h);
-
-    // Column children structure
-    lemma_column_children_len(padding, spacing, alignment, child_sizes, avail_w, 0);
-
-    reveal(column_layout);
-    let layout = column_layout(limits, padding, spacing, alignment, child_sizes);
-
-    // Per-child bounds
-    assert forall|i: int| 0 <= i < cn.len() implies
-        T::zero().le(layout.children[i].x)
-        && T::zero().le(layout.children[i].y)
-        && layout.children[i].x.add(cn[i].size.width).le(layout.size.width)
-        && layout.children[i].y.add(cn[i].size.height).le(layout.size.height)
-    by {
-        lemma_column_children_element(
-            padding, spacing, alignment, child_sizes, avail_w, i as nat,
-        );
-
-        // X lower: 0 <= left, left <= left + align_offset, so 0 <= x
-        lemma_column_child_x_lower_bound(
-            padding.left, alignment, avail_w, child_sizes[i].width,
-        );
-        T::axiom_le_transitive(T::zero(), padding.left, layout.children[i].x);
-
-        // X upper: x + w <= left + avail_w <= max.w ≡ parent.w
-        lemma_column_child_x_upper_bound(
-            padding.left, alignment, avail_w, child_sizes[i].width,
-        );
-        T::axiom_le_transitive(
-            layout.children[i].x.add(child_sizes[i].width),
-            padding.left.add(avail_w),
-            limits.max.width,
-        );
-        // max.w ≡ parent.w (from antisymmetric above)
-        T::axiom_eqv_symmetric(
-            limits.resolve(input_size).width, limits.max.width,
-        );
-        verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_right::<T>(
-            layout.children[i].x.add(child_sizes[i].width),
-            limits.max.width,
-            limits.resolve(input_size).width,
-        );
-
-        // Y lower: 0 <= top <= child_y
-        lemma_column_child_y_lower_bound(padding.top, child_sizes, spacing, i as nat);
-        T::axiom_le_transitive(T::zero(), padding.top, layout.children[i].y);
-
-        // Y upper: y + h <= top + content_h <= total_h <= resolve.h = parent.h
-        if cn.len() > 0 {
-            lemma_column_child_y_upper_bound(padding.top, child_sizes, spacing, i as nat);
-            T::axiom_le_transitive(
-                layout.children[i].y.add(child_sizes[i].height),
-                padding.top.add(content_h),
-                total_h,
-            );
-            T::axiom_le_transitive(
-                layout.children[i].y.add(child_sizes[i].height),
-                total_h,
-                limits.resolve(input_size).height,
-            );
-        }
-
-        // cn[i].size == child_sizes[i]
-        assert(child_sizes[i] === cn[i].size);
-    };
-
-    lemma_merge_layout_cwb(layout, cn);
-}
-
-/// Row layout has children_within_bounds when padding fits and content doesn't overflow.
-pub proof fn lemma_row_children_within_bounds<T: OrderedField>(
-    limits: Limits<T>,
-    padding: Padding<T>,
-    spacing: T,
-    alignment: Alignment,
-    children: Seq<Widget<T>>,
-    fuel: nat,
-)
-    requires
-        limits.wf(),
-        fuel > 1,
-        padding.is_nonneg(),
-        T::zero().le(spacing),
-        padding.horizontal().add(limits.min.width).le(limits.max.width),
-        padding.vertical().add(limits.min.height).le(limits.max.height),
-        ({
-            let inner = limits.shrink(padding.horizontal(), padding.vertical());
-            let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
-            let child_sizes = Seq::new(cn.len(), |i: int| cn[i].size);
-            padding.horizontal().add(row_content_width(child_sizes, spacing))
-                .le(limits.max.width)
-        }),
-    ensures
-        layout_widget(limits, Widget::Row {
-            padding, spacing, alignment, children,
-        }, fuel).children_within_bounds(),
-{
-    let h = padding.horizontal();
-    let v = padding.vertical();
-    let inner = limits.shrink(h, v);
-    let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
-    let child_sizes = Seq::new(cn.len(), |i: int| cn[i].size);
-    let avail_h = limits.max.height.sub(v);
-    let content_w = row_content_width(child_sizes, spacing);
-    let total_w = h.add(content_w);
-    let input_size = Size::new(total_w, limits.max.height);
-
-    // h >= 0, v >= 0
-    lemma_nonneg_sum(padding.left, padding.right);
-    lemma_nonneg_sum(padding.top, padding.bottom);
-
-    // inner.wf() + shrink bounds
-    lemma_shrink_wf(limits, h, v);
-    lemma_add_comm_le(h, limits.min.width, limits.max.width);
-    lemma_add_comm_le(v, limits.min.height, limits.max.height);
-    lemma_shrink_max_bound(limits, h, v);
-
-    // inner.max.h <= avail_h: from shrink_max_bound + add_cancel
-    verus_algebra::lemmas::additive_group_lemmas::lemma_sub_then_add_cancel::<T>(
-        limits.max.height, v,
-    );
-    T::axiom_eqv_symmetric(avail_h.add(v), limits.max.height);
-    verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_right::<T>(
-        inner.max.height.add(v), limits.max.height, avail_h.add(v),
-    );
-    lemma_le_add_cancel_right(inner.max.height, avail_h, v);
-
-    // Each child: height <= avail_h and nonneg
-    assert forall|k: int| 0 <= k < cn.len() implies
-        child_sizes[k].height.le(avail_h)
-        && T::zero().le(child_sizes[k].width)
-        && T::zero().le(child_sizes[k].height)
-    by {
-        lemma_layout_respects_limits(inner, children[k], (fuel - 1) as nat);
-        T::axiom_le_transitive(child_sizes[k].height, inner.max.height, avail_h);
-        T::axiom_le_transitive(T::zero(), inner.min.width, child_sizes[k].width);
-        T::axiom_le_transitive(T::zero(), inner.min.height, child_sizes[k].height);
-    };
-
-    // total_w <= max.w (from no-overflow), max.h <= max.h (reflexive)
-    T::axiom_le_reflexive(limits.max.height);
-    lemma_resolve_ge_input(limits, input_size);
-    lemma_resolve_le_max_height(limits, input_size);
-
-    // parent.h = resolve.h ≡ max.h
-    T::axiom_le_antisymmetric(
-        limits.resolve(input_size).height, limits.max.height,
-    );
-
-    // top + avail_h <= max.h: top <= v, v + avail_h ≡ max.h
-    lemma_le_add_nonneg(padding.top, padding.bottom);
-    T::axiom_le_add_monotone(padding.top, v, avail_h);
-    T::axiom_add_commutative(v, avail_h);
-    verus_algebra::lemmas::additive_group_lemmas::lemma_sub_then_add_cancel::<T>(
-        limits.max.height, v,
-    );
-    verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_right::<T>(
-        padding.top.add(avail_h), v.add(avail_h), avail_h.add(v),
-    );
-    T::axiom_le_transitive(
-        padding.top.add(avail_h), avail_h.add(v), limits.max.height,
-    );
-
-    // left + content_w <= total_w: left <= h, so left + content_w <= h + content_w = total_w
-    lemma_le_add_nonneg(padding.left, padding.right);
-    T::axiom_le_add_monotone(padding.left, h, content_w);
-
-    // Row children structure
-    lemma_row_children_len(padding, spacing, alignment, child_sizes, avail_h, 0);
-
-    reveal(row_layout);
-    let layout = row_layout(limits, padding, spacing, alignment, child_sizes);
-
-    // Per-child bounds
-    assert forall|i: int| 0 <= i < cn.len() implies
-        T::zero().le(layout.children[i].x)
-        && T::zero().le(layout.children[i].y)
-        && layout.children[i].x.add(cn[i].size.width).le(layout.size.width)
-        && layout.children[i].y.add(cn[i].size.height).le(layout.size.height)
-    by {
-        lemma_row_children_element(
-            padding, spacing, alignment, child_sizes, avail_h, i as nat,
-        );
-
-        // X lower: 0 <= left <= child_x
-        lemma_row_child_x_lower_bound(padding.left, child_sizes, spacing, i as nat);
-        T::axiom_le_transitive(T::zero(), padding.left, layout.children[i].x);
-
-        // X upper: x + w <= left + content_w <= total_w <= resolve.w = parent.w
-        if cn.len() > 0 {
-            lemma_row_child_x_upper_bound(padding.left, child_sizes, spacing, i as nat);
-            T::axiom_le_transitive(
-                layout.children[i].x.add(child_sizes[i].width),
-                padding.left.add(content_w),
-                total_w,
-            );
-            T::axiom_le_transitive(
-                layout.children[i].x.add(child_sizes[i].width),
-                total_w,
-                limits.resolve(input_size).width,
-            );
-        }
-
-        // Y lower: 0 <= top <= top + align_offset
-        lemma_row_child_y_lower_bound(
-            padding.top, alignment, avail_h, child_sizes[i].height,
-        );
-        T::axiom_le_transitive(T::zero(), padding.top, layout.children[i].y);
-
-        // Y upper: y + h <= top + avail_h <= max.h ≡ parent.h
-        lemma_row_child_y_upper_bound(
-            padding.top, alignment, avail_h, child_sizes[i].height,
-        );
-        T::axiom_le_transitive(
-            layout.children[i].y.add(child_sizes[i].height),
-            padding.top.add(avail_h),
-            limits.max.height,
-        );
-        T::axiom_eqv_symmetric(
-            limits.resolve(input_size).height, limits.max.height,
-        );
-        verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_right::<T>(
-            layout.children[i].y.add(child_sizes[i].height),
-            limits.max.height,
-            limits.resolve(input_size).height,
-        );
-
-        // cn[i].size == child_sizes[i]
-        assert(child_sizes[i] === cn[i].size);
-    };
-
-    lemma_merge_layout_cwb(layout, cn);
-}
-
 // ── Content-size monotonicity helpers ───────────────────────────────
 
 /// sum_heights is monotone in pointwise-larger sizes.
@@ -3777,14 +3439,66 @@ pub proof fn lemma_layout_widget_cwb<T: OrderedField>(
             // Empty children → cwb trivially
         },
         Widget::Column { padding, spacing, alignment, children } => {
-            lemma_column_children_within_bounds(
-                limits, padding, spacing, alignment, children, fuel,
+            let inner = limits.shrink(padding.horizontal(), padding.vertical());
+            let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
+            let child_sizes = Seq::new(cn.len(), |i: int| cn[i].size);
+
+            // Bridge: sum_main(Vertical) == sum_heights, so Z3 derives
+            // linear_content_main(Vertical) == column_content_height
+            lemma_sum_main_eq_sum_heights::<T>(child_sizes, child_sizes.len() as nat);
+
+            // Prove CWB on the linear_layout
+            lemma_linear_children_within_bounds(
+                limits, padding, spacing, alignment, children, Axis::Vertical, fuel,
             );
+
+            // Bridge to merge_layout CWB
+            reveal(linear_layout);
+            let layout = linear_layout(limits, padding, spacing, alignment, child_sizes, Axis::Vertical);
+            let avail_cross = limits.max.width.sub(padding.horizontal());
+
+            lemma_linear_children_len(padding, spacing, alignment, child_sizes, Axis::Vertical, avail_cross, 0);
+
+            assert forall|i: int| 0 <= i < cn.len() implies
+                T::zero().le(layout.children[i].x)
+                && T::zero().le(layout.children[i].y)
+                && layout.children[i].x.add(cn[i].size.width).le(layout.size.width)
+                && layout.children[i].y.add(cn[i].size.height).le(layout.size.height)
+            by {
+                lemma_linear_children_element(padding, spacing, alignment, child_sizes, Axis::Vertical, avail_cross, i as nat);
+                // layout.children[i].size == child_sizes[i] == cn[i].size
+                // So CWB bounds transfer from pre-merge to merge_layout_cwb
+            };
+
+            lemma_merge_layout_cwb(layout, cn);
         },
         Widget::Row { padding, spacing, alignment, children } => {
-            lemma_row_children_within_bounds(
-                limits, padding, spacing, alignment, children, fuel,
+            let inner = limits.shrink(padding.horizontal(), padding.vertical());
+            let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
+            let child_sizes = Seq::new(cn.len(), |i: int| cn[i].size);
+
+            lemma_sum_main_eq_sum_widths::<T>(child_sizes, child_sizes.len() as nat);
+
+            lemma_linear_children_within_bounds(
+                limits, padding, spacing, alignment, children, Axis::Horizontal, fuel,
             );
+
+            reveal(linear_layout);
+            let layout = linear_layout(limits, padding, spacing, alignment, child_sizes, Axis::Horizontal);
+            let avail_cross = limits.max.height.sub(padding.vertical());
+
+            lemma_linear_children_len(padding, spacing, alignment, child_sizes, Axis::Horizontal, avail_cross, 0);
+
+            assert forall|i: int| 0 <= i < cn.len() implies
+                T::zero().le(layout.children[i].x)
+                && T::zero().le(layout.children[i].y)
+                && layout.children[i].x.add(cn[i].size.width).le(layout.size.width)
+                && layout.children[i].y.add(cn[i].size.height).le(layout.size.height)
+            by {
+                lemma_linear_children_element(padding, spacing, alignment, child_sizes, Axis::Horizontal, avail_cross, i as nat);
+            };
+
+            lemma_merge_layout_cwb(layout, cn);
         },
         Widget::Stack { padding, h_align, v_align, children } => {
             crate::layout::stack_proofs::lemma_stack_start_children_within_bounds(
@@ -4178,7 +3892,7 @@ pub proof fn lemma_layout_widget_monotone<T: OrderedField>(
             lemma_resolve_monotone_input_and_max(limits1, limits2, cs1, cs2);
         },
         Widget::Column { padding, spacing, alignment, children } => {
-            reveal(column_layout);
+            reveal(linear_layout);
             let h = padding.horizontal();
             let v = padding.vertical();
             let inner1 = limits1.shrink(h, v);
@@ -4190,43 +3904,40 @@ pub proof fn lemma_layout_widget_monotone<T: OrderedField>(
             let cn2 = widget_child_nodes(inner2, children, (fuel - 1) as nat);
             let cs1 = Seq::new(cn1.len(), |i: int| cn1[i].size);
             let cs2 = Seq::new(cn2.len(), |i: int| cn2[i].size);
-            // Inductive: each child size is monotone
             assert forall|i: int| 0 <= i < children.len() implies
                 cn1[i].size.le(cn2[i].size)
             by {
                 lemma_layout_widget_monotone(inner1, inner2, children[i], (fuel - 1) as nat);
             };
-            // content_height monotone
-            lemma_sum_heights_pointwise_monotone::<T>(cs1, cs2, cs1.len() as nat);
-            // column_content_height = sum_heights + (n-1)*spacing
-            // Both have same spacing term, sum_h1 ≤ sum_h2
-            // → content_h1 ≤ content_h2 (by le_add_monotone with same spacing)
+            // main_dim monotone (Vertical → height)
+            assert forall|i: int| 0 <= i < cs1.len() as int implies
+                cs1[i].main_dim(Axis::Vertical).le(cs2[i].main_dim(Axis::Vertical))
+            by {};
+            lemma_sum_main_pointwise_monotone::<T>(cs1, cs2, Axis::Vertical, cs1.len() as nat);
             if children.len() > 0 {
                 T::axiom_le_add_monotone(
-                    sum_heights(cs1, cs1.len() as nat),
-                    sum_heights(cs2, cs2.len() as nat),
+                    sum_main(cs1, Axis::Vertical, cs1.len() as nat),
+                    sum_main(cs2, Axis::Vertical, cs2.len() as nat),
                     repeated_add(spacing, (children.len() - 1) as nat),
                 );
             }
-            // total_h1 = v + content_h1 ≤ v + content_h2 = total_h2
-            let ch1 = column_content_height(cs1, spacing);
-            let ch2 = column_content_height(cs2, spacing);
-            T::axiom_le_add_monotone(ch1, ch2, v);
-            T::axiom_add_commutative(ch1, v);
-            T::axiom_add_commutative(ch2, v);
+            let cm1 = linear_content_main(cs1, Axis::Vertical, spacing);
+            let cm2 = linear_content_main(cs2, Axis::Vertical, spacing);
+            let mp = padding.main_padding(Axis::Vertical);
+            T::axiom_le_add_monotone(cm1, cm2, mp);
+            T::axiom_add_commutative(cm1, mp);
+            T::axiom_add_commutative(cm2, mp);
             T::axiom_le_congruence(
-                ch1.add(v), v.add(ch1), ch2.add(v), v.add(ch2),
+                cm1.add(mp), mp.add(cm1), cm2.add(mp), mp.add(cm2),
             );
-            // Width: limits1.max.width ≤ limits2.max.width
-            // Size1 = (max1_w, v+ch1), Size2 = (max2_w, v+ch2)
             lemma_resolve_monotone_input_and_max(
                 limits1, limits2,
-                Size::new(limits1.max.width, v.add(ch1)),
-                Size::new(limits2.max.width, v.add(ch2)),
+                Size::from_axes(Axis::Vertical, mp.add(cm1), limits1.max.cross_dim(Axis::Vertical)),
+                Size::from_axes(Axis::Vertical, mp.add(cm2), limits2.max.cross_dim(Axis::Vertical)),
             );
         },
         Widget::Row { padding, spacing, alignment, children } => {
-            reveal(row_layout);
+            reveal(linear_layout);
             let h = padding.horizontal();
             let v = padding.vertical();
             let inner1 = limits1.shrink(h, v);
@@ -4243,26 +3954,30 @@ pub proof fn lemma_layout_widget_monotone<T: OrderedField>(
             by {
                 lemma_layout_widget_monotone(inner1, inner2, children[i], (fuel - 1) as nat);
             };
-            lemma_sum_widths_pointwise_monotone::<T>(cs1, cs2, cs1.len() as nat);
+            assert forall|i: int| 0 <= i < cs1.len() as int implies
+                cs1[i].main_dim(Axis::Horizontal).le(cs2[i].main_dim(Axis::Horizontal))
+            by {};
+            lemma_sum_main_pointwise_monotone::<T>(cs1, cs2, Axis::Horizontal, cs1.len() as nat);
             if children.len() > 0 {
                 T::axiom_le_add_monotone(
-                    sum_widths(cs1, cs1.len() as nat),
-                    sum_widths(cs2, cs2.len() as nat),
+                    sum_main(cs1, Axis::Horizontal, cs1.len() as nat),
+                    sum_main(cs2, Axis::Horizontal, cs2.len() as nat),
                     repeated_add(spacing, (children.len() - 1) as nat),
                 );
             }
-            let cw1 = row_content_width(cs1, spacing);
-            let cw2 = row_content_width(cs2, spacing);
-            T::axiom_le_add_monotone(cw1, cw2, h);
-            T::axiom_add_commutative(cw1, h);
-            T::axiom_add_commutative(cw2, h);
+            let cm1 = linear_content_main(cs1, Axis::Horizontal, spacing);
+            let cm2 = linear_content_main(cs2, Axis::Horizontal, spacing);
+            let mp = padding.main_padding(Axis::Horizontal);
+            T::axiom_le_add_monotone(cm1, cm2, mp);
+            T::axiom_add_commutative(cm1, mp);
+            T::axiom_add_commutative(cm2, mp);
             T::axiom_le_congruence(
-                cw1.add(h), h.add(cw1), cw2.add(h), h.add(cw2),
+                cm1.add(mp), mp.add(cm1), cm2.add(mp), mp.add(cm2),
             );
             lemma_resolve_monotone_input_and_max(
                 limits1, limits2,
-                Size::new(h.add(cw1), limits1.max.height),
-                Size::new(h.add(cw2), limits2.max.height),
+                Size::from_axes(Axis::Horizontal, mp.add(cm1), limits1.max.cross_dim(Axis::Horizontal)),
+                Size::from_axes(Axis::Horizontal, mp.add(cm2), limits2.max.cross_dim(Axis::Horizontal)),
             );
         },
         Widget::Stack { padding, h_align, v_align, children } => {
@@ -5275,18 +4990,20 @@ pub proof fn lemma_linear_children_within_bounds<T: OrderedField>(
     let cs = padding.cross_start(axis);
     let ms = padding.main_start(axis);
 
-    // Per-child bounds
-    assert forall|i: int| 0 <= i < cn.len() implies
+    // Per-child bounds: prove children_within_bounds directly on linear_layout result.
+    // layout.children[i] = linear_children[i] = Node::leaf(x, y, child_sizes[i])
+    // so layout.children[i].size == child_sizes[i]
+    assert forall|i: int| 0 <= i < layout.children.len() implies
         T::zero().le(layout.children[i].x)
         && T::zero().le(layout.children[i].y)
-        && layout.children[i].x.add(cn[i].size.width).le(layout.size.width)
-        && layout.children[i].y.add(cn[i].size.height).le(layout.size.height)
+        && layout.children[i].right().le(layout.size.width)
+        && layout.children[i].bottom().le(layout.size.height)
     by {
         lemma_linear_children_element(
             padding, spacing, alignment, child_sizes, axis, avail_cross, i as nat,
         );
 
-        // Cross-axis lower: 0 ≤ cross_start ≤ cross_start + align_offset = cross_pos
+        // Cross-axis lower: 0 ≤ cross_start ≤ cross_start + align_offset
         lemma_column_child_x_lower_bound(
             cs, alignment, avail_cross, child_sizes[i].cross_dim(axis),
         );
@@ -5300,7 +5017,7 @@ pub proof fn lemma_linear_children_within_bounds<T: OrderedField>(
         lemma_linear_child_main_lower_bound(ms, child_sizes, axis, spacing, i as nat);
 
         // Main-axis upper
-        if cn.len() > 0 {
+        if child_sizes.len() > 0 {
             lemma_linear_child_main_upper_bound(ms, child_sizes, axis, spacing, i as nat);
         }
 
@@ -5325,7 +5042,7 @@ pub proof fn lemma_linear_children_within_bounds<T: OrderedField>(
                     limits.resolve(input_size).width,
                 );
                 // y + h ≤ top + content_h ≤ total_h ≤ resolve.h
-                if cn.len() > 0 {
+                if child_sizes.len() > 0 {
                     T::axiom_le_transitive(
                         layout.children[i].y.add(child_sizes[i].height),
                         padding.top.add(content_main),
@@ -5343,7 +5060,7 @@ pub proof fn lemma_linear_children_within_bounds<T: OrderedField>(
                 T::axiom_le_transitive(T::zero(), padding.left, layout.children[i].x);
                 T::axiom_le_transitive(T::zero(), padding.top, layout.children[i].y);
                 // x + w ≤ left + content_w ≤ total_w ≤ resolve.w
-                if cn.len() > 0 {
+                if child_sizes.len() > 0 {
                     T::axiom_le_transitive(
                         layout.children[i].x.add(child_sizes[i].width),
                         padding.left.add(content_main),
@@ -5371,11 +5088,7 @@ pub proof fn lemma_linear_children_within_bounds<T: OrderedField>(
                 );
             },
         }
-
-        assert(child_sizes[i] === cn[i].size);
     };
-
-    lemma_merge_layout_cwb(layout, cn);
 }
 
 } // verus!

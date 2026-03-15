@@ -63,16 +63,16 @@ pub open spec fn measure_widget<T: OrderedField>(
             Widget::Column { padding, spacing, alignment, children } => {
                 let inner = limits.shrink(padding.horizontal(), padding.vertical());
                 let child_sizes = measure_children(inner, children, (fuel - 1) as nat);
-                let content_height = column_content_height(child_sizes, spacing);
-                let total_height = padding.vertical().add(content_height);
-                limits.resolve(Size::new(limits.max.width, total_height))
+                let content_main = linear_content_main(child_sizes, Axis::Vertical, spacing);
+                let total_main = padding.main_padding(Axis::Vertical).add(content_main);
+                limits.resolve(Size::from_axes(Axis::Vertical, total_main, limits.max.cross_dim(Axis::Vertical)))
             },
             Widget::Row { padding, spacing, alignment, children } => {
                 let inner = limits.shrink(padding.horizontal(), padding.vertical());
                 let child_sizes = measure_children(inner, children, (fuel - 1) as nat);
-                let content_width = row_content_width(child_sizes, spacing);
-                let total_width = padding.horizontal().add(content_width);
-                limits.resolve(Size::new(total_width, limits.max.height))
+                let content_main = linear_content_main(child_sizes, Axis::Horizontal, spacing);
+                let total_main = padding.main_padding(Axis::Horizontal).add(content_main);
+                limits.resolve(Size::from_axes(Axis::Horizontal, total_main, limits.max.cross_dim(Axis::Horizontal)))
             },
             Widget::Stack { padding, h_align, v_align, children } => {
                 let inner = limits.shrink(padding.horizontal(), padding.vertical());
@@ -192,6 +192,19 @@ pub open spec fn measure_row_result<T: OrderedField>(
     let content_width = row_content_width(child_sizes, spacing);
     let total_width = padding.horizontal().add(content_width);
     limits.resolve(Size::new(total_width, limits.max.height))
+}
+
+/// Unified linear container size from pre-measured child sizes (axis-parameterized).
+pub open spec fn measure_linear_result<T: OrderedField>(
+    limits: Limits<T>,
+    padding: Padding<T>,
+    spacing: T,
+    child_sizes: Seq<Size<T>>,
+    axis: Axis,
+) -> Size<T> {
+    let content_main = linear_content_main(child_sizes, axis, spacing);
+    let total_main = padding.main_padding(axis).add(content_main);
+    limits.resolve(Size::from_axes(axis, total_main, limits.max.cross_dim(axis)))
 }
 
 /// Stack container size from pre-measured child sizes.
@@ -346,33 +359,21 @@ pub proof fn lemma_measure_is_layout_size<T: OrderedField>(
                 // Both return limits.resolve(size)
             },
             Widget::Column { padding, spacing, alignment, children } => {
-                reveal(column_layout);
+                reveal(linear_layout);
                 let inner = limits.shrink(padding.horizontal(), padding.vertical());
                 lemma_measure_children_match(inner, children, (fuel - 1) as nat);
 
-                // child_sizes used by measure
                 let m_sizes = measure_children(inner, children, (fuel - 1) as nat);
-                // child nodes from layout
                 let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
-                // child_sizes used by layout (extracted from nodes)
                 let l_sizes = Seq::new(cn.len(), |i: int| cn[i].size);
-
-                // From lemma: m_sizes =~= l_sizes
                 assert(m_sizes =~= l_sizes);
 
-                // layout_column_body computes column_layout then merge_layout
-                // merge_layout preserves .size
-                let layout = column_layout(limits, padding, spacing, alignment, l_sizes);
+                let layout = linear_layout(limits, padding, spacing, alignment, l_sizes, Axis::Vertical);
                 assert(merge_layout(layout, cn).size == layout.size);
-
-                // layout_widget returns merge_layout(column_layout(...), cn)
                 assert(layout_widget(limits, widget, fuel).size == layout.size);
-
-                // measure_widget returns limits.resolve(Size::new(limits.max.width, total_height))
-                // which is exactly layout.size (= parent_size in column_layout)
             },
             Widget::Row { padding, spacing, alignment, children } => {
-                reveal(row_layout);
+                reveal(linear_layout);
                 let inner = limits.shrink(padding.horizontal(), padding.vertical());
                 lemma_measure_children_match(inner, children, (fuel - 1) as nat);
 
@@ -381,7 +382,7 @@ pub proof fn lemma_measure_is_layout_size<T: OrderedField>(
                 let l_sizes = Seq::new(cn.len(), |i: int| cn[i].size);
                 assert(m_sizes =~= l_sizes);
 
-                let layout = row_layout(limits, padding, spacing, alignment, l_sizes);
+                let layout = linear_layout(limits, padding, spacing, alignment, l_sizes, Axis::Horizontal);
                 assert(merge_layout(layout, cn).size == layout.size);
                 assert(layout_widget(limits, widget, fuel).size == layout.size);
             },

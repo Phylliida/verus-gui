@@ -322,7 +322,7 @@ pub proof fn lemma_column_layout_is_linear<T: OrderedField>(
 }
 
 /// Helper: sum_main(Vertical) == sum_heights
-proof fn lemma_sum_main_eq_sum_heights<T: OrderedRing>(
+pub proof fn lemma_sum_main_eq_sum_heights<T: OrderedRing>(
     sizes: Seq<Size<T>>,
     count: nat,
 )
@@ -425,7 +425,7 @@ pub proof fn lemma_row_layout_is_linear<T: OrderedField>(
 }
 
 /// Helper: sum_main(Horizontal) == sum_widths
-proof fn lemma_sum_main_eq_sum_widths<T: OrderedRing>(
+pub proof fn lemma_sum_main_eq_sum_widths<T: OrderedRing>(
     sizes: Seq<Size<T>>,
     count: nat,
 )

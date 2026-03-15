@@ -72,6 +72,32 @@ proof fn lemma_row_respects_limits<T: OrderedField>(
     lemma_resolve_bounds(limits, s);
 }
 
+/// Linear (axis-parameterized): output.size == linear_layout(...).size == limits.resolve(something).
+proof fn lemma_linear_respects_limits<T: OrderedField>(
+    limits: Limits<T>,
+    padding: Padding<T>,
+    spacing: T,
+    alignment: Alignment,
+    child_nodes: Seq<Node<T>>,
+    axis: Axis,
+)
+    requires limits.wf(),
+    ensures
+        limits.min.le(layout_linear_body(limits, padding, spacing, alignment, child_nodes, axis).size),
+        layout_linear_body(limits, padding, spacing, alignment, child_nodes, axis).size.le(limits.max),
+{
+    reveal(linear_layout);
+    let child_sizes = Seq::new(child_nodes.len(), |i: int| child_nodes[i].size);
+    let layout = linear_layout(limits, padding, spacing, alignment, child_sizes, axis);
+    assert(layout_linear_body(limits, padding, spacing, alignment, child_nodes, axis).size
+        == layout.size);
+    let content_main = linear_content_main(child_sizes, axis, spacing);
+    let total_main = padding.main_padding(axis).add(content_main);
+    let s = Size::from_axes(axis, total_main, limits.max.cross_dim(axis));
+    assert(layout.size == limits.resolve(s));
+    lemma_resolve_bounds(limits, s);
+}
+
 /// Stack: output.size == stack_layout(...).size == limits.resolve(something).
 proof fn lemma_stack_respects_limits<T: OrderedField>(
     limits: Limits<T>,
@@ -174,6 +200,7 @@ proof fn lemma_flex_row_respects_limits<T: OrderedField>(
     lemma_resolve_bounds(limits, limits.max);
 }
 
+
 /// Grid: output.size == grid_layout(...).size == limits.resolve(something).
 proof fn lemma_grid_respects_limits<T: OrderedField>(
     limits: Limits<T>,
@@ -265,12 +292,12 @@ pub proof fn lemma_layout_widget_respects_limits<T: OrderedField>(
         Widget::Column { padding, spacing, alignment, children } => {
             let inner = limits.shrink(padding.horizontal(), padding.vertical());
             let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
-            lemma_column_respects_limits(limits, padding, spacing, alignment, cn);
+            lemma_linear_respects_limits(limits, padding, spacing, alignment, cn, Axis::Vertical);
         },
         Widget::Row { padding, spacing, alignment, children } => {
             let inner = limits.shrink(padding.horizontal(), padding.vertical());
             let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
-            lemma_row_respects_limits(limits, padding, spacing, alignment, cn);
+            lemma_linear_respects_limits(limits, padding, spacing, alignment, cn, Axis::Horizontal);
         },
         Widget::Stack { padding, h_align, v_align, children } => {
             let inner = limits.shrink(padding.horizontal(), padding.vertical());
@@ -283,6 +310,7 @@ pub proof fn lemma_layout_widget_respects_limits<T: OrderedField>(
             lemma_wrap_respects_limits(limits, padding, h_spacing, v_spacing, cn);
         },
         Widget::Flex { padding, spacing, alignment, direction, children } => {
+            let axis = direction.axis();
             let inner = limits.shrink(padding.horizontal(), padding.vertical());
             let weights = Seq::new(children.len(), |i: int| children[i].weight);
             let total_weight = sum_weights(weights, weights.len() as nat);
@@ -296,6 +324,11 @@ pub proof fn lemma_layout_widget_respects_limits<T: OrderedField>(
                         inner, children, weights, total_weight,
                         available_height, (fuel - 1) as nat,
                     );
+                    // Bridge: layout_widget uses flex_linear_widget_child_nodes dispatch
+                    assert(cn === flex_linear_widget_child_nodes(
+                        inner, children, weights, total_weight,
+                        available_height, Axis::Vertical, (fuel - 1) as nat,
+                    ));
                     lemma_flex_column_respects_limits(
                         limits, padding, spacing, alignment, weights, cn,
                     );
@@ -306,6 +339,11 @@ pub proof fn lemma_layout_widget_respects_limits<T: OrderedField>(
                         inner, children, weights, total_weight,
                         available_width, (fuel - 1) as nat,
                     );
+                    // Bridge: layout_widget uses flex_linear_widget_child_nodes dispatch
+                    assert(cn === flex_linear_widget_child_nodes(
+                        inner, children, weights, total_weight,
+                        available_width, Axis::Horizontal, (fuel - 1) as nat,
+                    ));
                     lemma_flex_row_respects_limits(
                         limits, padding, spacing, alignment, weights, cn,
                     );

@@ -7,6 +7,7 @@ use crate::node::Node;
 use crate::padding::Padding;
 use crate::alignment::{Alignment, align_offset};
 use crate::layout::repeated_add;
+use crate::layout::Axis;
 
 verus! {
 
@@ -204,6 +205,90 @@ pub open spec fn flex_row_layout<T: OrderedField>(
     let children = flex_row_children(
         padding, spacing, v_align, weights, child_cross_sizes,
         total_weight, available_width, available_height, 0,
+    );
+    Node { x: T::zero(), y: T::zero(), size: parent_size, children }
+}
+
+// ── Unified flex linear layout ─────────────────────────────────────
+
+/// Main-axis position of child at `index` in a flex linear layout.
+/// Replaces flex_column_child_y (Vertical) and flex_row_child_x (Horizontal).
+pub open spec fn flex_linear_child_main_position<T: OrderedField>(
+    main_start: T,
+    weights: Seq<T>,
+    total_weight: T,
+    available_main: T,
+    spacing: T,
+    index: nat,
+) -> T {
+    main_start
+        .add(flex_main_sum(weights, total_weight, available_main, index))
+        .add(repeated_add(spacing, index))
+}
+
+/// Build child Nodes for a flex linear layout (axis-parameterized).
+/// Replaces flex_column_children (Vertical) and flex_row_children (Horizontal).
+pub open spec fn flex_linear_children<T: OrderedField>(
+    padding: Padding<T>,
+    spacing: T,
+    alignment: Alignment,
+    weights: Seq<T>,
+    child_cross_sizes: Seq<T>,
+    total_weight: T,
+    available_main: T,
+    available_cross: T,
+    axis: Axis,
+    index: nat,
+) -> Seq<Node<T>>
+    decreases weights.len() - index,
+{
+    if index >= weights.len() {
+        Seq::empty()
+    } else {
+        let child_main = flex_child_main_size(weights[index as int], total_weight, available_main);
+        let child_cross = child_cross_sizes[index as int];
+        let cross_offset = padding.cross_start(axis).add(
+            align_offset(alignment, available_cross, child_cross)
+        );
+        let main_offset = flex_linear_child_main_position(
+            padding.main_start(axis), weights, total_weight, available_main, spacing, index,
+        );
+        let (x, y) = match axis {
+            Axis::Vertical => (cross_offset, main_offset),
+            Axis::Horizontal => (main_offset, cross_offset),
+        };
+        let child_node = Node::leaf(x, y, Size::from_axes(axis, child_main, child_cross));
+        Seq::empty().push(child_node).add(
+            flex_linear_children(padding, spacing, alignment, weights, child_cross_sizes,
+                total_weight, available_main, available_cross, axis, index + 1)
+        )
+    }
+}
+
+/// Lay out children in a flex linear layout (axis-parameterized).
+/// Replaces flex_column_layout (Vertical) and flex_row_layout (Horizontal).
+#[verifier::opaque]
+pub open spec fn flex_linear_layout<T: OrderedField>(
+    limits: Limits<T>,
+    padding: Padding<T>,
+    spacing: T,
+    alignment: Alignment,
+    weights: Seq<T>,
+    child_cross_sizes: Seq<T>,
+    axis: Axis,
+) -> Node<T> {
+    let total_weight = sum_weights(weights, weights.len() as nat);
+    let available_cross = limits.max.cross_dim(axis).sub(padding.cross_padding(axis));
+    let total_spacing = if weights.len() == 0 {
+        T::zero()
+    } else {
+        repeated_add(spacing, (weights.len() - 1) as nat)
+    };
+    let available_main = limits.max.main_dim(axis).sub(padding.main_padding(axis)).sub(total_spacing);
+    let parent_size = limits.resolve(limits.max);
+    let children = flex_linear_children(
+        padding, spacing, alignment, weights, child_cross_sizes,
+        total_weight, available_main, available_cross, axis, 0,
     );
     Node { x: T::zero(), y: T::zero(), size: parent_size, children }
 }

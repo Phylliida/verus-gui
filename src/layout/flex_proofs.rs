@@ -3,6 +3,7 @@ use verus_algebra::traits::ordered_ring::OrderedRing;
 use verus_algebra::traits::field::OrderedField;
 use crate::layout::flex::*;
 use crate::layout::repeated_add;
+use crate::layout::Axis;
 
 verus! {
 
@@ -767,6 +768,10 @@ pub proof fn lemma_flex_column_children_within_bounds<T: OrderedField>(
     let cn = crate::widget::flex_column_widget_child_nodes(
         inner, children, weights, tw, avail_h, (fuel - 1) as nat,
     );
+    // Bridge: layout_widget unfolds through flex_linear_widget_child_nodes dispatch wrapper
+    assert(cn === crate::widget::flex_linear_widget_child_nodes(
+        inner, children, weights, tw, avail_h, crate::layout::Axis::Vertical, (fuel - 1) as nat,
+    ));
     let child_cross_sizes = Seq::new(cn.len(), |i: int| cn[i].size.width);
 
     // Each child: bound on size
@@ -1205,6 +1210,10 @@ pub proof fn lemma_flex_row_children_within_bounds<T: OrderedField>(
     let cn = crate::widget::flex_row_widget_child_nodes(
         inner, children, weights, tw, avail_w, (fuel - 1) as nat,
     );
+    // Bridge: layout_widget unfolds through flex_linear_widget_child_nodes dispatch wrapper
+    assert(cn === crate::widget::flex_linear_widget_child_nodes(
+        inner, children, weights, tw, avail_w, crate::layout::Axis::Horizontal, (fuel - 1) as nat,
+    ));
     let child_cross_sizes = Seq::new(cn.len(), |i: int| cn[i].size.height);
 
     // Each child: bound on size
@@ -1470,6 +1479,148 @@ pub proof fn lemma_flex_row_children_within_bounds<T: OrderedField>(
     };
 
     crate::layout::proofs::lemma_merge_layout_cwb(layout, cn);
+}
+
+// ── Unified flex linear children proofs ──────────────────────────
+
+/// Length of flex_linear_children sequence.
+pub proof fn lemma_flex_linear_children_len<T: OrderedField>(
+    padding: crate::padding::Padding<T>,
+    spacing: T,
+    alignment: crate::alignment::Alignment,
+    weights: Seq<T>,
+    child_cross_sizes: Seq<T>,
+    total_weight: T,
+    available_main: T,
+    available_cross: T,
+    axis: Axis,
+    index: nat,
+)
+    requires
+        index <= weights.len(),
+    ensures
+        flex_linear_children(
+            padding, spacing, alignment, weights, child_cross_sizes,
+            total_weight, available_main, available_cross, axis, index,
+        ).len() == weights.len() - index,
+    decreases weights.len() - index,
+{
+    if index >= weights.len() {
+    } else {
+        lemma_flex_linear_children_len(
+            padding, spacing, alignment, weights, child_cross_sizes,
+            total_weight, available_main, available_cross, axis, index + 1,
+        );
+    }
+}
+
+/// Element access into flex_linear_children (shifted start).
+proof fn lemma_flex_linear_children_element_shifted<T: OrderedField>(
+    padding: crate::padding::Padding<T>,
+    spacing: T,
+    alignment: crate::alignment::Alignment,
+    weights: Seq<T>,
+    child_cross_sizes: Seq<T>,
+    total_weight: T,
+    available_main: T,
+    available_cross: T,
+    axis: Axis,
+    start: nat,
+    k: nat,
+)
+    requires
+        start <= k,
+        k < weights.len(),
+    ensures
+        ({
+            let child_main = flex_child_main_size(weights[k as int], total_weight, available_main);
+            let child_cross = child_cross_sizes[k as int];
+            let cross_offset = padding.cross_start(axis).add(
+                crate::alignment::align_offset(alignment, available_cross, child_cross)
+            );
+            let main_offset = flex_linear_child_main_position(
+                padding.main_start(axis), weights, total_weight, available_main, spacing, k,
+            );
+            let (x, y) = match axis {
+                Axis::Vertical => (cross_offset, main_offset),
+                Axis::Horizontal => (main_offset, cross_offset),
+            };
+            flex_linear_children(
+                padding, spacing, alignment, weights, child_cross_sizes,
+                total_weight, available_main, available_cross, axis, start,
+            )[(k - start) as int]
+                == crate::node::Node::leaf(x, y,
+                    crate::size::Size::from_axes(axis, child_main, child_cross))
+        }),
+    decreases k - start,
+{
+    if start == k {
+    } else {
+        lemma_flex_linear_children_len(
+            padding, spacing, alignment, weights, child_cross_sizes,
+            total_weight, available_main, available_cross, axis, start + 1,
+        );
+        lemma_flex_linear_children_len(
+            padding, spacing, alignment, weights, child_cross_sizes,
+            total_weight, available_main, available_cross, axis, start,
+        );
+        lemma_flex_linear_children_element_shifted(
+            padding, spacing, alignment, weights, child_cross_sizes,
+            total_weight, available_main, available_cross, axis, start + 1, k,
+        );
+        let tail = flex_linear_children(
+            padding, spacing, alignment, weights, child_cross_sizes,
+            total_weight, available_main, available_cross, axis, start + 1,
+        );
+        let fc = flex_linear_children(
+            padding, spacing, alignment, weights, child_cross_sizes,
+            total_weight, available_main, available_cross, axis, start,
+        );
+        assert(fc[(k - start) as int] == tail[((k - start) as int) - 1]);
+    }
+}
+
+/// Element access into flex_linear_children at index k from the beginning.
+pub proof fn lemma_flex_linear_children_element<T: OrderedField>(
+    padding: crate::padding::Padding<T>,
+    spacing: T,
+    alignment: crate::alignment::Alignment,
+    weights: Seq<T>,
+    child_cross_sizes: Seq<T>,
+    total_weight: T,
+    available_main: T,
+    available_cross: T,
+    axis: Axis,
+    k: nat,
+)
+    requires
+        k < weights.len(),
+    ensures
+        ({
+            let child_main = flex_child_main_size(weights[k as int], total_weight, available_main);
+            let child_cross = child_cross_sizes[k as int];
+            let cross_offset = padding.cross_start(axis).add(
+                crate::alignment::align_offset(alignment, available_cross, child_cross)
+            );
+            let main_offset = flex_linear_child_main_position(
+                padding.main_start(axis), weights, total_weight, available_main, spacing, k,
+            );
+            let (x, y) = match axis {
+                Axis::Vertical => (cross_offset, main_offset),
+                Axis::Horizontal => (main_offset, cross_offset),
+            };
+            flex_linear_children(
+                padding, spacing, alignment, weights, child_cross_sizes,
+                total_weight, available_main, available_cross, axis, 0,
+            )[k as int]
+                == crate::node::Node::leaf(x, y,
+                    crate::size::Size::from_axes(axis, child_main, child_cross))
+        }),
+{
+    lemma_flex_linear_children_element_shifted(
+        padding, spacing, alignment, weights, child_cross_sizes,
+        total_weight, available_main, available_cross, axis, 0, k,
+    );
 }
 
 } // verus!
