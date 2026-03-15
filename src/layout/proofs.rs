@@ -1169,6 +1169,7 @@ pub proof fn lemma_column_children_len<T: OrderedField>(
             == child_sizes.len() - index,
     decreases child_sizes.len() - index,
 {
+    reveal(column_children);
     if index >= child_sizes.len() {
     } else {
         lemma_column_children_len(padding, spacing, alignment, child_sizes, available_width, index + 1);
@@ -1219,6 +1220,7 @@ proof fn lemma_column_children_element_shifted<T: OrderedField>(
             ),
     decreases k - start,
 {
+    reveal(column_children);
     if start == k {
         // Base case: one-step unfolding gives column_children(.., k)[0] = node_k
     } else {

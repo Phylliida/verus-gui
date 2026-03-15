@@ -699,6 +699,178 @@ fn session_handle_input_exec(
     }
 }
 
+// ── Per-arm helpers for apply_key_to_session_exec ───────────────────
+// Each handles one event kind (active + noop path), keeping the
+// parent dispatch trivially small.
+
+/// Handle Copy event: copy selection to clipboard, or noop.
+fn session_copy_arm_exec(
+    session: RuntimeTextEditSession,
+    event: &RuntimeKeyEvent,
+) -> (result: RuntimeTextEditSession)
+    requires
+        session.wf_spec(),
+        match dispatch_key(session.model@, event@) {
+            KeyAction::External(ExternalAction::Copy) => true,
+            _ => false,
+        },
+    ensures
+        result.view_session().model
+            == apply_key_to_session(session.view_session(), event@).model,
+        result.view_session().last_was_insert
+            == apply_key_to_session(session.view_session(), event@).last_was_insert,
+        result.view_session().clipboard
+            == apply_key_to_session(session.view_session(), event@).clipboard,
+        result.model.wf_spec(),
+        result.wf_spec(),
+{
+    if session.model.anchor != session.model.focus {
+        proof { lemma_apply_key_copy(session.view_session(), event@); }
+        let clipboard = get_selection_text_exec(&session.model);
+        RuntimeTextEditSession {
+            clipboard,
+            last_was_insert: session.last_was_insert,
+            model: session.model,
+            undo_stack: session.undo_stack,
+            history: session.history,
+            style_history: session.style_history,
+        }
+    } else {
+        proof { lemma_apply_key_noop(session.view_session(), event@); }
+        session
+    }
+}
+
+/// Handle Cut event: cut selection, or noop if no selection.
+fn session_cut_arm_exec(
+    session: RuntimeTextEditSession,
+    event: &RuntimeKeyEvent,
+) -> (result: RuntimeTextEditSession)
+    requires
+        session.wf_spec(),
+        session.model.text.len() + 2 < usize::MAX,
+        session.undo_stack.entries.len() < usize::MAX,
+        match dispatch_key(session.model@, event@) {
+            KeyAction::External(ExternalAction::Cut) => true,
+            _ => false,
+        },
+    ensures
+        result.view_session().model
+            == apply_key_to_session(session.view_session(), event@).model,
+        result.view_session().last_was_insert
+            == apply_key_to_session(session.view_session(), event@).last_was_insert,
+        result.view_session().clipboard
+            == apply_key_to_session(session.view_session(), event@).clipboard,
+        result.model.wf_spec(),
+        result.wf_spec(),
+{
+    if session.model.anchor != session.model.focus {
+        proof { lemma_apply_key_kind_determines_result(session.view_session(), event@, KeyEventKind::Cut); }
+        session_handle_cut_exec(session)
+    } else {
+        proof { lemma_apply_key_noop(session.view_session(), event@); }
+        session
+    }
+}
+
+/// Handle Undo event: apply undo if possible, or noop.
+fn session_undo_arm_exec(
+    session: RuntimeTextEditSession,
+    event: &RuntimeKeyEvent,
+) -> (result: RuntimeTextEditSession)
+    requires
+        session.wf_spec(),
+        match dispatch_key(session.model@, event@) {
+            KeyAction::External(ExternalAction::Undo) => true,
+            _ => false,
+        },
+    ensures
+        result.view_session().model
+            == apply_key_to_session(session.view_session(), event@).model,
+        result.view_session().last_was_insert
+            == apply_key_to_session(session.view_session(), event@).last_was_insert,
+        result.view_session().clipboard
+            == apply_key_to_session(session.view_session(), event@).clipboard,
+        result.model.wf_spec(),
+        result.wf_spec(),
+{
+    if can_undo_exec(&session.undo_stack) {
+        if session.model.composition.is_none() {
+            proof { lemma_apply_key_kind_determines_result(session.view_session(), event@, KeyEventKind::Undo); }
+            return session_apply_undo_exec(session);
+        }
+    }
+    proof { lemma_apply_key_noop(session.view_session(), event@); }
+    session
+}
+
+/// Handle Redo event: apply redo if possible, or noop.
+fn session_redo_arm_exec(
+    session: RuntimeTextEditSession,
+    event: &RuntimeKeyEvent,
+) -> (result: RuntimeTextEditSession)
+    requires
+        session.wf_spec(),
+        match dispatch_key(session.model@, event@) {
+            KeyAction::External(ExternalAction::Redo) => true,
+            _ => false,
+        },
+    ensures
+        result.view_session().model
+            == apply_key_to_session(session.view_session(), event@).model,
+        result.view_session().last_was_insert
+            == apply_key_to_session(session.view_session(), event@).last_was_insert,
+        result.view_session().clipboard
+            == apply_key_to_session(session.view_session(), event@).clipboard,
+        result.model.wf_spec(),
+        result.wf_spec(),
+{
+    if can_redo_exec(&session.undo_stack) {
+        if session.model.composition.is_none() {
+            proof { lemma_apply_key_kind_determines_result(session.view_session(), event@, KeyEventKind::Redo); }
+            return session_apply_redo_exec(session);
+        }
+    }
+    proof { lemma_apply_key_noop(session.view_session(), event@); }
+    session
+}
+
+/// Handle Paste event: paste clipboard, or noop if empty/overflow.
+fn session_paste_arm_exec(
+    session: RuntimeTextEditSession,
+    event: &RuntimeKeyEvent,
+) -> (result: RuntimeTextEditSession)
+    requires
+        session.wf_spec(),
+        session.model.text.len() + 2 < usize::MAX,
+        session.undo_stack.entries.len() < usize::MAX,
+        match dispatch_key(session.model@, event@) {
+            KeyAction::External(ExternalAction::Paste) => true,
+            _ => false,
+        },
+    ensures
+        result.view_session().model
+            == apply_key_to_session(session.view_session(), event@).model,
+        result.view_session().last_was_insert
+            == apply_key_to_session(session.view_session(), event@).last_was_insert,
+        result.view_session().clipboard
+            == apply_key_to_session(session.view_session(), event@).clipboard,
+        result.model.wf_spec(),
+        result.wf_spec(),
+{
+    let filtered = filter_permitted_exec(&session.clipboard);
+    let clean = canonicalize_newlines_exec(&filtered);
+    if (clean.len() > 0 || session.model.anchor != session.model.focus)
+        && clean.len() < usize::MAX - session.model.text.len()
+    {
+        proof { lemma_apply_key_kind_determines_result(session.view_session(), event@, KeyEventKind::Paste); }
+        session_handle_paste_exec(session, clean)
+    } else {
+        proof { lemma_apply_key_noop(session.view_session(), event@); }
+        session
+    }
+}
+
 // ── Main session dispatch ───────────────────────────────────────────
 
 /// Apply a key event to the session.
@@ -726,67 +898,19 @@ pub fn apply_key_to_session_exec(
         result.model.wf_spec(),
         result.wf_spec(),
 {
-    // Handle Copy/Cut/Undo/Redo directly (before consuming model).
     match &event.kind {
-        RuntimeKeyEventKind::Copy => {
-            if session.model.anchor != session.model.focus {
-                proof { lemma_apply_key_copy(session.view_session(), event@); }
-                let clipboard = get_selection_text_exec(&session.model);
-                return RuntimeTextEditSession {
-                    clipboard,
-                    last_was_insert: session.last_was_insert,
-                    model: session.model,
-                    undo_stack: session.undo_stack,
-                    history: session.history,
-                    style_history: session.style_history,
-                };
-            }
-            proof { lemma_apply_key_noop(session.view_session(), event@); }
-            return session;
-        },
-        RuntimeKeyEventKind::Cut => {
-            if session.model.anchor != session.model.focus {
-                proof { lemma_apply_key_kind_determines_result(session.view_session(), event@, KeyEventKind::Cut); }
-                return session_handle_cut_exec(session);
-            }
-            proof { lemma_apply_key_noop(session.view_session(), event@); }
-            return session;
-        },
-        RuntimeKeyEventKind::Undo => {
-            if can_undo_exec(&session.undo_stack) {
-                if session.model.composition.is_none() {
-                    proof { lemma_apply_key_kind_determines_result(session.view_session(), event@, KeyEventKind::Undo); }
-                    return session_apply_undo_exec(session);
-                }
-            }
-            proof { lemma_apply_key_noop(session.view_session(), event@); }
-            return session;
-        },
-        RuntimeKeyEventKind::Redo => {
-            if can_redo_exec(&session.undo_stack) {
-                if session.model.composition.is_none() {
-                    proof { lemma_apply_key_kind_determines_result(session.view_session(), event@, KeyEventKind::Redo); }
-                    return session_apply_redo_exec(session);
-                }
-            }
-            proof { lemma_apply_key_noop(session.view_session(), event@); }
-            return session;
-        },
-        RuntimeKeyEventKind::Paste => {
-            let filtered = filter_permitted_exec(&session.clipboard);
-            let clean = canonicalize_newlines_exec(&filtered);
-            if (clean.len() > 0 || session.model.anchor != session.model.focus)
-                && clean.len() < usize::MAX - session.model.text.len()
-            {
-                proof { lemma_apply_key_kind_determines_result(session.view_session(), event@, KeyEventKind::Paste); }
-                return session_handle_paste_exec(session, clean);
-            }
-            proof { lemma_apply_key_noop(session.view_session(), event@); }
-            return session;
-        },
+        RuntimeKeyEventKind::Copy =>
+            return session_copy_arm_exec(session, event),
+        RuntimeKeyEventKind::Cut =>
+            return session_cut_arm_exec(session, event),
+        RuntimeKeyEventKind::Undo =>
+            return session_undo_arm_exec(session, event),
+        RuntimeKeyEventKind::Redo =>
+            return session_redo_arm_exec(session, event),
+        RuntimeKeyEventKind::Paste =>
+            return session_paste_arm_exec(session, event),
         _ => {},
     }
-
     session_handle_input_exec(session, event)
 }
 
