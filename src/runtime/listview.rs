@@ -20,6 +20,316 @@ use crate::measure::measure_children;
 
 verus! {
 
+/// Measure all children at runtime, producing sizes matching measure_children spec.
+fn listview_measure_children_exec(
+    child_limits: &RuntimeLimits,
+    children: &Vec<RuntimeWidget>,
+    fuel: usize,
+    Ghost(spec_wc): Ghost<Seq<Widget<RationalModel>>>,
+    Ghost(spec_child_limits): Ghost<Limits<RationalModel>>,
+) -> (result: Vec<RuntimeSize>)
+    requires
+        child_limits.wf_spec(),
+        child_limits@ == spec_child_limits,
+        fuel > 0,
+        forall|j: int| 0 <= j < children@.len() ==>
+            (#[trigger] children@[j]).wf_spec((fuel - 1) as nat),
+        forall|j: int| 0 <= j < children@.len() ==>
+            spec_wc[j] == children@[j].model(),
+    ensures
+        result@.len() == children@.len(),
+        forall|j: int| 0 <= j < result@.len() ==> {
+            &&& (#[trigger] result@[j]).wf_spec()
+            &&& result@[j]@ == crate::measure::measure_widget::<RationalModel>(
+                    spec_child_limits, spec_wc[j], (fuel - 1) as nat)
+        },
+{
+    let n = children.len();
+    let mut child_sizes: Vec<RuntimeSize> = Vec::new();
+    let mut mi: usize = 0;
+
+    while mi < n
+        invariant
+            0 <= mi <= n,
+            n == children@.len(),
+            child_limits.wf_spec(),
+            child_limits@ == spec_child_limits,
+            fuel > 0,
+            child_sizes@.len() == mi as int,
+            forall|j: int| 0 <= j < children@.len() ==>
+                (#[trigger] children@[j]).wf_spec((fuel - 1) as nat),
+            forall|j: int| 0 <= j < n ==>
+                spec_wc[j] == (#[trigger] children@[j]).model(),
+            forall|j: int| 0 <= j < mi ==> {
+                &&& (#[trigger] child_sizes@[j]).wf_spec()
+                &&& child_sizes@[j]@ == crate::measure::measure_widget::<RationalModel>(
+                        spec_child_limits, spec_wc[j], (fuel - 1) as nat)
+            },
+        decreases n - mi,
+    {
+        let cs = measure_widget_exec(child_limits, &children[mi], fuel - 1);
+        child_sizes.push(cs);
+        mi = mi + 1;
+    }
+
+    child_sizes
+}
+
+/// Find the visible range [first, end) for a ListView given child sizes and scroll state.
+fn listview_find_visible_range_exec(
+    child_sizes: &Vec<RuntimeSize>,
+    Ghost(spec_sizes): Ghost<Seq<Size<RationalModel>>>,
+    spacing: &RuntimeRational,
+    scroll_y: &RuntimeRational,
+    viewport: &RuntimeSize,
+) -> (result: (usize, usize))
+    requires
+        spacing.wf_spec(),
+        scroll_y.wf_spec(),
+        viewport.wf_spec(),
+        spec_sizes.len() == child_sizes@.len() as nat,
+        forall|j: int| 0 <= j < child_sizes@.len() ==> (#[trigger] child_sizes@[j]).wf_spec(),
+        forall|j: int| 0 <= j < child_sizes@.len() ==> child_sizes@[j]@ == spec_sizes[j],
+    ensures
+        result.0 as nat == listview_first_visible::<RationalModel>(spec_sizes, spacing@, scroll_y@),
+        result.1 as nat == listview_end_visible::<RationalModel>(spec_sizes, spacing@, scroll_y@, viewport@.height),
+        result.0 <= child_sizes@.len(),
+        result.1 <= child_sizes@.len(),
+{
+    let n = child_sizes.len();
+    let scroll_bottom = scroll_y.add(&viewport.height);
+
+    // Find first visible index
+    let mut first: usize = 0;
+    let mut cur_y = RuntimeRational::from_int(0);
+    let mut first_visible_at_cur: bool = false;
+
+    while first < n && !first_visible_at_cur
+        invariant
+            0 <= first <= n,
+            n == child_sizes@.len(),
+            spec_sizes.len() == n as nat,
+            spacing.wf_spec(),
+            scroll_y.wf_spec(),
+            viewport.wf_spec(),
+            scroll_bottom.wf_spec(),
+            scroll_bottom@ == scroll_y@.add_spec(viewport@.height),
+            cur_y.wf_spec(),
+            cur_y@ == listview_child_y::<RationalModel>(spec_sizes, spacing@, first as nat),
+            forall|j: int| 0 <= j < n ==> (#[trigger] child_sizes@[j]).wf_spec(),
+            forall|j: int| 0 <= j < n ==> child_sizes@[j]@ == spec_sizes[j],
+            forall|k: nat| k < first as nat ==>
+                !scroll_y@.lt(listview_child_bottom::<RationalModel>(spec_sizes, spacing@, k)),
+            first_visible_at_cur ==> (first < n && scroll_y@.lt(
+                listview_child_bottom::<RationalModel>(spec_sizes, spacing@, first as nat))),
+        decreases n - first, (if first_visible_at_cur { 0int } else { 1int }),
+    {
+        let child_h = copy_rational(&child_sizes[first].height);
+        let bottom = cur_y.add(&child_h);
+
+        proof {
+            assert(child_sizes@[first as int]@ == spec_sizes[first as int]);
+            assert(child_h@ == spec_sizes[first as int].height);
+            assert(bottom@ == listview_child_bottom::<RationalModel>(spec_sizes, spacing@, first as nat));
+        }
+
+        if scroll_y.lt(&bottom) {
+            first_visible_at_cur = true;
+        } else {
+            cur_y = bottom.add(spacing);
+            first = first + 1;
+        }
+    }
+
+    proof {
+        if first_visible_at_cur {
+            assert(scroll_y@.lt(listview_child_bottom::<RationalModel>(spec_sizes, spacing@, first as nat)));
+        }
+        lemma_first_visible_loop_matches::<RationalModel>(spec_sizes, spacing@, scroll_y@, first as nat);
+    }
+
+    // Find end visible index
+    let mut end: usize = 0;
+    let mut end_y = RuntimeRational::from_int(0);
+    let mut end_past_visible: bool = false;
+
+    while end < n && !end_past_visible
+        invariant
+            0 <= end <= n,
+            n == child_sizes@.len(),
+            spec_sizes.len() == n as nat,
+            spacing.wf_spec(),
+            scroll_y.wf_spec(),
+            viewport.wf_spec(),
+            scroll_bottom.wf_spec(),
+            scroll_bottom@ == scroll_y@.add_spec(viewport@.height),
+            end_y.wf_spec(),
+            end_y@ == listview_child_y::<RationalModel>(spec_sizes, spacing@, end as nat),
+            forall|j: int| 0 <= j < n ==> (#[trigger] child_sizes@[j]).wf_spec(),
+            forall|j: int| 0 <= j < n ==> child_sizes@[j]@ == spec_sizes[j],
+            forall|k: nat| k < end as nat ==>
+                !scroll_y@.add_spec(viewport@.height).le_spec(
+                    listview_child_y::<RationalModel>(spec_sizes, spacing@, k)),
+            end_past_visible ==> (end < n && scroll_y@.add_spec(viewport@.height).le_spec(
+                listview_child_y::<RationalModel>(spec_sizes, spacing@, end as nat))),
+        decreases n - end, (if end_past_visible { 0int } else { 1int }),
+    {
+        if scroll_bottom.le(&end_y) {
+            end_past_visible = true;
+        } else {
+            let child_h = copy_rational(&child_sizes[end].height);
+            end_y = end_y.add(&child_h).add(spacing);
+            end = end + 1;
+        }
+    }
+
+    proof {
+        if end_past_visible {
+            assert(scroll_y@.add_spec(viewport@.height).le_spec(
+                listview_child_y::<RationalModel>(spec_sizes, spacing@, end as nat)));
+        }
+        lemma_end_visible_loop_matches::<RationalModel>(spec_sizes, spacing@, scroll_y@, viewport@.height, end as nat);
+    }
+
+    (first, end)
+}
+
+/// Position visible children: accumulate y-offsets and build positioned nodes.
+fn listview_position_children_exec(
+    visible_nodes: &Vec<RuntimeNode>,
+    child_sizes: &Vec<RuntimeSize>,
+    Ghost(spec_sizes): Ghost<Seq<Size<RationalModel>>>,
+    Ghost(spec_wc): Ghost<Seq<Widget<RationalModel>>>,
+    Ghost(spec_child_limits): Ghost<Limits<RationalModel>>,
+    first: usize,
+    end: usize,
+    spacing: &RuntimeRational,
+    scroll_y: &RuntimeRational,
+    fuel: usize,
+) -> (result: Vec<RuntimeNode>)
+    requires
+        spacing.wf_spec(),
+        scroll_y.wf_spec(),
+        first <= end,
+        end <= child_sizes@.len(),
+        spec_sizes.len() == child_sizes@.len() as nat,
+        visible_nodes@.len() == (end - first) as int,
+        fuel > 0,
+        forall|j: int| 0 <= j < child_sizes@.len() ==> (#[trigger] child_sizes@[j]).wf_spec(),
+        forall|j: int| 0 <= j < child_sizes@.len() ==> child_sizes@[j]@ == spec_sizes[j],
+        forall|j: int| 0 <= j < visible_nodes@.len() ==> {
+            &&& (#[trigger] visible_nodes@[j]).wf_spec()
+            &&& visible_nodes@[j]@ == layout_widget::<RationalModel>(
+                    spec_child_limits, spec_wc[(first + j) as int], (fuel - 1) as nat)
+        },
+    ensures
+        result@.len() == (end - first) as int,
+        forall|j: int| 0 <= j < result@.len() ==> {
+            &&& (#[trigger] result@[j]).wf_shallow()
+            &&& result@[j]@ == Node::<RationalModel> {
+                x: RationalModel::from_int_spec(0),
+                y: listview_child_y::<RationalModel>(spec_sizes, spacing@, (first + j) as nat)
+                    .sub_spec(scroll_y@),
+                size: visible_nodes@[j]@.size,
+                children: visible_nodes@[j]@.children,
+            }
+        },
+{
+    let n = child_sizes.len();
+    let count: usize = end - first;
+    let mut positioned: Vec<RuntimeNode> = Vec::new();
+    let mut k: usize = 0;
+
+    // Compute child_y(first) by accumulation
+    let mut pos_y = RuntimeRational::from_int(0);
+    {
+        let mut fi: usize = 0;
+        while fi < first
+            invariant
+                0 <= fi <= first,
+                first <= n,
+                n == child_sizes@.len(),
+                spacing.wf_spec(),
+                pos_y.wf_spec(),
+                pos_y@ == listview_child_y::<RationalModel>(spec_sizes, spacing@, fi as nat),
+                forall|j: int| 0 <= j < n ==> (#[trigger] child_sizes@[j]).wf_spec(),
+                forall|j: int| 0 <= j < n ==> child_sizes@[j]@ == spec_sizes[j],
+            decreases first - fi,
+        {
+            let h = copy_rational(&child_sizes[fi].height);
+            pos_y = pos_y.add(&h).add(spacing);
+            fi = fi + 1;
+        }
+    }
+
+    while k < count
+        invariant
+            0 <= k <= count,
+            count == end - first,
+            first <= n,
+            end <= n,
+            n == child_sizes@.len(),
+            spacing.wf_spec(),
+            scroll_y.wf_spec(),
+            pos_y.wf_spec(),
+            pos_y@ == listview_child_y::<RationalModel>(spec_sizes, spacing@, (first + k) as nat),
+            visible_nodes@.len() == count as int,
+            positioned@.len() == k as int,
+            forall|j: int| 0 <= j < n ==> (#[trigger] child_sizes@[j]).wf_spec(),
+            forall|j: int| 0 <= j < n ==> child_sizes@[j]@ == spec_sizes[j],
+            forall|j: int| 0 <= j < count ==> {
+                &&& (#[trigger] visible_nodes@[j]).wf_spec()
+                &&& visible_nodes@[j]@ == layout_widget::<RationalModel>(
+                        spec_child_limits, spec_wc[(first + j) as int], (fuel - 1) as nat)
+            },
+            forall|j: int| 0 <= j < k ==> {
+                &&& (#[trigger] positioned@[j]).wf_shallow()
+                &&& positioned@[j]@ == Node::<RationalModel> {
+                    x: RationalModel::from_int_spec(0),
+                    y: listview_child_y::<RationalModel>(spec_sizes, spacing@, (first + j) as nat)
+                        .sub_spec(scroll_y@),
+                    size: visible_nodes@[j]@.size,
+                    children: visible_nodes@[j]@.children,
+                }
+            },
+        decreases count - k,
+    {
+        let child_y_offset = pos_y.sub(scroll_y);
+        let x = RuntimeRational::from_int(0);
+        let child_size = visible_nodes[k].size.copy_size();
+
+        let ghost child_spec_node = layout_widget::<RationalModel>(
+            spec_child_limits, spec_wc[(first + k) as int], (fuel - 1) as nat);
+
+        let positioned_child = RuntimeNode {
+            x,
+            y: child_y_offset,
+            size: child_size,
+            children: Vec::new(),
+            model: Ghost(Node::<RationalModel> {
+                x: RationalModel::from_int_spec(0),
+                y: listview_child_y::<RationalModel>(spec_sizes, spacing@, (first + k) as nat)
+                    .sub_spec(scroll_y@),
+                size: child_spec_node.size,
+                children: child_spec_node.children,
+            }),
+        };
+
+        proof {
+            assert(positioned_child.wf_shallow());
+        }
+
+        positioned.push(positioned_child);
+
+        // Advance pos_y
+        let h = copy_rational(&child_sizes[first + k].height);
+        pos_y = pos_y.add(&h).add(spacing);
+        k = k + 1;
+    }
+
+    positioned
+}
+
 /// Layout a ListView widget at runtime.
 ///
 /// 1. Measure all children to get their heights
@@ -76,33 +386,10 @@ pub fn layout_listview_widget_exec(
         max: Size::new(viewport@.width, viewport@.height),
     };
 
-    // Step 1: Measure all children to get their sizes
-    let mut child_sizes: Vec<RuntimeSize> = Vec::new();
-    let mut mi: usize = 0;
-
-    while mi < n
-        invariant
-            0 <= mi <= n,
-            n == children@.len(),
-            child_limits.wf_spec(),
-            child_limits@ == spec_child_limits,
-            fuel > 0,
-            child_sizes@.len() == mi as int,
-            forall|j: int| 0 <= j < children@.len() ==>
-                (#[trigger] children@[j]).wf_spec((fuel - 1) as nat),
-            forall|j: int| 0 <= j < n ==>
-                spec_wc[j] == (#[trigger] children@[j]).model(),
-            forall|j: int| 0 <= j < mi ==> {
-                &&& (#[trigger] child_sizes@[j]).wf_spec()
-                &&& child_sizes@[j]@ == crate::measure::measure_widget::<RationalModel>(
-                        spec_child_limits, spec_wc[j], (fuel - 1) as nat)
-            },
-        decreases n - mi,
-    {
-        let cs = measure_widget_exec(&child_limits, &children[mi], fuel - 1);
-        child_sizes.push(cs);
-        mi = mi + 1;
-    }
+    // Step 1: Measure all children
+    let child_sizes = listview_measure_children_exec(
+        &child_limits, children, fuel, Ghost(spec_wc), Ghost(spec_child_limits),
+    );
 
     let ghost spec_sizes: Seq<Size<RationalModel>> =
         measure_children::<RationalModel>(spec_child_limits, spec_wc, (fuel - 1) as nat);
@@ -116,244 +403,68 @@ pub fn layout_listview_widget_exec(
         assert(computed_sizes =~= spec_sizes);
     }
 
-    // Step 2: Find first visible index via linear scan
-    let scroll_bottom = scroll_y.add(&viewport.height);
-    let mut first: usize = 0;
-    let mut cur_y = RuntimeRational::from_int(0);
-    let mut first_visible_at_cur: bool = false;
+    // Steps 2-3: Find visible range
+    let (first, end) = listview_find_visible_range_exec(
+        &child_sizes, Ghost(spec_sizes), spacing, scroll_y, viewport,
+    );
 
-    while first < n && !first_visible_at_cur
-        invariant
-            0 <= first <= n,
-            n == children@.len(),
-            n == child_sizes@.len(),
-            spec_sizes.len() == n as nat,
-            spacing.wf_spec(),
-            scroll_y.wf_spec(),
-            viewport.wf_spec(),
-            scroll_bottom.wf_spec(),
-            scroll_bottom@ == scroll_y@.add_spec(viewport@.height),
-            cur_y.wf_spec(),
-            cur_y@ == listview_child_y::<RationalModel>(spec_sizes, spacing@, first as nat),
-            forall|j: int| 0 <= j < n ==> (#[trigger] child_sizes@[j]).wf_spec(),
-            forall|j: int| 0 <= j < n ==> child_sizes@[j]@ == spec_sizes[j],
-            // All items before first are NOT visible (bottom <= scroll_y)
-            forall|k: nat| k < first as nat ==>
-                !scroll_y@.lt(listview_child_bottom::<RationalModel>(spec_sizes, spacing@, k)),
-            // If we found a visible one, record it
-            first_visible_at_cur ==> (first < n && scroll_y@.lt(
-                listview_child_bottom::<RationalModel>(spec_sizes, spacing@, first as nat))),
-        decreases n - first, (if first_visible_at_cur { 0int } else { 1int }),
-    {
-        let child_h = copy_rational(&child_sizes[first].height);
-        let bottom = cur_y.add(&child_h);
+    // Steps 4-6: Layout and position visible children
+    let positioned = if end >= first {
+        let count: usize = end - first;
 
-        proof {
-            assert(child_sizes@[first as int]@ == spec_sizes[first as int]);
-            assert(child_h@ == spec_sizes[first as int].height);
-            assert(bottom@ == listview_child_bottom::<RationalModel>(spec_sizes, spacing@, first as nat));
-        }
+        // Step 4: Layout visible children
+        let mut visible_nodes: Vec<RuntimeNode> = Vec::new();
+        let mut vi: usize = 0;
 
-        if scroll_y.lt(&bottom) {
-            first_visible_at_cur = true;
-        } else {
-            // Advance: next y = bottom + spacing
-            cur_y = bottom.add(spacing);
-            first = first + 1;
-        }
-    }
-
-    proof {
-        // After loop: first == n (no visible) or first_visible_at_cur
-        if first_visible_at_cur {
-            assert(scroll_y@.lt(listview_child_bottom::<RationalModel>(spec_sizes, spacing@, first as nat)));
-        }
-        lemma_first_visible_loop_matches::<RationalModel>(spec_sizes, spacing@, scroll_y@, first as nat);
-    }
-
-    // Step 3: Find end visible index via linear scan
-    let mut end: usize = 0;
-    let mut end_y = RuntimeRational::from_int(0);
-    let mut end_past_visible: bool = false;
-
-    while end < n && !end_past_visible
-        invariant
-            0 <= end <= n,
-            n == children@.len(),
-            n == child_sizes@.len(),
-            spec_sizes.len() == n as nat,
-            spacing.wf_spec(),
-            scroll_y.wf_spec(),
-            viewport.wf_spec(),
-            scroll_bottom.wf_spec(),
-            scroll_bottom@ == scroll_y@.add_spec(viewport@.height),
-            end_y.wf_spec(),
-            end_y@ == listview_child_y::<RationalModel>(spec_sizes, spacing@, end as nat),
-            forall|j: int| 0 <= j < n ==> (#[trigger] child_sizes@[j]).wf_spec(),
-            forall|j: int| 0 <= j < n ==> child_sizes@[j]@ == spec_sizes[j],
-            // All items before end have top < scroll_bottom
-            forall|k: nat| k < end as nat ==>
-                !scroll_y@.add_spec(viewport@.height).le_spec(
-                    listview_child_y::<RationalModel>(spec_sizes, spacing@, k)),
-            end_past_visible ==> (end < n && scroll_y@.add_spec(viewport@.height).le_spec(
-                listview_child_y::<RationalModel>(spec_sizes, spacing@, end as nat))),
-        decreases n - end, (if end_past_visible { 0int } else { 1int }),
-    {
-        if scroll_bottom.le(&end_y) {
-            end_past_visible = true;
-        } else {
-            // Advance
-            let child_h = copy_rational(&child_sizes[end].height);
-            end_y = end_y.add(&child_h).add(spacing);
-            end = end + 1;
-        }
-    }
-
-    proof {
-        if end_past_visible {
-            assert(scroll_y@.add_spec(viewport@.height).le_spec(
-                listview_child_y::<RationalModel>(spec_sizes, spacing@, end as nat)));
-        }
-        lemma_end_visible_loop_matches::<RationalModel>(spec_sizes, spacing@, scroll_y@, viewport@.height, end as nat);
-    }
-
-    // Step 4: Layout visible children
-    let count: usize = if end >= first { end - first } else { 0 };
-    let mut visible_nodes: Vec<RuntimeNode> = Vec::new();
-    let mut vi: usize = 0;
-
-    while vi < count
-        invariant
-            0 <= vi <= count,
-            count == (if end >= first { end - first } else { 0 }),
-            first <= n,
-            end <= n,
-            n == children@.len(),
-            child_limits.wf_spec(),
-            child_limits@ == spec_child_limits,
-            fuel > 0,
-            visible_nodes@.len() == vi as int,
-            forall|j: int| 0 <= j < children@.len() ==>
-                (#[trigger] children@[j]).wf_spec((fuel - 1) as nat),
-            forall|j: int| 0 <= j < n ==>
-                spec_wc[j] == (#[trigger] children@[j]).model(),
-            forall|j: int| 0 <= j < vi ==> {
-                &&& (#[trigger] visible_nodes@[j]).wf_spec()
-                &&& visible_nodes@[j]@ == layout_widget::<RationalModel>(
-                        spec_child_limits, spec_wc[(first + j) as int], (fuel - 1) as nat)
-            },
-        decreases count - vi,
-    {
-        let child_idx = first + vi;
-        let cn = layout_widget_exec(&child_limits, &children[child_idx], fuel - 1);
-        visible_nodes.push(cn);
-        vi = vi + 1;
-    }
-
-    // Step 5: Build positioned children
-    let mut positioned: Vec<RuntimeNode> = Vec::new();
-    let mut k: usize = 0;
-
-    // Compute child_y(first) by accumulation
-    let mut pos_y = RuntimeRational::from_int(0);
-    {
-        let mut fi: usize = 0;
-        while fi < first
+        while vi < count
             invariant
-                0 <= fi <= first,
+                0 <= vi <= count,
+                count == end - first,
+                first <= end,
                 first <= n,
-                n == child_sizes@.len(),
-                spacing.wf_spec(),
-                pos_y.wf_spec(),
-                pos_y@ == listview_child_y::<RationalModel>(spec_sizes, spacing@, fi as nat),
-                forall|j: int| 0 <= j < n ==> (#[trigger] child_sizes@[j]).wf_spec(),
-                forall|j: int| 0 <= j < n ==> child_sizes@[j]@ == spec_sizes[j],
-            decreases first - fi,
+                end <= n,
+                n == children@.len(),
+                child_limits.wf_spec(),
+                child_limits@ == spec_child_limits,
+                fuel > 0,
+                visible_nodes@.len() == vi as int,
+                forall|j: int| 0 <= j < children@.len() ==>
+                    (#[trigger] children@[j]).wf_spec((fuel - 1) as nat),
+                forall|j: int| 0 <= j < n ==>
+                    spec_wc[j] == (#[trigger] children@[j]).model(),
+                forall|j: int| 0 <= j < vi ==> {
+                    &&& (#[trigger] visible_nodes@[j]).wf_spec()
+                    &&& visible_nodes@[j]@ == layout_widget::<RationalModel>(
+                            spec_child_limits, spec_wc[(first + j) as int], (fuel - 1) as nat)
+                },
+            decreases count - vi,
         {
-            let h = copy_rational(&child_sizes[fi].height);
-            pos_y = pos_y.add(&h).add(spacing);
-            fi = fi + 1;
+            let child_idx = first + vi;
+            let cn = layout_widget_exec(&child_limits, &children[child_idx], fuel - 1);
+            visible_nodes.push(cn);
+            vi = vi + 1;
         }
-    }
+
+        let visible_nodes = visible_nodes;
+
+        // Steps 5-6: Position visible children
+        listview_position_children_exec(
+            &visible_nodes, &child_sizes, Ghost(spec_sizes), Ghost(spec_wc),
+            Ghost(spec_child_limits), first, end, spacing, scroll_y, fuel,
+        )
+    } else {
+        Vec::new()
+    };
+
+    // Build the parent node
+    let resolved = limits.resolve_exec(viewport.copy_size());
+    let px = RuntimeRational::from_int(0);
+    let py = RuntimeRational::from_int(0);
 
     let ghost spec_first = listview_first_visible::<RationalModel>(spec_sizes, spacing@, scroll_y@);
     let ghost spec_end = listview_end_visible::<RationalModel>(spec_sizes, spacing@, scroll_y@, viewport@.height);
     let ghost spec_cn = listview_widget_child_nodes::<RationalModel>(
         spec_child_limits, spec_wc, spec_first, spec_end, (fuel - 1) as nat);
-
-    while k < count
-        invariant
-            0 <= k <= count,
-            count == (if end >= first { end - first } else { 0 }),
-            first <= n,
-            end <= n,
-            n == children@.len(),
-            n == child_sizes@.len(),
-            spacing.wf_spec(),
-            scroll_y.wf_spec(),
-            viewport.wf_spec(),
-            pos_y.wf_spec(),
-            pos_y@ == listview_child_y::<RationalModel>(spec_sizes, spacing@, (first + k) as nat),
-            visible_nodes@.len() == count as int,
-            positioned@.len() == k as int,
-            first as nat == spec_first,
-            end as nat == spec_end,
-            forall|j: int| 0 <= j < n ==> (#[trigger] child_sizes@[j]).wf_spec(),
-            forall|j: int| 0 <= j < n ==> child_sizes@[j]@ == spec_sizes[j],
-            forall|j: int| 0 <= j < count ==> {
-                &&& (#[trigger] visible_nodes@[j]).wf_spec()
-                &&& visible_nodes@[j]@ == layout_widget::<RationalModel>(
-                        spec_child_limits, spec_wc[(first + j) as int], (fuel - 1) as nat)
-            },
-            forall|j: int| 0 <= j < k ==> {
-                &&& (#[trigger] positioned@[j]).wf_shallow()
-                &&& positioned@[j]@ == Node::<RationalModel> {
-                    x: RationalModel::from_int_spec(0),
-                    y: listview_child_y::<RationalModel>(spec_sizes, spacing@, (first + j) as nat)
-                        .sub_spec(scroll_y@),
-                    size: visible_nodes@[j]@.size,
-                    children: visible_nodes@[j]@.children,
-                }
-            },
-        decreases count - k,
-    {
-        let child_y_offset = pos_y.sub(scroll_y);
-        let x = RuntimeRational::from_int(0);
-        let child_size = visible_nodes[k].size.copy_size();
-
-        let ghost child_spec_node = layout_widget::<RationalModel>(
-            spec_child_limits, spec_wc[(first + k) as int], (fuel - 1) as nat);
-
-        let positioned_child = RuntimeNode {
-            x,
-            y: child_y_offset,
-            size: child_size,
-            children: Vec::new(),
-            model: Ghost(Node::<RationalModel> {
-                x: RationalModel::from_int_spec(0),
-                y: listview_child_y::<RationalModel>(spec_sizes, spacing@, (first + k) as nat)
-                    .sub_spec(scroll_y@),
-                size: child_spec_node.size,
-                children: child_spec_node.children,
-            }),
-        };
-
-        proof {
-            assert(positioned_child.wf_shallow());
-        }
-
-        positioned.push(positioned_child);
-
-        // Advance pos_y
-        let h = copy_rational(&child_sizes[first + k].height);
-        pos_y = pos_y.add(&h).add(spacing);
-        k = k + 1;
-    }
-
-    // Step 6: Build the parent node
-    let resolved = limits.resolve_exec(viewport.copy_size());
-    let px = RuntimeRational::from_int(0);
-    let py = RuntimeRational::from_int(0);
 
     let ghost parent_model = layout_widget::<RationalModel>(
         limits@,
@@ -377,7 +488,6 @@ pub fn layout_listview_widget_exec(
     proof {
         assert(spec_first == first as nat);
         assert(spec_end == end as nat);
-        assert(spec_cn.len() == count as nat);
         assert(out.children@.len() == parent_model.children.len());
 
         assert forall|j: int| 0 <= j < out.children@.len() implies

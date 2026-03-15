@@ -94,7 +94,6 @@ pub open spec fn child_y_position<T: OrderedRing>(
 }
 
 /// Build the sequence of child Nodes for a column layout.
-#[verifier::opaque]
 pub open spec fn column_children<T: OrderedField>(
     padding: Padding<T>,
     spacing: T,
