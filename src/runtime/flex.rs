@@ -47,6 +47,7 @@ pub fn flex_column_layout_exec(
         ),
         out.children@.len() == weights@.len(),
 {
+    proof { reveal(flex_column_layout); }
     let ghost spec_weights: Seq<RationalModel> =
         Seq::new(weights@.len() as nat, |i: int| weights@[i]@);
     let ghost spec_cross: Seq<RationalModel> =
@@ -276,6 +277,7 @@ pub fn flex_row_layout_exec(
         ),
         out.children@.len() == weights@.len(),
 {
+    proof { reveal(flex_row_layout); }
     let ghost spec_weights: Seq<RationalModel> =
         Seq::new(weights@.len() as nat, |i: int| weights@[i]@);
     let ghost spec_cross: Seq<RationalModel> =

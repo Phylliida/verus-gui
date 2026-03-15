@@ -121,6 +121,7 @@ pub open spec fn listview_visible_count<T: OrderedRing>(
 ///
 /// Each child is positioned at (0, child_y(first + i) - scroll_y).
 /// Output size = limits.resolve(viewport).
+#[verifier::opaque]
 pub open spec fn layout_listview_body<T: OrderedField>(
     limits: Limits<T>,
     child_sizes: Seq<Size<T>>,

@@ -35,6 +35,7 @@ pub fn measure_widget_exec(
         out@ == measure_widget::<RationalModel>(limits@, widget.model(), fuel as nat),
     decreases fuel, 1nat,
 {
+    proof { reveal(measure_widget); }
     if fuel == 0 {
         // Unreachable: wf_spec(0) is false
         RuntimeSize::zero_exec()
@@ -296,10 +297,13 @@ fn measure_container_exec(
         Seq::new(child_sizes@.len() as nat, |j: int| child_sizes@[j]@);
 
     proof {
+        reveal(measure_widget);
         assert(child_sizes_seq.len() == spec_cs.len());
         assert forall|j: int| 0 <= j < child_sizes_seq.len() implies
             child_sizes_seq[j] == spec_cs[j]
-        by {}
+        by {
+            reveal(measure_widget);
+        }
         assert(child_sizes_seq =~= spec_cs);
     }
 
@@ -393,10 +397,7 @@ fn measure_absolute_exec(
     let ghost spec_cs = measure_absolute_children(inner@, spec_ac, (fuel - 1) as nat);
 
     proof {
-        assert(child_sizes_seq.len() == spec_cs.len());
-        assert forall|j: int| 0 <= j < child_sizes_seq.len() implies
-            child_sizes_seq[j] == spec_cs[j]
-        by {}
+        reveal(measure_widget);
         assert(child_sizes_seq =~= spec_cs);
     }
 

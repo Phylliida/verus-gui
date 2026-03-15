@@ -163,6 +163,7 @@ pub open spec fn undo_splice_params(
 }
 
 /// Compute undo splice params, taking modifiers into account for word deletion.
+#[verifier::opaque]
 pub open spec fn undo_splice_params_full(
     event: KeyEvent, model: TextModel,
 ) -> (nat, nat, Seq<char>, Seq<StyleSet>) {

@@ -24,6 +24,7 @@ pub proof fn lemma_listview_respects_limits<T: OrderedField>(
         limits.min.le(layout_listview_body(limits, child_sizes, spacing, scroll_y, viewport, child_nodes, first).size),
         layout_listview_body(limits, child_sizes, spacing, scroll_y, viewport, child_nodes, first).size.le(limits.max),
 {
+    reveal(layout_listview_body);
     // layout_listview_body returns limits.resolve(viewport)
     lemma_resolve_bounds(limits, viewport);
 }

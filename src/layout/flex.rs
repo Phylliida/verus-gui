@@ -108,6 +108,7 @@ pub open spec fn flex_column_children<T: OrderedField>(
 ///
 /// Each child gets a fraction of the available height proportional to its weight.
 /// The cross-axis (horizontal) uses alignment.
+#[verifier::opaque]
 pub open spec fn flex_column_layout<T: OrderedField>(
     limits: Limits<T>,
     padding: Padding<T>,
@@ -182,6 +183,7 @@ pub open spec fn flex_row_children<T: OrderedField>(
 }
 
 /// Lay out children in a flex row (proportional horizontal distribution).
+#[verifier::opaque]
 pub open spec fn flex_row_layout<T: OrderedField>(
     limits: Limits<T>,
     padding: Padding<T>,

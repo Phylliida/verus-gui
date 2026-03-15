@@ -12,6 +12,7 @@ use crate::layout::flex::*;
 use crate::layout::grid::*;
 use crate::layout::wrap::*;
 use crate::layout::absolute::*;
+use crate::layout::listview::*;
 use crate::padding::Padding;
 use crate::alignment::{Alignment, align_offset};
 use crate::widget::*;
@@ -1854,6 +1855,8 @@ pub proof fn lemma_layout_respects_limits<T: OrderedField>(
             lemma_resolve_bounds(limits, Size::new(tw, th));
         },
         Widget::Flex { padding, spacing, alignment, direction, children } => {
+            reveal(flex_column_layout);
+            reveal(flex_row_layout);
             lemma_resolve_bounds(limits, limits.max);
         },
         Widget::Grid { padding, h_spacing, v_spacing, h_align, v_align,
@@ -1923,6 +1926,7 @@ pub proof fn lemma_layout_respects_limits<T: OrderedField>(
             lemma_resolve_bounds(limits, viewport);
         },
         Widget::ListView { spacing, scroll_y, viewport, children } => {
+            reveal(layout_listview_body);
             lemma_resolve_bounds(limits, viewport);
         },
         Widget::TextInput { preferred_size, .. } => {
@@ -4301,6 +4305,8 @@ pub proof fn lemma_layout_widget_monotone<T: OrderedField>(
             );
         },
         Widget::Flex { padding, spacing, alignment, direction, children } => {
+            reveal(flex_column_layout);
+            reveal(flex_row_layout);
             // Flex output size = limits.resolve(limits.max) regardless of direction
             lemma_resolve_monotone_input_and_max(
                 limits1, limits2, limits1.max, limits2.max,
@@ -4443,6 +4449,7 @@ pub proof fn lemma_layout_widget_monotone<T: OrderedField>(
             lemma_resolve_monotone_max(limits1, limits2, viewport);
         },
         Widget::ListView { spacing, scroll_y, viewport, children } => {
+            reveal(layout_listview_body);
             // Output = limits.resolve(viewport), same viewport for both.
             lemma_resolve_monotone_max(limits1, limits2, viewport);
         },

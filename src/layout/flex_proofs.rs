@@ -657,6 +657,7 @@ pub proof fn lemma_flex_column_children_within_bounds<T: OrderedField>(
             children,
         }, fuel).children_within_bounds(),
 {
+    reveal(flex_column_layout);
     let h = padding.horizontal();
     let v = padding.vertical();
     let inner = limits.shrink(h, v);
@@ -1108,6 +1109,7 @@ pub proof fn lemma_flex_row_children_within_bounds<T: OrderedField>(
             children,
         }, fuel).children_within_bounds(),
 {
+    reveal(flex_row_layout);
     let h = padding.horizontal();
     let v = padding.vertical();
     let inner = limits.shrink(h, v);

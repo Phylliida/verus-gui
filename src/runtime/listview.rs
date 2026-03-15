@@ -57,6 +57,7 @@ pub fn layout_listview_widget_exec(
         }),
     decreases fuel, 0nat,
 {
+    proof { reveal(layout_listview_body); }
     let n = children.len();
 
     let ghost spec_wc: Seq<Widget<RationalModel>> =

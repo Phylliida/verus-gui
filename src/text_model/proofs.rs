@@ -3,6 +3,8 @@ use super::*;
 use super::operations::*;
 use super::cursor::*;
 use super::paragraph_proofs::*;
+use super::session::{undo_splice_params_full, is_text_edit_key};
+use crate::event::{dispatch_key, KeyAction, KeyEvent, KeyEventKind};
 
 verus! {
 
@@ -885,6 +887,37 @@ pub proof fn lemma_delete_forward_at_end_noop(model: TextModel)
     ensures
         delete_forward(model) == model,
 {
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Bridge: undo params match dispatch result
+// ──────────────────────────────────────────────────────────────────────
+
+/// The undo splice parameters computed by undo_splice_params_full produce
+/// the same text and styles as the dispatch_key operation.
+/// This bridges the undo system with the dispatch system without requiring
+/// callers to unfold undo_splice_params_full.
+pub proof fn lemma_undo_params_match_dispatch(event: KeyEvent, model: TextModel)
+    requires
+        is_text_edit_key(event.kind, model),
+        match dispatch_key(model, event) {
+            KeyAction::NewModel(_) => true,
+            _ => false,
+        },
+    ensures ({
+        let (start, end, new_text, new_styles) = undo_splice_params_full(event, model);
+        let new_model = match dispatch_key(model, event) {
+            KeyAction::NewModel(m) => m,
+            _ => arbitrary(),
+        };
+        &&& new_model.text =~= seq_splice(model.text, start as int, end as int, new_text)
+        &&& new_model.styles =~= seq_splice(model.styles, start as int, end as int, new_styles)
+    }),
+{
+    reveal(undo_splice_params_full);
+    // With undo_splice_params_full revealed and dispatch_key open,
+    // Z3 can verify each text-edit case (Char/Enter/Tab/Backspace/Delete/ComposeCommit)
+    // by seeing that both functions use the same splice parameters.
 }
 
 } // verus!

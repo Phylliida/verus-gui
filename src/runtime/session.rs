@@ -438,6 +438,7 @@ fn undo_splice_params_full_exec(
         result.1 <= model.text.len(),
         result.2.len() == result.3.len(),
 {
+    proof { reveal(undo_splice_params_full); }
     let sel_start = if model.anchor <= model.focus {
         model.anchor } else { model.focus };
     let sel_end = if model.anchor <= model.focus {
@@ -577,10 +578,8 @@ fn session_handle_text_edit_exec(
             let ghost new_style_history = update_style_history_for_push(
                 old_stack, old_style_history, entry@, new_model@.styles, merge);
             proof {
-                // Key fact: undo params produce same text as dispatch
-                assert(seq_splice(old_model.text,
-                    undo_start as int, undo_end as int, ins_text@)
-                    =~= new_model@.text);
+                // Bridge: undo params produce same text/styles as dispatch
+                lemma_undo_params_match_dispatch(event@, old_model);
                 // Prove entry_describes_transition
                 lemma_entry_for_splice_describes_transition(
                     old_model, undo_start as nat, undo_end as nat,

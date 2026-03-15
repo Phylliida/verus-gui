@@ -13,6 +13,7 @@ use crate::layout::flex::*;
 use crate::layout::grid::*;
 use crate::layout::wrap::*;
 use crate::layout::absolute::*;
+use crate::layout::listview::*;
 use crate::widget::*;
 
 verus! {
@@ -141,6 +142,7 @@ proof fn lemma_flex_column_respects_limits<T: OrderedField>(
         limits.min.le(layout_flex_column_body(limits, padding, spacing, alignment, weights, child_nodes).size),
         layout_flex_column_body(limits, padding, spacing, alignment, weights, child_nodes).size.le(limits.max),
 {
+    reveal(flex_column_layout);
     let child_cross_sizes = Seq::new(child_nodes.len(), |i: int| child_nodes[i].size.width);
     let layout = flex_column_layout(limits, padding, spacing, alignment, weights, child_cross_sizes);
     assert(layout_flex_column_body(limits, padding, spacing, alignment, weights, child_nodes).size
@@ -163,6 +165,7 @@ proof fn lemma_flex_row_respects_limits<T: OrderedField>(
         limits.min.le(layout_flex_row_body(limits, padding, spacing, alignment, weights, child_nodes).size),
         layout_flex_row_body(limits, padding, spacing, alignment, weights, child_nodes).size.le(limits.max),
 {
+    reveal(flex_row_layout);
     let child_cross_sizes = Seq::new(child_nodes.len(), |i: int| child_nodes[i].size.height);
     let layout = flex_row_layout(limits, padding, spacing, alignment, weights, child_cross_sizes);
     assert(layout_flex_row_body(limits, padding, spacing, alignment, weights, child_nodes).size
@@ -372,6 +375,7 @@ pub proof fn lemma_layout_widget_respects_limits<T: OrderedField>(
             lemma_resolve_bounds(limits, viewport);
         },
         Widget::ListView { spacing, scroll_y, viewport, children } => {
+            reveal(layout_listview_body);
             lemma_resolve_bounds(limits, viewport);
         },
         Widget::TextInput { preferred_size, .. } => {

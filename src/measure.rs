@@ -12,6 +12,7 @@ use crate::layout::flex::*;
 use crate::layout::grid::*;
 use crate::layout::wrap::*;
 use crate::layout::absolute::*;
+use crate::layout::listview::*;
 
 verus! {
 
@@ -44,6 +45,7 @@ pub open spec fn measure_children<T: OrderedField>(
 ///
 /// Equivalent to `layout_widget(limits, widget, fuel).size` — proved by
 /// `lemma_measure_is_layout_size`.
+#[verifier::opaque]
 pub open spec fn measure_widget<T: OrderedField>(
     limits: Limits<T>,
     widget: Widget<T>,
@@ -294,6 +296,7 @@ proof fn lemma_measure_children_match<T: OrderedField>(
     assert forall|i: int| 0 <= i < children.len() implies
         mc[i] == cn[i].size
     by {
+        reveal(measure_widget);
         lemma_measure_is_layout_size(inner_limits, children[i], fuel);
     }
 }
@@ -318,6 +321,7 @@ proof fn lemma_measure_absolute_children_match<T: OrderedField>(
     assert forall|i: int| 0 <= i < children.len() implies
         mc[i] == cn[i].size
     by {
+        reveal(measure_widget);
         lemma_measure_is_layout_size(inner_limits, children[i].child, fuel);
     }
 }
@@ -333,6 +337,7 @@ pub proof fn lemma_measure_is_layout_size<T: OrderedField>(
             == layout_widget(limits, widget, fuel).size,
     decreases fuel, 0nat,
 {
+    reveal(measure_widget);
     if fuel == 0 {
         // Both return Size::new(T::zero(), T::zero())
     } else {
@@ -410,6 +415,8 @@ pub proof fn lemma_measure_is_layout_size<T: OrderedField>(
                 assert(layout_widget(limits, widget, fuel).size == layout.size);
             },
             Widget::Flex { padding, spacing, alignment, direction, children } => {
+                reveal(flex_column_layout);
+                reveal(flex_row_layout);
                 // Flex fills limits.max regardless of direction
                 // flex_column_layout / flex_row_layout both set parent_size = limits.resolve(limits.max)
                 let inner = limits.shrink(padding.horizontal(), padding.vertical());
@@ -526,6 +533,7 @@ pub proof fn lemma_measure_is_layout_size<T: OrderedField>(
                 // No recursion needed — child doesn't affect output size
             },
             Widget::ListView { spacing, scroll_y, viewport, children } => {
+                reveal(layout_listview_body);
                 // measure = limits.resolve(viewport) = layout_widget(...).size
                 // Output size depends only on viewport, not children
             },
