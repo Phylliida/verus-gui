@@ -38,6 +38,7 @@ pub mod event_helpers;
 pub mod event;
 pub mod interaction;
 pub mod text_model;
+pub mod session_helpers;
 pub mod session;
 pub mod text_input;
 pub mod event_routing;

@@ -7,6 +7,7 @@ use crate::event::*;
 use crate::runtime::text_model::*;
 use crate::text_model::session::*;
 use crate::runtime::session::*;
+use crate::runtime::session_helpers::*;
 use crate::runtime::event::*;
 
 verus! {
