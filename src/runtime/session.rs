@@ -119,6 +119,7 @@ fn session_apply_undo_exec(
         result.wf_spec(),
 {
     proof {
+        lemma_apply_key_undo(session.view_session());
         lemma_undo_preconditions_from_history(
             session.undo_stack@, session.history@, session.model@.text);
     }
@@ -164,6 +165,7 @@ fn session_apply_redo_exec(
         result.wf_spec(),
 {
     proof {
+        lemma_apply_key_redo(session.view_session());
         lemma_redo_preconditions_from_history(
             session.undo_stack@, session.history@, session.model@.text);
     }
@@ -224,6 +226,7 @@ fn session_handle_cut_exec(
     let sel_end = if session.model.anchor <= session.model.focus {
         session.model.focus } else { session.model.anchor };
     proof {
+        lemma_apply_key_cut(session.view_session());
         lemma_empty_seq_wf();
         axiom_splice_wf(session.model@.text, sel_start as nat, sel_end as nat, Seq::<char>::empty());
     }
@@ -312,6 +315,7 @@ fn session_handle_paste_exec(
     let ghost old_style_history = session.style_history@;
 
     proof {
+        lemma_apply_key_paste(session.view_session());
         axiom_paste_wf(
             session.model@.text,
             sel_start as nat, sel_end as nat, session.clipboard@);
@@ -378,6 +382,7 @@ fn session_handle_non_text_edit_exec(
         result.model.wf_spec(),
         result.wf_spec(),
 {
+    proof { lemma_apply_key_non_text_edit(session.view_session(), event@); }
     let clipboard = session.clipboard;
     let ghost old_model = session.model@;
     let ghost old_stack = session.undo_stack@;
@@ -389,9 +394,6 @@ fn session_handle_non_text_edit_exec(
     match action {
         RuntimeKeyAction::NewModel(new_model) => {
             proof {
-                // Non-text-edit operations don't change text or styles.
-                // For compose_start/update/cancel, select_all, move_cursor, extend_selection:
-                // new_model@.text =~= old_model.text and new_model@.styles =~= old_model.styles
             }
             RuntimeTextEditSession {
                 model: new_model,
@@ -578,6 +580,8 @@ fn session_handle_text_edit_exec(
             let ghost new_style_history = update_style_history_for_push(
                 old_stack, old_style_history, entry@, new_model@.styles, merge);
             proof {
+                // Bridge: apply_key_to_session output fields
+                lemma_apply_key_text_edit(session.view_session(), event@);
                 // Bridge: undo params produce same text/styles as dispatch
                 lemma_undo_params_match_dispatch(event@, old_model);
                 // Prove entry_describes_transition
@@ -673,6 +677,7 @@ fn session_handle_input_exec(
         _ => false,
     };
     if dispatch_none {
+        proof { lemma_apply_key_noop(session.view_session(), event@); }
         return session;
     }
 
@@ -725,6 +730,7 @@ pub fn apply_key_to_session_exec(
     match &event.kind {
         RuntimeKeyEventKind::Copy => {
             if session.model.anchor != session.model.focus {
+                proof { lemma_apply_key_copy(session.view_session(), event@); }
                 let clipboard = get_selection_text_exec(&session.model);
                 return RuntimeTextEditSession {
                     clipboard,
@@ -735,28 +741,35 @@ pub fn apply_key_to_session_exec(
                     style_history: session.style_history,
                 };
             }
+            proof { lemma_apply_key_noop(session.view_session(), event@); }
             return session;
         },
         RuntimeKeyEventKind::Cut => {
             if session.model.anchor != session.model.focus {
+                proof { lemma_apply_key_kind_determines_result(session.view_session(), event@, KeyEventKind::Cut); }
                 return session_handle_cut_exec(session);
             }
+            proof { lemma_apply_key_noop(session.view_session(), event@); }
             return session;
         },
         RuntimeKeyEventKind::Undo => {
             if can_undo_exec(&session.undo_stack) {
                 if session.model.composition.is_none() {
+                    proof { lemma_apply_key_kind_determines_result(session.view_session(), event@, KeyEventKind::Undo); }
                     return session_apply_undo_exec(session);
                 }
             }
+            proof { lemma_apply_key_noop(session.view_session(), event@); }
             return session;
         },
         RuntimeKeyEventKind::Redo => {
             if can_redo_exec(&session.undo_stack) {
                 if session.model.composition.is_none() {
+                    proof { lemma_apply_key_kind_determines_result(session.view_session(), event@, KeyEventKind::Redo); }
                     return session_apply_redo_exec(session);
                 }
             }
+            proof { lemma_apply_key_noop(session.view_session(), event@); }
             return session;
         },
         RuntimeKeyEventKind::Paste => {
@@ -765,8 +778,10 @@ pub fn apply_key_to_session_exec(
             if (clean.len() > 0 || session.model.anchor != session.model.focus)
                 && clean.len() < usize::MAX - session.model.text.len()
             {
+                proof { lemma_apply_key_kind_determines_result(session.view_session(), event@, KeyEventKind::Paste); }
                 return session_handle_paste_exec(session, clean);
             }
+            proof { lemma_apply_key_noop(session.view_session(), event@); }
             return session;
         },
         _ => {},

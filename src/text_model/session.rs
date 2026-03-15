@@ -203,6 +203,7 @@ pub open spec fn undo_splice_params_full(
 
 /// Apply a key event to the entire session: dispatches via dispatch_key,
 /// then handles undo/redo/clipboard at the session level.
+#[verifier::opaque]
 pub open spec fn apply_key_to_session(
     session: TextEditSession,
     event: KeyEvent,

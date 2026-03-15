@@ -3,8 +3,15 @@ use super::*;
 use super::operations::*;
 use super::cursor::*;
 use super::paragraph_proofs::*;
-use super::session::{undo_splice_params_full, is_text_edit_key};
-use crate::event::{dispatch_key, KeyAction, KeyEvent, KeyEventKind};
+use super::session::{
+    undo_splice_params_full, is_text_edit_key, is_insert_key,
+    apply_key_to_session, TextEditSession,
+};
+use super::undo::{can_undo, can_redo, apply_undo, apply_redo};
+use crate::event::{
+    dispatch_key, KeyAction, KeyEvent, KeyEventKind,
+    ExternalAction, Modifiers,
+};
 
 verus! {
 
@@ -918,6 +925,194 @@ pub proof fn lemma_undo_params_match_dispatch(event: KeyEvent, model: TextModel)
     // With undo_splice_params_full revealed and dispatch_key open,
     // Z3 can verify each text-edit case (Char/Enter/Tab/Backspace/Delete/ComposeCommit)
     // by seeing that both functions use the same splice parameters.
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Bridge lemmas: apply_key_to_session field extraction
+// ──────────────────────────────────────────────────────────────────────
+//
+// Each lemma reveals apply_key_to_session in a focused context,
+// proving what the 3 output fields (model, last_was_insert, clipboard)
+// are for one specific dispatch arm. This allows exec functions to
+// call a single lemma instead of Z3 unfolding the entire ~140-line spec.
+
+/// Bridge: NewModel + is_text_edit arm.
+pub proof fn lemma_apply_key_text_edit(session: TextEditSession, event: KeyEvent)
+    requires
+        is_text_edit_key(event.kind, session.model),
+        match dispatch_key(session.model, event) {
+            KeyAction::NewModel(_) => true,
+            _ => false,
+        },
+    ensures ({
+        let new_model = match dispatch_key(session.model, event) {
+            KeyAction::NewModel(m) => m,
+            _ => arbitrary(),
+        };
+        &&& apply_key_to_session(session, event).model == new_model
+        &&& apply_key_to_session(session, event).last_was_insert == is_insert_key(event.kind)
+        &&& apply_key_to_session(session, event).clipboard == session.clipboard
+    }),
+{
+    reveal(apply_key_to_session);
+}
+
+/// Bridge: NewModel + non-text-edit arm.
+pub proof fn lemma_apply_key_non_text_edit(session: TextEditSession, event: KeyEvent)
+    requires
+        !is_text_edit_key(event.kind, session.model),
+        match dispatch_key(session.model, event) {
+            KeyAction::NewModel(_) => true,
+            _ => false,
+        },
+    ensures ({
+        let new_model = match dispatch_key(session.model, event) {
+            KeyAction::NewModel(m) => m,
+            _ => arbitrary(),
+        };
+        &&& apply_key_to_session(session, event).model == new_model
+        &&& apply_key_to_session(session, event).last_was_insert == false
+        &&& apply_key_to_session(session, event).clipboard == session.clipboard
+    }),
+{
+    reveal(apply_key_to_session);
+}
+
+/// Bridge: Undo arm (can_undo && no composition).
+pub proof fn lemma_apply_key_undo(session: TextEditSession)
+    requires
+        can_undo(session.undo_stack),
+        session.model.composition.is_none(),
+    ensures ({
+        let event = KeyEvent { kind: KeyEventKind::Undo, modifiers: Modifiers { shift: false, ctrl: false, alt: false } };
+        let (_, new_model) = apply_undo(session.undo_stack, session.model);
+        &&& apply_key_to_session(session, event).model == new_model
+        &&& apply_key_to_session(session, event).last_was_insert == false
+        &&& apply_key_to_session(session, event).clipboard == session.clipboard
+    }),
+{
+    reveal(apply_key_to_session);
+}
+
+/// Bridge: Redo arm (can_redo && no composition).
+pub proof fn lemma_apply_key_redo(session: TextEditSession)
+    requires
+        can_redo(session.undo_stack),
+        session.model.composition.is_none(),
+    ensures ({
+        let event = KeyEvent { kind: KeyEventKind::Redo, modifiers: Modifiers { shift: false, ctrl: false, alt: false } };
+        let (_, new_model) = apply_redo(session.undo_stack, session.model);
+        &&& apply_key_to_session(session, event).model == new_model
+        &&& apply_key_to_session(session, event).last_was_insert == false
+        &&& apply_key_to_session(session, event).clipboard == session.clipboard
+    }),
+{
+    reveal(apply_key_to_session);
+}
+
+/// Bridge: Copy arm (has selection).
+pub proof fn lemma_apply_key_copy(session: TextEditSession, event: KeyEvent)
+    requires
+        has_selection(session.model.anchor, session.model.focus),
+        match dispatch_key(session.model, event) {
+            KeyAction::External(ExternalAction::Copy) => true,
+            _ => false,
+        },
+    ensures
+        apply_key_to_session(session, event).model == session.model,
+        apply_key_to_session(session, event).last_was_insert == session.last_was_insert,
+        apply_key_to_session(session, event).clipboard == get_selection_text(session.model),
+{
+    reveal(apply_key_to_session);
+}
+
+/// Bridge: Cut arm (has selection).
+pub proof fn lemma_apply_key_cut(session: TextEditSession)
+    requires
+        has_selection(session.model.anchor, session.model.focus),
+    ensures ({
+        let event = KeyEvent { kind: KeyEventKind::Cut, modifiers: Modifiers { shift: false, ctrl: false, alt: false } };
+        &&& apply_key_to_session(session, event).model == delete_selection(session.model)
+        &&& apply_key_to_session(session, event).last_was_insert == false
+        &&& apply_key_to_session(session, event).clipboard == get_selection_text(session.model)
+    }),
+{
+    reveal(apply_key_to_session);
+}
+
+/// Bridge: Paste arm (valid paste).
+pub proof fn lemma_apply_key_paste(session: TextEditSession)
+    requires ({
+        let clean = canonicalize_newlines(filter_permitted(session.clipboard));
+        &&& (clean.len() > 0 || has_selection(session.model.anchor, session.model.focus))
+        &&& session.model.text.len() + clean.len() < usize::MAX as nat
+    }),
+    ensures ({
+        let event = KeyEvent { kind: KeyEventKind::Paste, modifiers: Modifiers { shift: false, ctrl: false, alt: false } };
+        &&& apply_key_to_session(session, event).model == paste(session.model, session.clipboard, Seq::empty())
+        &&& apply_key_to_session(session, event).last_was_insert == false
+        &&& apply_key_to_session(session, event).clipboard == session.clipboard
+    }),
+{
+    reveal(apply_key_to_session);
+}
+
+/// Bridge: all noop arms (identity return).
+/// Covers: Copy/Cut without selection, Undo/Redo without preconditions,
+/// Paste noop, Find*, and dispatch None.
+pub proof fn lemma_apply_key_noop(session: TextEditSession, event: KeyEvent)
+    requires
+        match dispatch_key(session.model, event) {
+            KeyAction::External(ExternalAction::Copy) =>
+                !has_selection(session.model.anchor, session.model.focus),
+            KeyAction::External(ExternalAction::Cut) =>
+                !has_selection(session.model.anchor, session.model.focus),
+            KeyAction::External(ExternalAction::Undo) =>
+                !can_undo(session.undo_stack) || session.model.composition.is_some(),
+            KeyAction::External(ExternalAction::Redo) =>
+                !can_redo(session.undo_stack) || session.model.composition.is_some(),
+            KeyAction::External(ExternalAction::Paste) => {
+                let clean = canonicalize_newlines(filter_permitted(session.clipboard));
+                !((clean.len() > 0 || has_selection(session.model.anchor, session.model.focus))
+                    && session.model.text.len() + clean.len() < usize::MAX as nat)
+            },
+            KeyAction::External(ExternalAction::FindNext(_)) => true,
+            KeyAction::External(ExternalAction::FindPrev(_)) => true,
+            KeyAction::External(ExternalAction::ReplaceAt(_, _, _)) => true,
+            KeyAction::External(ExternalAction::ReplaceAll(_, _)) => true,
+            KeyAction::None => true,
+            _ => false,
+        },
+    ensures
+        apply_key_to_session(session, event).model == session.model,
+        apply_key_to_session(session, event).last_was_insert == session.last_was_insert,
+        apply_key_to_session(session, event).clipboard == session.clipboard,
+{
+    reveal(apply_key_to_session);
+}
+
+/// Bridge: modifiers are irrelevant for Cut/Undo/Redo/Paste events.
+/// The result of apply_key_to_session depends only on event.kind for these.
+/// Used by apply_key_to_session_exec to connect event@ to hardcoded ensures
+/// in session_handle_cut_exec, session_apply_undo_exec, etc.
+pub proof fn lemma_apply_key_kind_determines_result(
+    session: TextEditSession, event: KeyEvent, kind: KeyEventKind,
+)
+    requires
+        event.kind == kind,
+        match kind {
+            KeyEventKind::Cut | KeyEventKind::Undo
+            | KeyEventKind::Redo | KeyEventKind::Paste => true,
+            _ => false,
+        },
+    ensures ({
+        let canonical = KeyEvent { kind: kind, modifiers: Modifiers { shift: false, ctrl: false, alt: false } };
+        &&& apply_key_to_session(session, event).model == apply_key_to_session(session, canonical).model
+        &&& apply_key_to_session(session, event).last_was_insert == apply_key_to_session(session, canonical).last_was_insert
+        &&& apply_key_to_session(session, event).clipboard == apply_key_to_session(session, canonical).clipboard
+    }),
+{
+    reveal(apply_key_to_session);
 }
 
 } // verus!
