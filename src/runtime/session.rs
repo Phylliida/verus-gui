@@ -409,10 +409,112 @@ fn session_handle_non_text_edit_exec(
     }
 }
 
+// ── Undo splice params extraction ─────────────────────────────────
+
+/// Extract undo splice parameters for a text-edit key event.
+/// Mirrors the spec `undo_splice_params_full`. Separated from
+/// `session_handle_text_edit_exec` to reduce Z3 path explosion.
+fn undo_splice_params_full_exec(
+    model: &RuntimeTextModel,
+    event: &RuntimeKeyEvent,
+) -> (result: (usize, usize, Vec<char>, Vec<RuntimeStyleSet>))
+    requires
+        model.wf_spec(),
+        is_text_edit_key(event@.kind, model@),
+        match dispatch_key(model@, event@) {
+            KeyAction::NewModel(_) => true,
+            _ => false,
+        },
+        model@.composition.is_some() ==>
+            model@.text.len()
+                + model@.composition.unwrap().provisional.len()
+                < usize::MAX,
+    ensures
+        result.0 as nat == undo_splice_params_full(event@, model@).0,
+        result.1 as nat == undo_splice_params_full(event@, model@).1,
+        result.2@ =~= undo_splice_params_full(event@, model@).2,
+        style_seq_view(result.3@) =~= undo_splice_params_full(event@, model@).3,
+        result.0 <= result.1,
+        result.1 <= model.text.len(),
+        result.2.len() == result.3.len(),
+{
+    let sel_start = if model.anchor <= model.focus {
+        model.anchor } else { model.focus };
+    let sel_end = if model.anchor <= model.focus {
+        model.focus } else { model.anchor };
+
+    match &event.kind {
+        RuntimeKeyEventKind::Char(ch) => {
+            (sel_start, sel_end,
+             vec![*ch], vec![copy_style_set(&model.typing_style)])
+        },
+        RuntimeKeyEventKind::Enter => {
+            (sel_start, sel_end,
+             vec!['\n'], vec![copy_style_set(&model.typing_style)])
+        },
+        RuntimeKeyEventKind::Tab => {
+            (sel_start, sel_end,
+             vec!['\t'], vec![copy_style_set(&model.typing_style)])
+        },
+        RuntimeKeyEventKind::Backspace => {
+            if model.anchor != model.focus {
+                (sel_start, sel_end, Vec::new(), Vec::new())
+            } else if event.modifiers.ctrl {
+                proof {
+                    axiom_prev_word_boundary_valid(
+                        model@.text, model@.focus);
+                }
+                let prev = prev_word_start_exec(
+                    &model.text, model.focus);
+                (prev, model.focus, Vec::new(), Vec::new())
+            } else {
+                proof {
+                    axiom_prev_grapheme_boundary_valid(
+                        model@.text, model@.focus);
+                }
+                let prev = prev_grapheme_boundary_exec(
+                    &model.text, model.focus);
+                (prev, model.focus, Vec::new(), Vec::new())
+            }
+        },
+        RuntimeKeyEventKind::Delete => {
+            if model.anchor != model.focus {
+                (sel_start, sel_end, Vec::new(), Vec::new())
+            } else if event.modifiers.ctrl {
+                proof {
+                    axiom_next_word_boundary_valid(
+                        model@.text, model@.focus);
+                }
+                let next = next_word_end_exec(
+                    &model.text, model.focus);
+                (model.focus, next, Vec::new(), Vec::new())
+            } else {
+                proof {
+                    axiom_next_grapheme_boundary_valid(
+                        model@.text, model@.focus);
+                }
+                let next = next_grapheme_boundary_exec(
+                    &model.text, model.focus);
+                (model.focus, next, Vec::new(), Vec::new())
+            }
+        },
+        RuntimeKeyEventKind::ComposeCommit => {
+            let c = model.composition.as_ref().unwrap();
+            let prov_text: Vec<char> = copy_char_vec(&c.provisional);
+            let prov_styles: Vec<RuntimeStyleSet> =
+                repeat_style_set_exec(&model.typing_style, c.provisional.len());
+            (c.range_start, c.range_end, prov_text, prov_styles)
+        },
+        _ => {
+            proof { assert(false); }
+            (0, 0, Vec::new(), Vec::new())
+        },
+    }
+}
+
 // ── Text-edit helper ───────────────────────────────────────────────
 
 /// Handle a text-modifying NewModel operation with correct undo entry.
-#[verifier::rlimit(80)]
 fn session_handle_text_edit_exec(
     session: RuntimeTextEditSession,
     event: &RuntimeKeyEvent,
@@ -441,11 +543,6 @@ fn session_handle_text_edit_exec(
         result.model.wf_spec(),
         result.wf_spec(),
 {
-    let sel_start = if session.model.anchor <= session.model.focus {
-        session.model.anchor } else { session.model.focus };
-    let sel_end = if session.model.anchor <= session.model.focus {
-        session.model.focus } else { session.model.anchor };
-
     let is_insert = match &event.kind {
         RuntimeKeyEventKind::Char(_)
         | RuntimeKeyEventKind::Enter
@@ -454,89 +551,8 @@ fn session_handle_text_edit_exec(
     };
     let merge = session.last_was_insert && is_insert;
 
-    // Compute per-operation undo entry parameters.
-    let (undo_start, undo_end, ins_text, ins_styles):
-        (usize, usize, Vec<char>, Vec<RuntimeStyleSet>) =
-        match &event.kind {
-            RuntimeKeyEventKind::Char(ch) => {
-                (sel_start, sel_end,
-                 vec![*ch], vec![copy_style_set(&session.model.typing_style)])
-            },
-            RuntimeKeyEventKind::Enter => {
-                (sel_start, sel_end,
-                 vec!['\n'], vec![copy_style_set(&session.model.typing_style)])
-            },
-            RuntimeKeyEventKind::Tab => {
-                (sel_start, sel_end,
-                 vec!['\t'], vec![copy_style_set(&session.model.typing_style)])
-            },
-            RuntimeKeyEventKind::Backspace => {
-                if session.model.anchor != session.model.focus {
-                    (sel_start, sel_end, Vec::new(), Vec::new())
-                } else if event.modifiers.ctrl {
-                    let prev = prev_word_start_exec(
-                        &session.model.text, session.model.focus);
-                    (prev, session.model.focus, Vec::new(), Vec::new())
-                } else {
-                    let prev = prev_grapheme_boundary_exec(
-                        &session.model.text, session.model.focus);
-                    (prev, session.model.focus, Vec::new(), Vec::new())
-                }
-            },
-            RuntimeKeyEventKind::Delete => {
-                if session.model.anchor != session.model.focus {
-                    (sel_start, sel_end, Vec::new(), Vec::new())
-                } else if event.modifiers.ctrl {
-                    let next = next_word_end_exec(
-                        &session.model.text, session.model.focus);
-                    (session.model.focus, next, Vec::new(), Vec::new())
-                } else {
-                    let next = next_grapheme_boundary_exec(
-                        &session.model.text, session.model.focus);
-                    (session.model.focus, next, Vec::new(), Vec::new())
-                }
-            },
-            RuntimeKeyEventKind::ComposeCommit => {
-                let c = session.model.composition.as_ref().unwrap();
-                let prov_text: Vec<char> = copy_char_vec(&c.provisional);
-                let prov_styles: Vec<RuntimeStyleSet> =
-                    repeat_style_set_exec(&session.model.typing_style, c.provisional.len());
-                (c.range_start, c.range_end, prov_text, prov_styles)
-            },
-            _ => {
-                proof { assert(false); }
-                (0, 0, Vec::new(), Vec::new())
-            },
-        };
-
-    // Prove undo_start <= undo_end <= text.len()
-    proof {
-        match event@.kind {
-            KeyEventKind::Backspace => {
-                if !has_selection(session.model@.anchor, session.model@.focus) {
-                    if event@.modifiers.ctrl {
-                        axiom_prev_word_boundary_valid(
-                            session.model@.text, session.model@.focus);
-                    } else {
-                        axiom_prev_grapheme_boundary_valid(
-                            session.model@.text, session.model@.focus);
-                    }
-                }
-            },
-            KeyEventKind::Delete => {
-                if !has_selection(session.model@.anchor, session.model@.focus) {
-                    if event@.modifiers.ctrl {
-                        axiom_next_word_boundary_valid(
-                            session.model@.text, session.model@.focus);
-                    } else {
-                        axiom_next_grapheme_boundary_valid(
-                            session.model@.text, session.model@.focus);
-                    }
-                }
-            },
-            _ => {},
-        }
-    }
+    let (undo_start, undo_end, ins_text, ins_styles) =
+        undo_splice_params_full_exec(&session.model, event);
 
     let mut entry = undo_entry_for_splice_exec(
         &session.model, undo_start, undo_end,
@@ -595,12 +611,95 @@ fn session_handle_text_edit_exec(
     }
 }
 
+// ── Input event handler (non-external-action) ───────────────────────
+
+/// Handle input events (not Copy/Cut/Undo/Redo/Paste).
+/// Checks for dispatch-none, classifies text-edit vs non-text-edit,
+/// and dispatches to the appropriate handler.
+/// Separated from `apply_key_to_session_exec` to reduce Z3 path explosion.
+fn session_handle_input_exec(
+    session: RuntimeTextEditSession,
+    event: &RuntimeKeyEvent,
+) -> (result: RuntimeTextEditSession)
+    requires
+        session.wf_spec(),
+        session.model.text.len() + 2 < usize::MAX,
+        session.undo_stack.entries.len() < usize::MAX,
+        session.model@.composition.is_some() ==>
+            session.model@.text.len()
+                + session.model@.composition.unwrap().provisional.len()
+                < usize::MAX,
+        // dispatch_key does not return External for this event
+        match dispatch_key(session.model@, event@) {
+            KeyAction::External(_) => false,
+            _ => true,
+        },
+    ensures
+        result.view_session().model
+            == apply_key_to_session(session.view_session(), event@).model,
+        result.view_session().last_was_insert
+            == apply_key_to_session(session.view_session(), event@).last_was_insert,
+        result.view_session().clipboard
+            == apply_key_to_session(session.view_session(), event@).clipboard,
+        result.model.wf_spec(),
+        result.wf_spec(),
+{
+    // Pre-check: will dispatch return None? If so, return unchanged.
+    let dispatch_none = match &event.kind {
+        RuntimeKeyEventKind::Char(ch) => {
+            let c = *ch;
+            session.model.composition.is_some()
+                || c == '\0' || c == '\u{FFF9}' || c == '\u{FFFA}'
+                || c == '\u{FFFB}' || c == '\r'
+        },
+        RuntimeKeyEventKind::Enter | RuntimeKeyEventKind::Tab => {
+            session.model.composition.is_some()
+        },
+        RuntimeKeyEventKind::Backspace => {
+            session.model.composition.is_some()
+                || (session.model.anchor == session.model.focus
+                    && session.model.focus == 0)
+        },
+        RuntimeKeyEventKind::Delete => {
+            session.model.composition.is_some()
+                || (session.model.anchor == session.model.focus
+                    && session.model.focus >= session.model.text.len())
+        },
+        RuntimeKeyEventKind::ComposeStart =>
+            session.model.composition.is_some(),
+        RuntimeKeyEventKind::ComposeUpdate(text, cursor) =>
+            session.model.composition.is_none() || *cursor > text.len(),
+        RuntimeKeyEventKind::ComposeCommit =>
+            session.model.composition.is_none(),
+        _ => false,
+    };
+    if dispatch_none {
+        return session;
+    }
+
+    // Determine if this is a text-modifying operation that needs an undo entry.
+    let is_text_edit = match &event.kind {
+        RuntimeKeyEventKind::Char(_)
+        | RuntimeKeyEventKind::Enter
+        | RuntimeKeyEventKind::Tab
+        | RuntimeKeyEventKind::Backspace
+        | RuntimeKeyEventKind::Delete
+        | RuntimeKeyEventKind::ComposeCommit => true,
+        _ => false,
+    };
+
+    if is_text_edit {
+        session_handle_text_edit_exec(session, event)
+    } else {
+        session_handle_non_text_edit_exec(session, event)
+    }
+}
+
 // ── Main session dispatch ───────────────────────────────────────────
 
 /// Apply a key event to the session.
 ///
 /// Fully verified including Undo/Redo via ghost history tracking.
-#[verifier::rlimit(80)]
 pub fn apply_key_to_session_exec(
     session: RuntimeTextEditSession,
     event: &RuntimeKeyEvent,
@@ -674,55 +773,7 @@ pub fn apply_key_to_session_exec(
         _ => {},
     }
 
-    // Pre-check: will dispatch return None? If so, return unchanged.
-    let dispatch_none = match &event.kind {
-        RuntimeKeyEventKind::Char(ch) => {
-            let c = *ch;
-            session.model.composition.is_some()
-                || c == '\0' || c == '\u{FFF9}' || c == '\u{FFFA}'
-                || c == '\u{FFFB}' || c == '\r'
-        },
-        RuntimeKeyEventKind::Enter | RuntimeKeyEventKind::Tab => {
-            session.model.composition.is_some()
-        },
-        RuntimeKeyEventKind::Backspace => {
-            session.model.composition.is_some()
-                || (session.model.anchor == session.model.focus
-                    && session.model.focus == 0)
-        },
-        RuntimeKeyEventKind::Delete => {
-            session.model.composition.is_some()
-                || (session.model.anchor == session.model.focus
-                    && session.model.focus >= session.model.text.len())
-        },
-        RuntimeKeyEventKind::ComposeStart =>
-            session.model.composition.is_some(),
-        RuntimeKeyEventKind::ComposeUpdate(text, cursor) =>
-            session.model.composition.is_none() || *cursor > text.len(),
-        RuntimeKeyEventKind::ComposeCommit =>
-            session.model.composition.is_none(),
-        _ => false,
-    };
-    if dispatch_none {
-        return session;
-    }
-
-    // Determine if this is a text-modifying operation that needs an undo entry.
-    let is_text_edit = match &event.kind {
-        RuntimeKeyEventKind::Char(_)
-        | RuntimeKeyEventKind::Enter
-        | RuntimeKeyEventKind::Tab
-        | RuntimeKeyEventKind::Backspace
-        | RuntimeKeyEventKind::Delete
-        | RuntimeKeyEventKind::ComposeCommit => true,
-        _ => false,
-    };
-
-    if is_text_edit {
-        session_handle_text_edit_exec(session, event)
-    } else {
-        session_handle_non_text_edit_exec(session, event)
-    }
+    session_handle_input_exec(session, event)
 }
 
 // ──────────────────────────────────────────────────────────────────────
