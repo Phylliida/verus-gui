@@ -185,4 +185,55 @@ pub fn text_input_tick_exec(
     input
 }
 
+/// Handle a click on a text input: compute cursor position from local coords.
+pub fn text_input_handle_click_exec(
+    mut input: RuntimeTextInput,
+    local_x: usize,
+    local_y: usize,
+    char_width: usize,
+    line_height: usize,
+    shift: bool,
+) -> (result: RuntimeTextInput)
+    requires
+        input.session.wf_spec(),
+        char_width > 0,
+        line_height > 0,
+        input.viewport.scroll_line as u64 + (local_y / line_height) as u64 <= usize::MAX as u64,
+    ensures
+        result.session.model.focus <= result.session.model.text@.len(),
+        result.session.model.anchor <= result.session.model.text@.len(),
+{
+    let scroll_line = input.viewport.scroll_line;
+    let line = scroll_line + local_y / line_height;
+    let col = local_x / char_width;
+
+    let text_pos = match input.config.line_width {
+        Some(w) => wrapped_visual_to_pos_exec(
+            &input.session.model.text, line, col, w),
+        None => {
+            let (pos, _aff) = visual_to_text_pos_exec(
+                &input.session.model.text, line, col);
+            pos
+        },
+    };
+
+    // Clamp to text length
+    let text_len = input.session.model.text.len();
+    let clamped = if text_pos > text_len { text_len } else { text_pos };
+
+    if shift {
+        input.session.model.focus = clamped;
+    } else {
+        input.session.model.anchor = clamped;
+        input.session.model.focus = clamped;
+    }
+    input.session.model.focus_affinity = Affinity::Downstream;
+
+    // Reset blink
+    input.cursor_visible = true;
+    input.blink_counter = 0;
+
+    input
+}
+
 } // verus!

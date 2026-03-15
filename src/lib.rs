@@ -48,3 +48,6 @@ pub mod text_model;
 
 #[cfg(verus_keep_ghost)]
 pub mod text_input;
+
+#[cfg(verus_keep_ghost)]
+pub mod event_routing;

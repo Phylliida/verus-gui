@@ -38,6 +38,7 @@ pub mod interaction;
 pub mod text_model;
 pub mod session;
 pub mod text_input;
+pub mod event_routing;
 
 verus! {
 

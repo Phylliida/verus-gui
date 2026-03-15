@@ -359,4 +359,38 @@ pub proof fn lemma_hit_test_child_offset<T: OrderedRing>(
     }
 }
 
+// ── Node local coordinates ───────────────────────────────────────
+
+/// Walk the node tree along a path, accumulating coordinate offsets.
+/// Returns the local coordinates within the node at the path endpoint.
+pub open spec fn node_local_coords<T: OrderedRing>(
+    node: Node<T>, path: Seq<nat>, px: T, py: T,
+) -> (T, T)
+    decreases path.len(),
+{
+    if path.len() == 0 {
+        (px, py)
+    } else {
+        let idx = path[0];
+        if idx >= node.children.len() {
+            (px, py)  // out of bounds: return current coords
+        } else {
+            let child = node.children[idx as int];
+            node_local_coords(
+                child,
+                path.subrange(1, path.len() as int),
+                px.sub(child.x),
+                py.sub(child.y),
+            )
+        }
+    }
+}
+
+/// For empty path, local coords are the input coords.
+pub proof fn lemma_node_local_coords_empty<T: OrderedRing>(
+    node: Node<T>, px: T, py: T,
+)
+    ensures node_local_coords(node, Seq::empty(), px, py) == (px, py),
+{}
+
 } // verus!

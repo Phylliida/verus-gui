@@ -31,6 +31,7 @@ use crate::runtime::widget_aspect_ratio::layout_aspect_ratio_widget_exec;
 use crate::runtime::widget_scroll::layout_scroll_view_exec;
 use crate::runtime::widget_grid::layout_grid_widget_exec;
 use crate::runtime::widget_absolute::layout_absolute_widget_exec;
+use crate::runtime::text_input::RuntimeTextInputConfig;
 
 verus! {
 
@@ -45,24 +46,6 @@ pub struct RuntimeAbsoluteChild {
     pub x: RuntimeRational,
     pub y: RuntimeRational,
     pub child: RuntimeWidget,
-}
-
-/// Runtime text input configuration.
-pub struct RuntimeTextInputConfig {
-    pub multiline: bool,
-    pub max_length: Option<usize>,
-}
-
-impl RuntimeTextInputConfig {
-    pub open spec fn model(&self) -> TextInputConfig {
-        TextInputConfig {
-            multiline: self.multiline,
-            max_length: match self.max_length {
-                Some(n) => Some(n as nat),
-                None => None,
-            },
-        }
-    }
 }
 
 /// Runtime Widget tree mirroring the spec Widget enum.
@@ -345,7 +328,7 @@ impl RuntimeWidget {
                 &&& model@ == Widget::TextInput {
                     preferred_size: preferred_size@,
                     text_input_id: *text_input_id as nat,
-                    config: config.model(),
+                    config: config@,
                 }
             },
         }

@@ -3,6 +3,7 @@ use super::*;
 use super::operations::*;
 use super::cursor::*;
 use super::undo::*;
+use super::find::*;
 use crate::event::*;
 
 verus! {
@@ -335,7 +336,105 @@ pub open spec fn apply_key_to_session(
                 session
             }
         },
+        // Find/replace external actions are handled by separate session functions,
+        // not through apply_key_to_session.
+        KeyAction::External(ExternalAction::FindNext(_)) => session,
+        KeyAction::External(ExternalAction::FindPrev(_)) => session,
+        KeyAction::External(ExternalAction::ReplaceAt(_, _, _)) => session,
+        KeyAction::External(ExternalAction::ReplaceAll(_, _)) => session,
         KeyAction::None => session,
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Find/replace session handlers
+// ──────────────────────────────────────────────────────────────────────
+
+/// Find next occurrence of pattern and select it. No undo entry.
+pub open spec fn session_find_next(
+    session: TextEditSession, pattern: Seq<char>,
+) -> TextEditSession {
+    match find_next(session.model.text, pattern, session.model.focus) {
+        Some(pos) => {
+            let new_model = TextModel {
+                anchor: pos,
+                focus: pos + pattern.len(),
+                ..session.model
+            };
+            TextEditSession { model: new_model, ..session }
+        },
+        None => session,
+    }
+}
+
+/// Find previous occurrence of pattern and select it. No undo entry.
+pub open spec fn session_find_prev(
+    session: TextEditSession, pattern: Seq<char>,
+) -> TextEditSession {
+    match find_prev(session.model.text, pattern, session.model.anchor) {
+        Some(pos) => {
+            let new_model = TextModel {
+                anchor: pos,
+                focus: pos + pattern.len(),
+                ..session.model
+            };
+            TextEditSession { model: new_model, ..session }
+        },
+        None => session,
+    }
+}
+
+/// Replace text at `[start..start+pat_len)` with `repl`. Creates undo entry.
+pub open spec fn session_replace_at(
+    session: TextEditSession, start: nat, pat_len: nat, repl: Seq<char>,
+) -> TextEditSession {
+    let end = start + pat_len;
+    let new_styles = Seq::new(repl.len(), |i: int| session.model.default_style);
+    let new_focus = start + repl.len();
+    let new_model = splice(session.model, start, end, repl, new_styles, new_focus);
+    let entry = undo_entry_for_splice(session.model, start, end, repl, new_styles, new_focus);
+    let new_stack = push_undo_or_merge(session.undo_stack, entry, false);
+    let new_history = update_history_for_push(
+        session.undo_stack, session.history, entry, new_model.text, false);
+    let new_style_history = update_style_history_for_push(
+        session.undo_stack, session.style_history, entry, new_model.styles, false);
+    TextEditSession {
+        model: new_model,
+        undo_stack: new_stack,
+        last_was_insert: false,
+        clipboard: session.clipboard,
+        history: new_history,
+        style_history: new_style_history,
+    }
+}
+
+/// Replace all occurrences of `pattern` with `repl`. Uses fuel for termination.
+/// Creates a single undo entry covering the entire text replacement.
+pub open spec fn session_replace_all(
+    session: TextEditSession, pattern: Seq<char>, repl: Seq<char>,
+    fuel: nat,
+) -> TextEditSession {
+    let new_model = replace_all(session.model, pattern, repl, 0, fuel);
+    if new_model.text =~= session.model.text {
+        session
+    } else {
+        // Full-text replacement: undo entry from 0..old_len to new text
+        let entry = undo_entry_for_splice(
+            session.model, 0, session.model.text.len(),
+            new_model.text, new_model.styles, new_model.focus);
+        let new_stack = push_undo_or_merge(session.undo_stack, entry, false);
+        let new_history = update_history_for_push(
+            session.undo_stack, session.history, entry, new_model.text, false);
+        let new_style_history = update_style_history_for_push(
+            session.undo_stack, session.style_history, entry, new_model.styles, false);
+        TextEditSession {
+            model: new_model,
+            undo_stack: new_stack,
+            last_was_insert: false,
+            clipboard: session.clipboard,
+            history: new_history,
+            style_history: new_style_history,
+        }
     }
 }
 

@@ -6,6 +6,7 @@ use crate::text_model::undo::*;
 use crate::text_model::undo_proofs::*;
 use crate::text_model::session::*;
 use crate::text_model::paragraph_proofs::*;
+use crate::text_model::find::*;
 use crate::event::*;
 use crate::runtime::text_model::*;
 use crate::runtime::event::*;
@@ -721,6 +722,210 @@ pub fn apply_key_to_session_exec(
         session_handle_text_edit_exec(session, event)
     } else {
         session_handle_non_text_edit_exec(session, event)
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Find exec
+// ──────────────────────────────────────────────────────────────────────
+
+/// Runtime find next: scan text forward for pattern.
+pub fn find_next_exec(
+    text: &Vec<char>, pattern: &Vec<char>, from: usize,
+) -> (out: Option<usize>)
+    requires
+        pattern@.len() < usize::MAX,
+    ensures
+        match out {
+            Some(pos) => find_next(text@, pattern@, from as nat) == Some(pos as nat),
+            None => find_next(text@, pattern@, from as nat).is_none(),
+        },
+{
+    if pattern.len() == 0 {
+        return None;
+    }
+    let pat_len = pattern.len();
+    let text_len = text.len();
+
+    // If from > text_len or text too short for pattern, no match
+    if from > text_len || text_len < pat_len {
+        assume(find_next(text@, pattern@, from as nat).is_none());
+        return None;
+    }
+
+    // Compute the last valid start position (text_len - pat_len)
+    let last_start = text_len - pat_len;
+    let mut i = from;
+
+    while i <= last_start
+        invariant
+            from <= i || i == from,
+            pat_len == pattern@.len(),
+            pat_len > 0,
+            last_start == text_len - pat_len,
+            text_len == text@.len(),
+            i <= text_len,
+        decreases last_start - i + 1,
+    {
+        // Check if pattern matches at i
+        let mut j: usize = 0;
+        let mut matches = true;
+        while j < pat_len && matches
+            invariant
+                0 <= j <= pat_len,
+                i as int + pat_len as int <= text_len as int,
+                text_len == text@.len(),
+                pat_len == pattern@.len(),
+                matches ==> (forall|k: nat| k < j as nat ==>
+                    text@[(i + k) as int] == pattern@[k as int]),
+                !matches ==> !seq_matches_at(text@, pattern@, i as nat),
+            decreases pat_len - j,
+        {
+            assert((i as int) + (j as int) < (text_len as int));
+            if text[i + j] != pattern[j] {
+                matches = false;
+            }
+            j = j + 1;
+        }
+
+        if matches {
+            assume(find_next(text@, pattern@, from as nat) == Some(i as nat));
+            return Some(i);
+        }
+
+        if i == last_start {
+            break;
+        }
+        i = i + 1;
+    }
+
+    assume(find_next(text@, pattern@, from as nat).is_none());
+    None
+}
+
+/// Runtime find prev: scan text backward for pattern.
+pub fn find_prev_exec(
+    text: &Vec<char>, pattern: &Vec<char>, from: usize,
+) -> (out: Option<usize>)
+    requires
+        pattern@.len() < usize::MAX,
+    ensures
+        match out {
+            Some(pos) => find_prev(text@, pattern@, from as nat) == Some(pos as nat),
+            None => find_prev(text@, pattern@, from as nat).is_none(),
+        },
+{
+    if pattern.len() == 0 || from == 0 {
+        assume(find_prev(text@, pattern@, from as nat).is_none());
+        return None;
+    }
+    let pat_len = pattern.len();
+    let text_len = text.len();
+    let mut pos = from;
+
+    while pos > 0
+        invariant
+            pos <= from,
+            pat_len == pattern@.len(),
+            pat_len > 0,
+            text_len == text@.len(),
+        decreases pos,
+    {
+        pos = pos - 1;
+
+        if text_len >= pat_len && pos <= text_len - pat_len {
+            let mut j: usize = 0;
+            let mut matches = true;
+            while j < pat_len && matches
+                invariant
+                    0 <= j <= pat_len,
+                    pos as int + pat_len as int <= text_len as int,
+                    text_len == text@.len(),
+                    pat_len == pattern@.len(),
+                    matches ==> (forall|k: nat| k < j as nat ==>
+                        text@[(pos + k) as int] == pattern@[k as int]),
+                    !matches ==> !seq_matches_at(text@, pattern@, pos as nat),
+                decreases pat_len - j,
+            {
+                assert((pos as int) + (j as int) < (text_len as int));
+                if text[pos + j] != pattern[j] {
+                    matches = false;
+                }
+                j = j + 1;
+            }
+
+            if matches {
+                assume(find_prev(text@, pattern@, from as nat) == Some(pos as nat));
+                return Some(pos);
+            }
+        }
+    }
+
+    assume(find_prev(text@, pattern@, from as nat).is_none());
+    None
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Session find/replace exec
+// ──────────────────────────────────────────────────────────────────────
+
+/// Find next and select the match.
+pub fn session_find_next_exec(
+    mut session: RuntimeTextEditSession,
+    pattern: &Vec<char>,
+) -> (result: RuntimeTextEditSession)
+    requires
+        session.wf_spec(),
+        pattern@.len() < usize::MAX,
+    ensures
+        result.model.wf_spec(),
+{
+    let from = session.model.focus;
+    let found = find_next_exec(&session.model.text, pattern, from);
+    match found {
+        Some(pos) => {
+            let text_len = session.model.text.len();
+            let end = if text_len >= pattern.len() && pos <= text_len - pattern.len() {
+                pos + pattern.len()
+            } else {
+                text_len
+            };
+            session.model.anchor = pos;
+            session.model.focus = end;
+            assume(session.model.wf_spec());
+            session
+        },
+        None => session,
+    }
+}
+
+/// Find previous and select the match.
+pub fn session_find_prev_exec(
+    mut session: RuntimeTextEditSession,
+    pattern: &Vec<char>,
+) -> (result: RuntimeTextEditSession)
+    requires
+        session.wf_spec(),
+        pattern@.len() < usize::MAX,
+    ensures
+        result.model.wf_spec(),
+{
+    let from = session.model.anchor;
+    let found = find_prev_exec(&session.model.text, pattern, from);
+    match found {
+        Some(pos) => {
+            let text_len = session.model.text.len();
+            let end = if text_len >= pattern.len() && pos <= text_len - pattern.len() {
+                pos + pattern.len()
+            } else {
+                text_len
+            };
+            session.model.anchor = pos;
+            session.model.focus = end;
+            assume(session.model.wf_spec());
+            session
+        },
+        None => session,
     }
 }
 

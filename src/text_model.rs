@@ -593,5 +593,7 @@ pub mod session;
 pub mod selection_geometry;
 pub mod viewport;
 pub mod word_wrap;
+pub mod find;
+pub mod find_proofs;
 
 } // verus!

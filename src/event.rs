@@ -291,13 +291,17 @@ pub enum KeyAction {
     None,
 }
 
-/// Actions that must be handled externally (undo stack, clipboard).
+/// Actions that must be handled externally (undo stack, clipboard, find).
 pub enum ExternalAction {
     Undo,
     Redo,
     Cut,
     Copy,
     Paste,
+    FindNext(Seq<char>),
+    FindPrev(Seq<char>),
+    ReplaceAt(nat, nat, Seq<char>),  // start, pattern_len, replacement
+    ReplaceAll(Seq<char>, Seq<char>),  // pattern, replacement
 }
 
 /// Dispatch a keyboard event to a text model operation.

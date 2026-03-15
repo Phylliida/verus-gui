@@ -422,6 +422,7 @@ pub proof fn lemma_empty_history_valid(text: Seq<char>)
     ensures
         undo_history_valid(empty_undo_stack(), seq![text]),
 {
+    reveal(undo_history_valid);
 }
 
 /// From history validity and can_undo, extract apply_undo_exec's preconditions.
@@ -449,14 +450,12 @@ pub proof fn lemma_undo_preconditions_from_history(
                 entry.focus_before)
     }),
 {
+    reveal(undo_history_valid);
+    reveal(entry_describes_transition);
     let pos = stack.position;
     let idx = (pos - 1) as int;
     let entry = stack.entries[idx];
 
-    // entry_describes_transition(entry, history[pos-1], history[pos])
-    // history[pos] =~= current_text
-    // history[pos] =~= seq_splice(history[pos-1], entry.start, entry.start + entry.removed_text.len(), entry.inserted_text)
-    // So current_text =~= seq_splice(history[pos-1], ...)
     let before = history[idx];
     let after = history[idx + 1];
     assert(entry_describes_transition(entry, before, after));
@@ -517,10 +516,11 @@ pub proof fn lemma_redo_preconditions_from_history(
                 entry.focus_after)
     }),
 {
+    reveal(undo_history_valid);
+    reveal(entry_describes_transition);
     let pos = stack.position;
     let entry = stack.entries[pos as int];
 
-    // entry_describes_transition(entry, history[pos], history[pos+1])
     let before = history[pos as int];
     let after = history[(pos + 1) as int];
     assert(entry_describes_transition(entry, before, after));
@@ -548,6 +548,7 @@ pub proof fn lemma_push_undo_history_valid(
             push_undo(stack, entry),
             history.subrange(0, stack.position as int + 1).push(after_text)),
 {
+    reveal(undo_history_valid);
     let new_stack = push_undo(stack, entry);
     let new_history = history.subrange(0, stack.position as int + 1).push(after_text);
 
@@ -615,6 +616,7 @@ pub proof fn lemma_merge_describes_composed_transition(
     ensures
         entry_describes_transition(merge_entries(e1, e2), text_before, text_after),
 {
+    reveal(entry_describes_transition);
     let merged = merge_entries(e1, e2);
     // e1: pure insertion at e1.start (removed_text empty)
     // e2: pure insertion at e1.start + e1.inserted_text.len() (removed_text empty)
@@ -676,6 +678,7 @@ pub proof fn lemma_push_or_merge_history_valid(
         undo_history_valid(new_stack, new_history)
     }),
 {
+    reveal(undo_history_valid);
     if merge && can_undo(stack)
         && can_merge_entries(stack.entries[(stack.position - 1) as int], entry)
     {
@@ -736,8 +739,7 @@ pub proof fn lemma_undo_maintains_history(
         undo_history_valid(new_stack, history)
     }),
 {
-    // Entries unchanged, history unchanged, just position decrements.
-    // All entry_describes_transition facts still hold.
+    reveal(undo_history_valid);
     let new_stack = UndoStack {
         position: (stack.position - 1) as nat,
         ..stack
@@ -766,6 +768,7 @@ pub proof fn lemma_redo_maintains_history(
         undo_history_valid(new_stack, history)
     }),
 {
+    reveal(undo_history_valid);
     let new_stack = UndoStack {
         position: stack.position + 1,
         ..stack
@@ -792,6 +795,8 @@ pub proof fn lemma_undo_history_position(
         new_model.text =~= history[new_stack.position as int]
     }),
 {
+    reveal(undo_history_valid);
+    reveal(entry_describes_transition);
     let pos = stack.position;
     let entry = stack.entries[(pos - 1) as int];
     let before = history[(pos - 1) as int];
@@ -818,6 +823,8 @@ pub proof fn lemma_redo_history_position(
         new_model.text =~= history[new_stack.position as int]
     }),
 {
+    reveal(undo_history_valid);
+    reveal(entry_describes_transition);
     let pos = stack.position;
     let entry = stack.entries[pos as int];
     let before = history[pos as int];
@@ -851,6 +858,7 @@ pub proof fn lemma_entry_for_splice_describes_transition(
             model.text,
             seq_splice(model.text, start as int, end as int, new_text)),
 {
+    reveal(entry_describes_transition);
     let entry = undo_entry_for_splice(model, start, end, new_text, new_styles, new_focus);
     let before = model.text;
     let after = seq_splice(model.text, start as int, end as int, new_text);
@@ -886,6 +894,7 @@ pub proof fn lemma_empty_style_history_valid(styles: Seq<StyleSet>)
     ensures
         undo_style_history_valid(empty_undo_stack(), seq![styles]),
 {
+    reveal(undo_style_history_valid);
 }
 
 /// Given a model and splice parameters, the undo entry describes the style
@@ -905,6 +914,7 @@ pub proof fn lemma_entry_for_splice_describes_style_transition(
             model.styles,
             seq_splice(model.styles, start as int, end as int, new_styles)),
 {
+    reveal(entry_describes_style_transition);
     let entry = undo_entry_for_splice(model, start, end, new_text, new_styles, new_focus);
     // entry.removed_styles = model.styles[start..end), len = end - start
     // entry.inserted_styles = new_styles
@@ -937,6 +947,8 @@ pub proof fn lemma_push_or_merge_style_history_valid(
         undo_style_history_valid(new_stack, new_style_history)
     }),
 {
+    reveal(undo_style_history_valid);
+    reveal(entry_describes_style_transition);
     if merge && can_undo(stack)
         && can_merge_entries(stack.entries[(stack.position - 1) as int], entry)
     {
@@ -1020,6 +1032,7 @@ pub proof fn lemma_undo_maintains_style_history(
         undo_style_history_valid(new_stack, style_history)
     }),
 {
+    reveal(undo_style_history_valid);
     let new_stack = UndoStack {
         position: (stack.position - 1) as nat,
         ..stack
@@ -1048,6 +1061,7 @@ pub proof fn lemma_redo_maintains_style_history(
         undo_style_history_valid(new_stack, style_history)
     }),
 {
+    reveal(undo_style_history_valid);
     let new_stack = UndoStack {
         position: stack.position + 1,
         ..stack
@@ -1074,6 +1088,8 @@ pub proof fn lemma_undo_style_history_position(
         new_model.styles =~= style_history[new_stack.position as int]
     }),
 {
+    reveal(undo_style_history_valid);
+    reveal(entry_describes_style_transition);
     let pos = stack.position;
     let entry = stack.entries[(pos - 1) as int];
     let before_s = style_history[(pos - 1) as int];
@@ -1099,6 +1115,8 @@ pub proof fn lemma_redo_style_history_position(
         new_model.styles =~= style_history[new_stack.position as int]
     }),
 {
+    reveal(undo_style_history_valid);
+    reveal(entry_describes_style_transition);
     let pos = stack.position;
     let entry = stack.entries[pos as int];
     let before_s = style_history[pos as int];

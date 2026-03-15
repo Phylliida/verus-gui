@@ -128,4 +128,77 @@ pub open spec fn text_input_handle_key(
     }
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Click-to-cursor
+// ──────────────────────────────────────────────────────────────────────
+
+/// Convert local (x, y) coordinates within a text input to a (line, col) position.
+/// char_width and line_height are the metrics for the monospace grid.
+/// scroll_line is the current scroll offset in lines.
+pub open spec fn text_input_click_pos(
+    local_x: nat,
+    local_y: nat,
+    char_width: nat,
+    line_height: nat,
+    scroll_line: nat,
+) -> (nat, nat) {
+    if char_width == 0 || line_height == 0 {
+        (scroll_line, 0)
+    } else {
+        let line = scroll_line + local_y / line_height;
+        let col = local_x / char_width;
+        (line, col)
+    }
+}
+
+/// Handle a click on a text input: move the cursor to the clicked position.
+/// If shift is held, extend the selection instead of moving.
+pub open spec fn text_input_handle_click(
+    session: TextEditSession,
+    config: TextInputConfig,
+    local_x: nat,
+    local_y: nat,
+    char_width: nat,
+    line_height: nat,
+    scroll_line: nat,
+    shift: bool,
+) -> TextEditSession {
+    let (line, col) = text_input_click_pos(
+        local_x, local_y, char_width, line_height, scroll_line);
+    let (text_pos, affinity) = match config.line_width {
+        Some(w) => {
+            let pos = wrapped_visual_to_pos(session.model.text, line, col, w);
+            (pos, Affinity::Downstream)
+        },
+        None => visual_to_text_pos(session.model.text, line, col),
+    };
+    let new_model = if shift {
+        TextModel { focus: text_pos, focus_affinity: affinity, ..session.model }
+    } else {
+        TextModel {
+            anchor: text_pos, focus: text_pos,
+            focus_affinity: affinity, ..session.model
+        }
+    };
+    TextEditSession { model: new_model, ..session }
+}
+
+/// Click without shift resets selection: anchor == focus.
+pub proof fn lemma_click_no_shift_collapses_selection(
+    session: TextEditSession,
+    config: TextInputConfig,
+    local_x: nat,
+    local_y: nat,
+    char_width: nat,
+    line_height: nat,
+    scroll_line: nat,
+)
+    ensures ({
+        let result = text_input_handle_click(
+            session, config, local_x, local_y,
+            char_width, line_height, scroll_line, false);
+        result.model.anchor == result.model.focus
+    }),
+{}
+
 } // verus!
