@@ -229,7 +229,6 @@ pub open spec fn push_undo_or_merge(
 // ──────────────────────────────────────────────────────────────────────
 
 /// An undo entry correctly describes a text transition.
-#[verifier::opaque]
 pub open spec fn entry_describes_transition(
     entry: UndoEntry, before_text: Seq<char>, after_text: Seq<char>,
 ) -> bool {
@@ -251,7 +250,6 @@ pub open spec fn entry_describes_transition(
 /// The history is consistent with the undo stack and current text.
 /// history[i] = text state before entry[i] was applied.
 /// history.last() = text after all entries applied.
-#[verifier::opaque]
 pub open spec fn undo_history_valid(
     stack: UndoStack, history: Seq<Seq<char>>,
 ) -> bool {
@@ -266,7 +264,6 @@ pub open spec fn undo_history_valid(
 // ──────────────────────────────────────────────────────────────────────
 
 /// An undo entry correctly describes a style transition.
-#[verifier::opaque]
 pub open spec fn entry_describes_style_transition(
     entry: UndoEntry, before_styles: Seq<StyleSet>, after_styles: Seq<StyleSet>,
 ) -> bool {
@@ -278,7 +275,6 @@ pub open spec fn entry_describes_style_transition(
 }
 
 /// The style history is consistent with the undo stack.
-#[verifier::opaque]
 pub open spec fn undo_style_history_valid(
     stack: UndoStack, style_history: Seq<Seq<StyleSet>>,
 ) -> bool {
