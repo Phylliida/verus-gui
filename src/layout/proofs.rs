@@ -1804,6 +1804,7 @@ pub proof fn lemma_layout_respects_limits<T: OrderedField>(
             lemma_resolve_bounds(limits, size);
         },
         Widget::Column { padding, spacing, alignment, children } => {
+            reveal(column_layout);
             let inner = limits.shrink(padding.horizontal(), padding.vertical());
             let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
             let child_sizes = Seq::new(cn.len(), |i: int| cn[i].size);
@@ -1816,6 +1817,7 @@ pub proof fn lemma_layout_respects_limits<T: OrderedField>(
             lemma_resolve_bounds(limits, Size::new(limits.max.width, total_height));
         },
         Widget::Row { padding, spacing, alignment, children } => {
+            reveal(row_layout);
             let inner = limits.shrink(padding.horizontal(), padding.vertical());
             let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
             let child_sizes = Seq::new(cn.len(), |i: int| cn[i].size);
@@ -1839,6 +1841,7 @@ pub proof fn lemma_layout_respects_limits<T: OrderedField>(
             lemma_resolve_bounds(limits, Size::new(tw, th));
         },
         Widget::Wrap { padding, h_spacing, v_spacing, children } => {
+            reveal(wrap_layout);
             let inner = limits.shrink(padding.horizontal(), padding.vertical());
             let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
             let child_sizes = Seq::new(cn.len(), |i: int| cn[i].size);
@@ -1855,6 +1858,7 @@ pub proof fn lemma_layout_respects_limits<T: OrderedField>(
         },
         Widget::Grid { padding, h_spacing, v_spacing, h_align, v_align,
                        col_widths, row_heights, children } => {
+            reveal(grid_layout);
             let content_w = grid_content_width(col_widths, h_spacing);
             let content_h = grid_content_height(row_heights, v_spacing);
             let tw = padding.horizontal().add(content_w);
@@ -1862,6 +1866,7 @@ pub proof fn lemma_layout_respects_limits<T: OrderedField>(
             lemma_resolve_bounds(limits, Size::new(tw, th));
         },
         Widget::Absolute { padding, children } => {
+            reveal(absolute_layout);
             let inner = limits.shrink(padding.horizontal(), padding.vertical());
             let cn = absolute_widget_child_nodes(inner, children, (fuel - 1) as nat);
             let offsets = Seq::new(children.len(), |i: int|
@@ -3019,6 +3024,7 @@ pub proof fn lemma_column_children_within_bounds<T: OrderedField>(
     // Column children structure
     lemma_column_children_len(padding, spacing, alignment, child_sizes, avail_w, 0);
 
+    reveal(column_layout);
     let layout = column_layout(limits, padding, spacing, alignment, child_sizes);
 
     // Per-child bounds
@@ -3184,6 +3190,7 @@ pub proof fn lemma_row_children_within_bounds<T: OrderedField>(
     // Row children structure
     lemma_row_children_len(padding, spacing, alignment, child_sizes, avail_h, 0);
 
+    reveal(row_layout);
     let layout = row_layout(limits, padding, spacing, alignment, child_sizes);
 
     // Per-child bounds
@@ -4167,6 +4174,7 @@ pub proof fn lemma_layout_widget_monotone<T: OrderedField>(
             lemma_resolve_monotone_input_and_max(limits1, limits2, cs1, cs2);
         },
         Widget::Column { padding, spacing, alignment, children } => {
+            reveal(column_layout);
             let h = padding.horizontal();
             let v = padding.vertical();
             let inner1 = limits1.shrink(h, v);
@@ -4214,6 +4222,7 @@ pub proof fn lemma_layout_widget_monotone<T: OrderedField>(
             );
         },
         Widget::Row { padding, spacing, alignment, children } => {
+            reveal(row_layout);
             let h = padding.horizontal();
             let v = padding.vertical();
             let inner1 = limits1.shrink(h, v);
@@ -4299,6 +4308,7 @@ pub proof fn lemma_layout_widget_monotone<T: OrderedField>(
         },
         Widget::Grid { padding, h_spacing, v_spacing, h_align, v_align,
                        col_widths, row_heights, children } => {
+            reveal(grid_layout);
             // Grid content is fixed (determined by col_widths, row_heights)
             // Output = limits.resolve(Size(h + content_w, v + content_h))
             // Same content → resolve_monotone_max
@@ -4312,6 +4322,7 @@ pub proof fn lemma_layout_widget_monotone<T: OrderedField>(
             );
         },
         Widget::Absolute { padding, children } => {
+            reveal(absolute_layout);
             let h = padding.horizontal();
             let v = padding.vertical();
             let inner1 = limits1.shrink(h, v);

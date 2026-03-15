@@ -34,6 +34,7 @@ proof fn lemma_column_respects_limits<T: OrderedField>(
         limits.min.le(layout_column_body(limits, padding, spacing, alignment, child_nodes).size),
         layout_column_body(limits, padding, spacing, alignment, child_nodes).size.le(limits.max),
 {
+    reveal(column_layout);
     let child_sizes = Seq::new(child_nodes.len(), |i: int| child_nodes[i].size);
     let layout = column_layout(limits, padding, spacing, alignment, child_sizes);
     // merge_layout preserves .size
@@ -59,6 +60,7 @@ proof fn lemma_row_respects_limits<T: OrderedField>(
         limits.min.le(layout_row_body(limits, padding, spacing, alignment, child_nodes).size),
         layout_row_body(limits, padding, spacing, alignment, child_nodes).size.le(limits.max),
 {
+    reveal(row_layout);
     let child_sizes = Seq::new(child_nodes.len(), |i: int| child_nodes[i].size);
     let layout = row_layout(limits, padding, spacing, alignment, child_sizes);
     assert(layout_row_body(limits, padding, spacing, alignment, child_nodes).size
@@ -110,6 +112,7 @@ proof fn lemma_wrap_respects_limits<T: OrderedField>(
         limits.min.le(layout_wrap_body(limits, padding, h_spacing, v_spacing, child_nodes).size),
         layout_wrap_body(limits, padding, h_spacing, v_spacing, child_nodes).size.le(limits.max),
 {
+    reveal(wrap_layout);
     let child_sizes = Seq::new(child_nodes.len(), |i: int| child_nodes[i].size);
     let layout = wrap_layout(limits, padding, h_spacing, v_spacing, child_sizes);
     assert(layout_wrap_body(limits, padding, h_spacing, v_spacing, child_nodes).size
@@ -187,6 +190,7 @@ proof fn lemma_grid_respects_limits<T: OrderedField>(
         layout_grid_body(limits, padding, h_spacing, v_spacing,
             h_align, v_align, col_widths, row_heights, child_nodes).size.le(limits.max),
 {
+    reveal(grid_layout);
     let num_cols = col_widths.len();
     let num_rows = row_heights.len();
     let child_sizes_2d = Seq::new(num_rows, |r: int|
@@ -219,6 +223,7 @@ proof fn lemma_absolute_respects_limits<T: OrderedField>(
         limits.min.le(layout_absolute_body(limits, padding, child_nodes, child_offsets).size),
         layout_absolute_body(limits, padding, child_nodes, child_offsets).size.le(limits.max),
 {
+    reveal(absolute_layout);
     let child_sizes = Seq::new(child_nodes.len(), |i: int| child_nodes[i].size);
     let child_data = Seq::new(child_nodes.len(), |i: int|
         (child_offsets[i].0, child_offsets[i].1, child_nodes[i].size));

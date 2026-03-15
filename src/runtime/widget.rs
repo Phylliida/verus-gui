@@ -1109,11 +1109,13 @@ fn layout_container_exec(
             Seq::new(child_sizes@.len() as nat, |j: int| child_sizes@[j]@);
         match kind {
             ContainerKind::Column => {
+                reveal(column_layout);
                 let avail_w = limits@.max.width.sub(padding@.horizontal());
                 lemma_column_children_len::<RationalModel>(
                     padding@, spacing1@, *align2, child_sizes_seq, avail_w, 0nat);
             },
             ContainerKind::Row => {
+                reveal(row_layout);
                 let avail_h = limits@.max.height.sub(padding@.vertical());
                 lemma_row_children_len::<RationalModel>(
                     padding@, spacing1@, *align1, child_sizes_seq, avail_h, 0nat);
@@ -1126,6 +1128,7 @@ fn layout_container_exec(
                     padding@, *align1, *align2, child_sizes_seq, avail_w, avail_h, 0nat);
             },
             ContainerKind::Wrap => {
+                reveal(wrap_layout);
                 let avail_w = limits@.max.width.sub(padding@.horizontal());
                 lemma_wrap_children_len::<RationalModel>(
                     padding@, spacing1@, spacing2@, child_sizes_seq, avail_w, 0nat);

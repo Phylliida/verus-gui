@@ -164,6 +164,7 @@ pub fn grid_layout_exec(
         ),
         out.children@.len() == row_heights@.len() * col_widths@.len(),
 {
+    proof { reveal(grid_layout); }
     let ghost spec_cw: Seq<Size<RationalModel>> =
         Seq::new(col_widths@.len() as nat, |i: int| col_widths@[i]@);
     let ghost spec_rh: Seq<Size<RationalModel>> =

@@ -37,6 +37,7 @@ pub fn row_layout_exec(
             Seq::new(child_sizes@.len() as nat, |i: int| child_sizes@[i]@),
         ),
 {
+    proof { reveal(row_layout); }
     let ghost spec_sizes: Seq<Size<RationalModel>> =
         Seq::new(child_sizes@.len() as nat, |i: int| child_sizes@[i]@);
 

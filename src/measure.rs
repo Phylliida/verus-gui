@@ -341,6 +341,7 @@ pub proof fn lemma_measure_is_layout_size<T: OrderedField>(
                 // Both return limits.resolve(size)
             },
             Widget::Column { padding, spacing, alignment, children } => {
+                reveal(column_layout);
                 let inner = limits.shrink(padding.horizontal(), padding.vertical());
                 lemma_measure_children_match(inner, children, (fuel - 1) as nat);
 
@@ -366,6 +367,7 @@ pub proof fn lemma_measure_is_layout_size<T: OrderedField>(
                 // which is exactly layout.size (= parent_size in column_layout)
             },
             Widget::Row { padding, spacing, alignment, children } => {
+                reveal(row_layout);
                 let inner = limits.shrink(padding.horizontal(), padding.vertical());
                 lemma_measure_children_match(inner, children, (fuel - 1) as nat);
 
@@ -394,6 +396,7 @@ pub proof fn lemma_measure_is_layout_size<T: OrderedField>(
                 assert(layout_widget(limits, widget, fuel).size == layout.size);
             },
             Widget::Wrap { padding, h_spacing, v_spacing, children } => {
+                reveal(wrap_layout);
                 let inner = limits.shrink(padding.horizontal(), padding.vertical());
                 lemma_measure_children_match(inner, children, (fuel - 1) as nat);
 
@@ -439,6 +442,7 @@ pub proof fn lemma_measure_is_layout_size<T: OrderedField>(
             },
             Widget::Grid { padding, h_spacing, v_spacing, h_align, v_align,
                            col_widths, row_heights, children } => {
+                reveal(grid_layout);
                 // Grid parent size depends only on col_widths and row_heights
                 let inner = limits.shrink(padding.horizontal(), padding.vertical());
                 let cn = grid_widget_child_nodes(
@@ -457,6 +461,7 @@ pub proof fn lemma_measure_is_layout_size<T: OrderedField>(
                 assert(merge_layout(layout, cn).size == layout.size);
             },
             Widget::Absolute { padding, children } => {
+                reveal(absolute_layout);
                 let inner = limits.shrink(padding.horizontal(), padding.vertical());
                 lemma_measure_absolute_children_match(inner, children, (fuel - 1) as nat);
 

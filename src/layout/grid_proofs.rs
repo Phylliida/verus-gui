@@ -1065,6 +1065,7 @@ pub proof fn lemma_grid_children_within_bounds<T: OrderedField>(
     );
     let parent_size = limits.resolve(Size::new(total_w, total_h));
 
+    reveal(grid_layout);
     let layout = grid_layout(limits, padding, h_spacing, v_spacing, h_align, v_align,
         col_widths, row_heights, child_sizes_2d);
 

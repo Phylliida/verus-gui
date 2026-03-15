@@ -34,6 +34,7 @@ pub fn wrap_layout_exec(
             Seq::new(child_sizes@.len() as nat, |i: int| child_sizes@[i]@),
         ),
 {
+    proof { reveal(wrap_layout); }
     let ghost spec_sizes: Seq<Size<RationalModel>> =
         Seq::new(child_sizes@.len() as nat, |i: int| child_sizes@[i]@);
 

@@ -38,6 +38,7 @@ pub fn absolute_layout_exec(
                 (offsets_x@[i]@, offsets_y@[i]@, child_sizes@[i]@)),
         ),
 {
+    proof { reveal(absolute_layout); }
     let ghost spec_data: Seq<(RationalModel, RationalModel, Size<RationalModel>)> =
         Seq::new(child_sizes@.len() as nat, |i: int|
             (offsets_x@[i]@, offsets_y@[i]@, child_sizes@[i]@));

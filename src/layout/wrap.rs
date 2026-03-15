@@ -153,6 +153,7 @@ pub open spec fn wrap_content_size<T: OrderedRing>(
 /// 2. Place children left-to-right, wrapping when exceeding available width
 /// 3. Content size is max-line-width x total-height
 /// 4. Return parent Node with positioned children
+#[verifier::opaque]
 pub open spec fn wrap_layout<T: OrderedRing>(
     limits: Limits<T>,
     padding: Padding<T>,

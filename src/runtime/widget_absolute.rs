@@ -127,6 +127,7 @@ pub fn layout_absolute_widget_exec(
         Seq::new(n as nat, |j: int| child_nodes@[j]@);
 
     proof {
+        reveal(absolute_layout);
         lemma_absolute_children_len::<RationalModel>(
             padding@,
             Seq::new(child_sizes@.len() as nat, |i: int|

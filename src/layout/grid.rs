@@ -165,6 +165,7 @@ pub open spec fn grid_content_height<T: OrderedRing>(
 }
 
 /// Lay out children in a grid with fixed column widths and row heights.
+#[verifier::opaque]
 pub open spec fn grid_layout<T: OrderedField>(
     limits: Limits<T>,
     padding: Padding<T>,

@@ -221,6 +221,7 @@ pub proof fn lemma_absolute_children_within_bounds<T: OrderedField>(
     // Bridge: both child_data are extensionally equal
     assert(child_data =~= child_data_body);
 
+    reveal(absolute_layout);
     let layout = absolute_layout(limits, padding, child_data_body);
 
     // layout.children.len() == cn.len()

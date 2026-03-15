@@ -874,6 +874,7 @@ pub proof fn lemma_wrap_children_within_bounds<T: OrderedField>(
     lemma_wrap_children_len(
         padding, h_spacing, v_spacing, child_sizes, avail_w, 0,
     );
+    reveal(wrap_layout);
     let layout = wrap_layout(limits, padding, h_spacing, v_spacing, child_sizes);
 
     // Per-child bounds

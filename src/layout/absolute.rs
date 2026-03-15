@@ -88,6 +88,7 @@ pub open spec fn absolute_children<T: OrderedField>(
 /// 2. Content size is the bounding box of all (x + width, y + height)
 /// 3. Each child is placed at (padding.left + x, padding.top + y)
 /// 4. Return parent Node with positioned children
+#[verifier::opaque]
 pub open spec fn absolute_layout<T: OrderedField>(
     limits: Limits<T>,
     padding: Padding<T>,

@@ -139,6 +139,7 @@ pub open spec fn column_content_height<T: OrderedRing>(
 /// 2. Place each child vertically, separated by spacing
 /// 3. Align children on cross-axis (horizontal) per Alignment
 /// 4. Return parent Node with positioned children
+#[verifier::opaque]
 pub open spec fn column_layout<T: OrderedField>(
     limits: Limits<T>,
     padding: Padding<T>,
@@ -225,6 +226,7 @@ pub open spec fn row_content_width<T: OrderedRing>(
 /// 2. Place each child horizontally, separated by spacing
 /// 3. Align children on cross-axis (vertical) per Alignment
 /// 4. Return parent Node with positioned children
+#[verifier::opaque]
 pub open spec fn row_layout<T: OrderedField>(
     limits: Limits<T>,
     padding: Padding<T>,
