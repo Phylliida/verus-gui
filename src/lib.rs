@@ -51,3 +51,12 @@ pub mod text_input;
 
 #[cfg(verus_keep_ghost)]
 pub mod event_routing;
+
+#[cfg(verus_keep_ghost)]
+pub mod draw;
+
+#[cfg(verus_keep_ghost)]
+pub mod draw_proofs;
+
+#[cfg(verus_keep_ghost)]
+pub mod vulkan_bridge;
