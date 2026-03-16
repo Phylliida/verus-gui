@@ -41,6 +41,7 @@ pub mod session_helpers;
 pub mod session;
 pub mod text_input;
 pub mod event_routing;
+pub mod cache;
 
 verus! {
 
