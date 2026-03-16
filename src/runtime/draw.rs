@@ -61,10 +61,12 @@ fn append_draw_commands(dst: &mut Vec<RuntimeDrawCommand>, src: &Vec<RuntimeDraw
             (#[trigger] src@[i]).wf_spec(),
     ensures
         dst@.len() == old(dst)@.len() + src@.len(),
+        // Prefix preserved (trigger: dst@[i])
         forall|i: int| 0 <= i < old(dst)@.len() ==>
             (#[trigger] dst@[i])@ === old(dst)@[i]@,
-        forall|i: int| 0 <= i < src@.len() ==>
-            (#[trigger] dst@[old(dst)@.len() + i])@ === src@[i]@,
+        // Suffix from src (trigger: dst@[i] — matches result@[i] directly)
+        forall|i: int| old(dst)@.len() <= i < dst@.len() ==>
+            (#[trigger] dst@[i])@ === src@[i - old(dst)@.len()]@,
         forall|i: int| 0 <= i < dst@.len() ==>
             (#[trigger] dst@[i]).wf_spec(),
 {
@@ -78,8 +80,8 @@ fn append_draw_commands(dst: &mut Vec<RuntimeDrawCommand>, src: &Vec<RuntimeDraw
             dst@.len() == old_len + k,
             forall|j: int| 0 <= j < old_len ==>
                 (#[trigger] dst@[j])@ === old(dst)@[j]@,
-            forall|j: int| 0 <= j < k as int ==>
-                (#[trigger] dst@[old_len + j])@ === src@[j]@,
+            forall|j: int| old_len <= j < old_len + k ==>
+                (#[trigger] dst@[j])@ === src@[j - old_len]@,
             forall|j: int| 0 <= j < dst@.len() ==>
                 (#[trigger] dst@[j]).wf_spec(),
             forall|j: int| 0 <= j < src@.len() ==>
@@ -175,31 +177,50 @@ pub fn flatten_node_exec(
             depth + 1, fuel - 1, 0,
             Ghost(spec_children));
 
+        // Capture ghost facts about children_draws views before building result
+        let ghost children_draws_len = children_draws@.len();
+        let ghost children_spec = flatten_children_to_draws::<RationalModel>(
+            spec_children, abs_x@, abs_y@,
+            (depth as nat) + 1, (fuel - 1) as nat, 0 as nat);
+
         // Build result: self_draw + children_draws
         let mut result: Vec<RuntimeDrawCommand> = Vec::new();
         result.push(self_draw);
+
+        // Capture: result@[0]@ === self_draw_model before append
+        let ghost self_view = result@[0]@;
+        assert(self_view === self_draw_model);
+
         append_draw_commands(&mut result, &children_draws);
 
         // Prove result matches spec
         proof {
-            let children_spec = flatten_children_to_draws::<RationalModel>(
-                spec_children, abs_x@, abs_y@,
-                (depth as nat) + 1, (fuel - 1) as nat, 0 as nat);
-
             // Unfold the spec definition for fuel > 0
             assert(spec_result =~= Seq::empty().push(self_draw_model).add(children_spec));
+
+            // result@[0]@ was preserved by append
+            assert(result@[0]@ === self_view);
+            assert(result@[0]@ === self_draw_model);
+
+            // Bridge: abs_x@ matches the spec's offset_x.add(node.x)
+            // abs_x@ = offset_x@.add_spec(node.x@) (from RuntimeRational::add)
+            // node.x@ == node@.x (from wf_deep)
+            // Ring::add == add_spec (from open trait impl)
+            assert(abs_x@ == offset_x@.add_spec(node@.x));
+            assert(abs_y@ == offset_y@.add_spec(node@.y));
 
             assert forall|i: int| 0 <= i < result@.len() implies
                 (#[trigger] result@[i]).wf_spec() &&
                 result@[i]@ === spec_result[i]
             by {
                 if i == 0 {
-                    // result@[0] is self_draw, which has model self_draw_model
-                    // spec_result[0] = self_draw_model (from Seq::empty().push(self_draw_model))
+                    // result@[0]@ preserved by append, matches self_draw_model
                 } else {
-                    // result@[i] = children_draws@[i - 1] (from append_draw_commands)
-                    // children_draws@[i-1]@ === children_spec[i-1] (from flatten_children_exec ensures)
-                    // spec_result[i] = children_spec[i-1] (from .add indexing)
+                    // From append ensures (suffix): result@[i]@ === children_draws@[i-1]@
+                    // (since old(result)@.len() == 1, i >= 1 means i is in suffix range)
+                    // From flatten_children_exec ensures:
+                    // children_draws@[i-1]@ === children_spec[i-1]
+                    // From spec: spec_result[i] = children_spec[i-1]
                 }
             };
         }
@@ -280,21 +301,31 @@ fn flatten_children_exec(
             next_depth, fuel, from + 1,
             spec_children);
 
+        // Capture ghost facts about first_draws and rest_draws views
+        let ghost first_spec = flatten_node_to_draws::<RationalModel>(
+            spec_children@[from as int], parent_abs_x@, parent_abs_y@,
+            start_depth as nat, fuel as nat);
+        let ghost next_depth_spec: nat = (start_depth as nat) + first_spec.len();
+        let ghost rest_spec = flatten_children_to_draws::<RationalModel>(
+            spec_children@, parent_abs_x@, parent_abs_y@,
+            next_depth_spec, fuel as nat, (from + 1) as nat);
+
         // Concatenate first_draws + rest_draws
         let mut result = first_draws;
         let ghost first_len = result@.len();
+
+        // Capture element-wise facts before append
+        proof {
+            assert(first_len == first_spec.len());
+            assert forall|i: int| 0 <= i < first_len implies
+                (#[trigger] result@[i])@ === first_spec[i]
+            by {};
+        }
+
         append_draw_commands(&mut result, &rest_draws);
 
         // Prove result matches spec
         proof {
-            let first_spec = flatten_node_to_draws::<RationalModel>(
-                spec_children@[from as int], parent_abs_x@, parent_abs_y@,
-                start_depth as nat, fuel as nat);
-            let next_depth_spec: nat = (start_depth as nat) + first_spec.len();
-            let rest_spec = flatten_children_to_draws::<RationalModel>(
-                spec_children@, parent_abs_x@, parent_abs_y@,
-                next_depth_spec, fuel as nat, (from + 1) as nat);
-
             // spec_seq = first_spec.add(rest_spec) by definition
             assert(spec_seq =~= first_spec.add(rest_spec));
 
@@ -303,13 +334,13 @@ fn flatten_children_exec(
                 result@[i]@ === spec_seq[i]
             by {
                 if i < first_len {
-                    // result@[i]@ === first_draws@[i]@ (append preserves prefix)
-                    // first_draws@[i]@ === first_spec[i] (from flatten_node_exec ensures)
-                    // spec_seq[i] = first_spec.add(rest_spec)[i] = first_spec[i] since i < first_spec.len()
+                    // From append prefix ensures: result@[i]@ === old(result)@[i]@
+                    // old(result)@[i]@ === first_spec[i] (from flatten_node_exec ensures, captured before move)
                 } else {
-                    // result@[i]@ === rest_draws@[i - first_len]@ (from append ensures)
-                    // rest_draws@[j]@ === rest_spec[j] where j = i - first_len (from recursive ensures)
-                    // spec_seq[i] = first_spec.add(rest_spec)[i] = rest_spec[i - first_spec.len()] = rest_spec[i - first_len]
+                    // From append suffix ensures: result@[i]@ === rest_draws@[i - first_len]@
+                    // (since old(result)@.len() == first_len, i >= first_len is in suffix)
+                    // From flatten_children_exec ensures on rest_draws:
+                    // rest_draws@[i - first_len]@ === rest_spec[i - first_len]
                 }
             };
         }

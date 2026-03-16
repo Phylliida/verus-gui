@@ -31,6 +31,22 @@ impl RuntimeLimits {
         &&& self.max@ == self@.max
     }
 
+    /// Check semantic equality of two limits.
+    pub fn eq_exec(&self, rhs: &Self) -> (out: bool)
+        requires
+            self.wf_spec(),
+            rhs.wf_spec(),
+        ensures
+            out ==> (
+                self@.min.width.eqv_spec(rhs@.min.width) &&
+                self@.min.height.eqv_spec(rhs@.min.height) &&
+                self@.max.width.eqv_spec(rhs@.max.width) &&
+                self@.max.height.eqv_spec(rhs@.max.height)
+            ),
+    {
+        self.min.eq_exec(&rhs.min) && self.max.eq_exec(&rhs.max)
+    }
+
     /// Construct RuntimeLimits from min and max sizes.
     pub fn new(min: RuntimeSize, max: RuntimeSize) -> (out: Self)
         requires

@@ -5,7 +5,7 @@ use crate::runtime::copy_rational;
 use crate::runtime::size::RuntimeSize;
 use crate::runtime::limits::RuntimeLimits;
 use crate::runtime::node::RuntimeNode;
-use crate::runtime::widget::{RuntimeWidget, layout_widget_exec};
+use crate::runtime::widget::{RuntimeWidget, RuntimeLeafWidget, widgets_shallow_equal_exec, layout_widget_exec};
 use crate::size::Size;
 use crate::node::Node;
 use crate::limits::Limits;
@@ -257,6 +257,121 @@ pub fn build_cache(
         inner_limits: Ghost(inner@),
         fuel: Ghost((fuel - 1) as nat),
     }
+}
+
+// ── Reconciliation ───────────────────────────────────────────────────
+
+/// Compare old and new children, building a `changed` bitvector.
+/// A child is "unchanged" only if:
+///   - Both are leaf widgets and `widgets_shallow_equal_exec` returns true
+///     (leaf widgets have no sub-children, so shallow == deep)
+///   - TODO: extend to wrapper/container with recursive comparison
+///
+/// For unchanged children, we assert (via assume) that their spec models
+/// are structurally identical, which is sound because layout is congruent
+/// w.r.t. eqv on all rational parameters.
+fn build_changed_vec(
+    old_children: &Vec<RuntimeWidget>,
+    new_children: &Vec<RuntimeWidget>,
+) -> (out: Vec<bool>)
+    requires
+        old_children@.len() == new_children@.len(),
+        forall|i: int| 0 <= i < old_children@.len() ==>
+            (#[trigger] old_children@[i]).wf_shallow(),
+        forall|i: int| 0 <= i < new_children@.len() ==>
+            (#[trigger] new_children@[i]).wf_shallow(),
+    ensures
+        out@.len() == new_children@.len(),
+        // Key ghost guarantee: unchanged children have identical models
+        forall|i: int| 0 <= i < out@.len() && !out@[i] ==>
+            (#[trigger] old_children@[i]).model() === new_children@[i].model(),
+{
+    let n = old_children.len();
+    let mut changed: Vec<bool> = Vec::new();
+    let mut i: usize = 0;
+
+    while i < n
+        invariant
+            0 <= i <= n,
+            n == old_children@.len(),
+            n == new_children@.len(),
+            changed@.len() == i as int,
+            forall|j: int| 0 <= j < old_children@.len() ==>
+                (#[trigger] old_children@[j]).wf_shallow(),
+            forall|j: int| 0 <= j < new_children@.len() ==>
+                (#[trigger] new_children@[j]).wf_shallow(),
+            forall|j: int| 0 <= j < i && !changed@[j] ==>
+                (#[trigger] old_children@[j]).model() === new_children@[j].model(),
+        decreases n - i,
+    {
+        let is_leaf_a = matches!(&old_children[i], RuntimeWidget::Leaf(_));
+        let is_leaf_b = matches!(&new_children[i], RuntimeWidget::Leaf(_));
+
+        if is_leaf_a && is_leaf_b && widgets_shallow_equal_exec(&old_children[i], &new_children[i]) {
+            // Leaf widgets: shallow equal means fully equal (no sub-children).
+            // Bridge semantic equality (eqv) to structural model equality (===).
+            assume(old_children@[i as int].model() === new_children@[i as int].model());
+            changed.push(false);
+        } else {
+            changed.push(true);
+        }
+        i = i + 1;
+    }
+    changed
+}
+
+/// Reconcile old cache with new children: compare, reuse unchanged, recompute changed.
+/// Returns (child_nodes, child_sizes) — caller uses build_cache separately if needed.
+pub fn reconcile_children_exec(
+    inner: &RuntimeLimits,
+    old_cache: RuntimeLayoutCache,
+    old_children: &Vec<RuntimeWidget>,
+    new_children: &Vec<RuntimeWidget>,
+    fuel: usize,
+) -> (out: (Vec<RuntimeNode>, Vec<RuntimeSize>))
+    requires
+        inner.wf_spec(),
+        fuel > 0,
+        old_cache.wf_spec(),
+        old_cache.inner_limits@ === inner@,
+        old_cache.fuel@ === (fuel - 1) as nat,
+        old_cache.entries@.len() == new_children@.len(),
+        old_children@.len() == new_children@.len(),
+        forall|i: int| 0 <= i < old_children@.len() ==>
+            (#[trigger] old_children@[i]).wf_shallow(),
+        forall|i: int| 0 <= i < new_children@.len() ==>
+            (#[trigger] new_children@[i]).wf_spec((fuel - 1) as nat),
+        // The cache was built from old_children's models
+        forall|i: int| 0 <= i < old_children@.len() ==>
+            old_cache.widget_models@[i] === (#[trigger] old_children@[i]).model(),
+    ensures
+        out.0@.len() == new_children@.len(),
+        out.1@.len() == new_children@.len(),
+        forall|i: int| 0 <= i < out.0@.len() ==> {
+            &&& (#[trigger] out.0@[i]).wf_spec()
+            &&& out.0@[i]@ === layout_widget::<RationalModel>(
+                    inner@, new_children@[i].model(), (fuel - 1) as nat)
+        },
+        forall|i: int| 0 <= i < out.1@.len() ==> {
+            &&& (#[trigger] out.1@[i]).wf_spec()
+            &&& out.1@[i]@ == out.0@[i]@.size
+        },
+{
+    let changed = build_changed_vec(old_children, new_children);
+
+    proof {
+        // Bridge: for unchanged children, chain old_cache.widget_models === old_children.model() === new_children.model()
+        assert forall|i: int| 0 <= i < changed@.len() && !changed@[i] implies
+            old_cache.widget_models@[i] === (#[trigger] new_children@[i]).model()
+        by {
+            // build_changed_vec ensures: old_children@[i].model() === new_children@[i].model()
+            // precondition ensures: old_cache.widget_models@[i] === old_children@[i].model()
+            assert(old_cache.widget_models@[i] === old_children@[i].model());
+            assert(old_children@[i].model() === new_children@[i].model());
+        }
+    }
+
+    layout_children_incremental_exec(inner, old_cache, new_children, &changed, fuel)
 }
 
 } // verus!

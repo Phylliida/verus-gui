@@ -5,7 +5,7 @@ use crate::runtime::copy_rational;
 use crate::runtime::size::RuntimeSize;
 use crate::runtime::limits::RuntimeLimits;
 use crate::runtime::padding::RuntimePadding;
-use crate::runtime::widget::{RuntimeWidget, RuntimeAbsoluteChild, ContainerKind};
+use crate::runtime::widget::{RuntimeWidget, RuntimeLeafWidget, RuntimeWrapperWidget, RuntimeContainerWidget, RuntimeAbsoluteChild, ContainerKind};
 use crate::layout::Axis;
 use crate::runtime::grid::{grid_content_width_exec, grid_content_height_exec};
 use crate::runtime::measure_helpers::*;
@@ -42,176 +42,127 @@ pub fn measure_widget_exec(
         // Unreachable: wf_spec(0) is false
         RuntimeSize::zero_exec()
     } else {
+        // Fuel bridge: one proof for all variants
+        proof { assert((fuel as nat - 1) as nat == (fuel - 1) as nat); }
+
         match widget {
-            RuntimeWidget::Leaf { size, model } => {
-                limits.resolve_exec(size.copy_size())
-            },
-            RuntimeWidget::Column { padding, spacing, alignment, children, model } => {
-                proof {
-                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
-                    assert forall|j: int| 0 <= j < children@.len() implies
-                        (#[trigger] children@[j]).wf_spec((fuel - 1) as nat)
-                    by {
-                        assert(children@[j].wf_spec((fuel as nat - 1) as nat));
-                    }
+            RuntimeWidget::Leaf(leaf) => {
+                match leaf {
+                    RuntimeLeafWidget::Leaf { size, model } => {
+                        limits.resolve_exec(size.copy_size())
+                    },
+                    RuntimeLeafWidget::TextInput { preferred_size, text_input_id, config, model } => {
+                        limits.resolve_exec(preferred_size.copy_size())
+                    },
                 }
-                let dummy_sp = RuntimeRational::from_int(0);
-                measure_container_exec(limits, padding, spacing, &dummy_sp,
-                    children, fuel, ContainerKind::Linear(Axis::Vertical))
             },
-            RuntimeWidget::Row { padding, spacing, alignment, children, model } => {
-                proof {
-                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
-                    assert forall|j: int| 0 <= j < children@.len() implies
-                        (#[trigger] children@[j]).wf_spec((fuel - 1) as nat)
-                    by {
-                        assert(children@[j].wf_spec((fuel as nat - 1) as nat));
-                    }
-                }
-                let dummy_sp = RuntimeRational::from_int(0);
-                measure_container_exec(limits, padding, spacing, &dummy_sp,
-                    children, fuel, ContainerKind::Linear(Axis::Horizontal))
-            },
-            RuntimeWidget::Stack { padding, h_align, v_align, children, model } => {
-                proof {
-                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
-                    assert forall|j: int| 0 <= j < children@.len() implies
-                        (#[trigger] children@[j]).wf_spec((fuel - 1) as nat)
-                    by {
-                        assert(children@[j].wf_spec((fuel as nat - 1) as nat));
-                    }
-                }
-                let dummy_sp1 = RuntimeRational::from_int(0);
-                let dummy_sp2 = RuntimeRational::from_int(0);
-                measure_container_exec(limits, padding, &dummy_sp1, &dummy_sp2,
-                    children, fuel, ContainerKind::Stack)
-            },
-            RuntimeWidget::Wrap { padding, h_spacing, v_spacing, children, model } => {
-                proof {
-                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
-                    assert forall|j: int| 0 <= j < children@.len() implies
-                        (#[trigger] children@[j]).wf_spec((fuel - 1) as nat)
-                    by {
-                        assert(children@[j].wf_spec((fuel as nat - 1) as nat));
-                    }
-                }
-                measure_container_exec(limits, padding, h_spacing, v_spacing,
-                    children, fuel, ContainerKind::Wrap)
-            },
-            RuntimeWidget::Flex { padding, spacing, alignment, direction, children, model } => {
-                // Flex fills limits.max regardless of children
-                limits.resolve_exec(limits.max.copy_size())
-            },
-            RuntimeWidget::Grid { padding, h_spacing, v_spacing, h_align, v_align,
-                                  col_widths, row_heights, children, model } => {
-                let pad_h = padding.horizontal_exec();
-                let pad_v = padding.vertical_exec();
-                let content_w = grid_content_width_exec(col_widths, h_spacing);
-                let content_h = grid_content_height_exec(row_heights, v_spacing);
-                let tw = pad_h.add(&content_w);
-                let th = pad_v.add(&content_h);
-                limits.resolve_exec(RuntimeSize::new(tw, th))
-            },
-            RuntimeWidget::Absolute { padding, children, model } => {
-                proof {
-                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
-                    assert forall|j: int| 0 <= j < children@.len() implies
-                        (#[trigger] children@[j]).child.wf_spec((fuel - 1) as nat)
-                    by {
-                        assert(children@[j].child.wf_spec((fuel as nat - 1) as nat));
-                    }
-                }
-                measure_absolute_exec(limits, padding, children, fuel)
-            },
-            RuntimeWidget::Margin { margin, child, model } => {
-                proof {
-                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
-                    assert(child.wf_spec((fuel - 1) as nat)) by {
-                        assert(child.wf_spec((fuel as nat - 1) as nat));
-                    }
-                }
-                let pad_h = margin.horizontal_exec();
-                let pad_v = margin.vertical_exec();
-                let inner = limits.shrink_exec(&pad_h, &pad_v);
-                let child_size = measure_widget_exec(&inner, child, fuel - 1);
-                let pad_h2 = margin.horizontal_exec();
-                let pad_v2 = margin.vertical_exec();
-                let tw = pad_h2.add(&child_size.width);
-                let th = pad_v2.add(&child_size.height);
-                limits.resolve_exec(RuntimeSize::new(tw, th))
-            },
-            RuntimeWidget::Conditional { visible, child, model } => {
-                if *visible {
-                    proof {
-                        assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
-                        assert(child.wf_spec((fuel - 1) as nat)) by {
-                            assert(child.wf_spec((fuel as nat - 1) as nat));
+            RuntimeWidget::Wrapper(wrapper) => {
+                match wrapper {
+                    RuntimeWrapperWidget::Margin { margin, child, model } => {
+                        let pad_h = margin.horizontal_exec();
+                        let pad_v = margin.vertical_exec();
+                        let inner = limits.shrink_exec(&pad_h, &pad_v);
+                        let child_size = measure_widget_exec(&inner, child, fuel - 1);
+                        let pad_h2 = margin.horizontal_exec();
+                        let pad_v2 = margin.vertical_exec();
+                        let tw = pad_h2.add(&child_size.width);
+                        let th = pad_v2.add(&child_size.height);
+                        limits.resolve_exec(RuntimeSize::new(tw, th))
+                    },
+                    RuntimeWrapperWidget::Conditional { visible, child, model } => {
+                        if *visible {
+                            let child_size = measure_widget_exec(limits, child, fuel - 1);
+                            limits.resolve_exec(child_size)
+                        } else {
+                            limits.resolve_exec(RuntimeSize::zero_exec())
                         }
-                    }
-                    let child_size = measure_widget_exec(limits, child, fuel - 1);
-                    limits.resolve_exec(child_size)
-                } else {
-                    limits.resolve_exec(RuntimeSize::zero_exec())
+                    },
+                    RuntimeWrapperWidget::SizedBox { inner_limits: il, child, model } => {
+                        let effective = limits.intersect_exec(il);
+                        let child_size = measure_widget_exec(&effective, child, fuel - 1);
+                        limits.resolve_exec(child_size)
+                    },
+                    RuntimeWrapperWidget::AspectRatio { ratio, child, model } => {
+                        let w1 = copy_rational(&limits.max.width);
+                        let h1 = w1.div(ratio);
+                        let child_size = if h1.le(&limits.max.height) {
+                            let eff_max = RuntimeSize::new(
+                                copy_rational(&limits.max.width), h1);
+                            let eff = RuntimeLimits {
+                                min: limits.min.copy_size(),
+                                max: eff_max,
+                                model: Ghost(Limits {
+                                    min: limits@.min,
+                                    max: Size::new(limits@.max.width, limits@.max.width.div(ratio@)),
+                                }),
+                            };
+                            measure_widget_exec(&eff, child, fuel - 1)
+                        } else {
+                            let h2 = copy_rational(&limits.max.height);
+                            let w2 = h2.mul(ratio);
+                            let eff_max = RuntimeSize::new(w2, copy_rational(&limits.max.height));
+                            let eff = RuntimeLimits {
+                                min: limits.min.copy_size(),
+                                max: eff_max,
+                                model: Ghost(Limits {
+                                    min: limits@.min,
+                                    max: Size::new(limits@.max.height.mul_spec(ratio@), limits@.max.height),
+                                }),
+                            };
+                            measure_widget_exec(&eff, child, fuel - 1)
+                        };
+                        limits.resolve_exec(child_size)
+                    },
+                    RuntimeWrapperWidget::ScrollView { viewport, scroll_x, scroll_y, child, model } => {
+                        // measure = limits.resolve(viewport), child doesn't affect output
+                        limits.resolve_exec(viewport.copy_size())
+                    },
                 }
             },
-            RuntimeWidget::SizedBox { inner_limits: il, child, model } => {
-                proof {
-                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
-                    assert(child.wf_spec((fuel - 1) as nat)) by {
-                        assert(child.wf_spec((fuel as nat - 1) as nat));
-                    }
+            RuntimeWidget::Container(container) => {
+                match container {
+                    RuntimeContainerWidget::Column { padding, spacing, alignment, children, model } => {
+                        let dummy_sp = RuntimeRational::from_int(0);
+                        measure_container_exec(limits, padding, spacing, &dummy_sp,
+                            children, fuel, ContainerKind::Linear(Axis::Vertical))
+                    },
+                    RuntimeContainerWidget::Row { padding, spacing, alignment, children, model } => {
+                        let dummy_sp = RuntimeRational::from_int(0);
+                        measure_container_exec(limits, padding, spacing, &dummy_sp,
+                            children, fuel, ContainerKind::Linear(Axis::Horizontal))
+                    },
+                    RuntimeContainerWidget::Stack { padding, h_align, v_align, children, model } => {
+                        let dummy_sp1 = RuntimeRational::from_int(0);
+                        let dummy_sp2 = RuntimeRational::from_int(0);
+                        measure_container_exec(limits, padding, &dummy_sp1, &dummy_sp2,
+                            children, fuel, ContainerKind::Stack)
+                    },
+                    RuntimeContainerWidget::Wrap { padding, h_spacing, v_spacing, children, model } => {
+                        measure_container_exec(limits, padding, h_spacing, v_spacing,
+                            children, fuel, ContainerKind::Wrap)
+                    },
+                    RuntimeContainerWidget::Flex { padding, spacing, alignment, direction, children, model } => {
+                        // Flex fills limits.max regardless of children
+                        limits.resolve_exec(limits.max.copy_size())
+                    },
+                    RuntimeContainerWidget::Grid { padding, h_spacing, v_spacing, h_align, v_align,
+                                                   col_widths, row_heights, children, model } => {
+                        let pad_h = padding.horizontal_exec();
+                        let pad_v = padding.vertical_exec();
+                        let content_w = grid_content_width_exec(col_widths, h_spacing);
+                        let content_h = grid_content_height_exec(row_heights, v_spacing);
+                        let tw = pad_h.add(&content_w);
+                        let th = pad_v.add(&content_h);
+                        limits.resolve_exec(RuntimeSize::new(tw, th))
+                    },
+                    RuntimeContainerWidget::Absolute { padding, children, model } => {
+                        measure_absolute_exec(limits, padding, children, fuel)
+                    },
+                    RuntimeContainerWidget::ListView { spacing, scroll_y, viewport, children, model } => {
+                        // measure = limits.resolve(viewport), children don't affect output
+                        limits.resolve_exec(viewport.copy_size())
+                    },
                 }
-                let effective = limits.intersect_exec(il);
-                let child_size = measure_widget_exec(&effective, child, fuel - 1);
-                limits.resolve_exec(child_size)
-            },
-            RuntimeWidget::AspectRatio { ratio, child, model } => {
-                proof {
-                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
-                    assert(child.wf_spec((fuel - 1) as nat)) by {
-                        assert(child.wf_spec((fuel as nat - 1) as nat));
-                    }
-                }
-                let w1 = copy_rational(&limits.max.width);
-                let h1 = w1.div(ratio);
-                let child_size = if h1.le(&limits.max.height) {
-                    let eff_max = RuntimeSize::new(
-                        copy_rational(&limits.max.width), h1);
-                    let eff = RuntimeLimits {
-                        min: limits.min.copy_size(),
-                        max: eff_max,
-                        model: Ghost(Limits {
-                            min: limits@.min,
-                            max: Size::new(limits@.max.width, limits@.max.width.div(ratio@)),
-                        }),
-                    };
-                    measure_widget_exec(&eff, child, fuel - 1)
-                } else {
-                    let h2 = copy_rational(&limits.max.height);
-                    let w2 = h2.mul(ratio);
-                    let eff_max = RuntimeSize::new(w2, copy_rational(&limits.max.height));
-                    let eff = RuntimeLimits {
-                        min: limits.min.copy_size(),
-                        max: eff_max,
-                        model: Ghost(Limits {
-                            min: limits@.min,
-                            max: Size::new(limits@.max.height.mul_spec(ratio@), limits@.max.height),
-                        }),
-                    };
-                    measure_widget_exec(&eff, child, fuel - 1)
-                };
-                limits.resolve_exec(child_size)
-            },
-            RuntimeWidget::ScrollView { viewport, scroll_x, scroll_y, child, model } => {
-                // measure = limits.resolve(viewport), child doesn't affect output
-                limits.resolve_exec(viewport.copy_size())
-            },
-            RuntimeWidget::ListView { spacing, scroll_y, viewport, children, model } => {
-                // measure = limits.resolve(viewport), children don't affect output
-                limits.resolve_exec(viewport.copy_size())
-            },
-            RuntimeWidget::TextInput { preferred_size, text_input_id, config, model } => {
-                limits.resolve_exec(preferred_size.copy_size())
             },
         }
     }

@@ -99,6 +99,17 @@ impl RuntimeSize {
         }
     }
 
+    /// Check semantic equality of two sizes.
+    pub fn eq_exec(&self, rhs: &Self) -> (out: bool)
+        requires
+            self.wf_spec(),
+            rhs.wf_spec(),
+        ensures
+            out ==> (self@.width.eqv_spec(rhs@.width) && self@.height.eqv_spec(rhs@.height)),
+    {
+        self.width.eq(&rhs.width) && self.height.eq(&rhs.height)
+    }
+
     /// Construct a RuntimeSize from main-axis and cross-axis values.
     pub fn from_axes_exec(axis: &Axis, main: RuntimeRational, cross: RuntimeRational) -> (out: Self)
         requires

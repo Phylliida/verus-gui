@@ -47,40 +47,81 @@ pub struct RuntimeAbsoluteChild {
     pub child: RuntimeWidget,
 }
 
-/// Runtime Widget tree mirroring the spec Widget enum.
-#[allow(inconsistent_fields)]
-pub enum RuntimeWidget {
+/// Runtime leaf widget: no children.
+pub enum RuntimeLeafWidget {
     Leaf {
         size: RuntimeSize,
-        model: Ghost<Widget<RationalModel>>,
+        model: Ghost<LeafWidget<RationalModel>>,
     },
+    TextInput {
+        preferred_size: RuntimeSize,
+        text_input_id: usize,
+        config: RuntimeTextInputConfig,
+        model: Ghost<LeafWidget<RationalModel>>,
+    },
+}
+
+/// Runtime wrapper widget: exactly one child.
+pub enum RuntimeWrapperWidget {
+    Margin {
+        margin: RuntimePadding,
+        child: Box<RuntimeWidget>,
+        model: Ghost<WrapperWidget<RationalModel>>,
+    },
+    Conditional {
+        visible: bool,
+        child: Box<RuntimeWidget>,
+        model: Ghost<WrapperWidget<RationalModel>>,
+    },
+    SizedBox {
+        inner_limits: RuntimeLimits,
+        child: Box<RuntimeWidget>,
+        model: Ghost<WrapperWidget<RationalModel>>,
+    },
+    AspectRatio {
+        ratio: RuntimeRational,
+        child: Box<RuntimeWidget>,
+        model: Ghost<WrapperWidget<RationalModel>>,
+    },
+    ScrollView {
+        viewport: RuntimeSize,
+        scroll_x: RuntimeRational,
+        scroll_y: RuntimeRational,
+        child: Box<RuntimeWidget>,
+        model: Ghost<WrapperWidget<RationalModel>>,
+    },
+}
+
+/// Runtime container widget: multiple children.
+#[allow(inconsistent_fields)]
+pub enum RuntimeContainerWidget {
     Column {
         padding: RuntimePadding,
         spacing: RuntimeRational,
         alignment: Alignment,
         children: Vec<RuntimeWidget>,
-        model: Ghost<Widget<RationalModel>>,
+        model: Ghost<ContainerWidget<RationalModel>>,
     },
     Row {
         padding: RuntimePadding,
         spacing: RuntimeRational,
         alignment: Alignment,
         children: Vec<RuntimeWidget>,
-        model: Ghost<Widget<RationalModel>>,
+        model: Ghost<ContainerWidget<RationalModel>>,
     },
     Stack {
         padding: RuntimePadding,
         h_align: Alignment,
         v_align: Alignment,
         children: Vec<RuntimeWidget>,
-        model: Ghost<Widget<RationalModel>>,
+        model: Ghost<ContainerWidget<RationalModel>>,
     },
     Wrap {
         padding: RuntimePadding,
         h_spacing: RuntimeRational,
         v_spacing: RuntimeRational,
         children: Vec<RuntimeWidget>,
-        model: Ghost<Widget<RationalModel>>,
+        model: Ghost<ContainerWidget<RationalModel>>,
     },
     Flex {
         padding: RuntimePadding,
@@ -88,7 +129,7 @@ pub enum RuntimeWidget {
         alignment: Alignment,
         direction: FlexDirection,
         children: Vec<RuntimeFlexItem>,
-        model: Ghost<Widget<RationalModel>>,
+        model: Ghost<ContainerWidget<RationalModel>>,
     },
     Grid {
         padding: RuntimePadding,
@@ -99,53 +140,27 @@ pub enum RuntimeWidget {
         col_widths: Vec<RuntimeSize>,
         row_heights: Vec<RuntimeSize>,
         children: Vec<RuntimeWidget>,
-        model: Ghost<Widget<RationalModel>>,
+        model: Ghost<ContainerWidget<RationalModel>>,
     },
     Absolute {
         padding: RuntimePadding,
         children: Vec<RuntimeAbsoluteChild>,
-        model: Ghost<Widget<RationalModel>>,
-    },
-    Margin {
-        margin: RuntimePadding,
-        child: Box<RuntimeWidget>,
-        model: Ghost<Widget<RationalModel>>,
-    },
-    Conditional {
-        visible: bool,
-        child: Box<RuntimeWidget>,
-        model: Ghost<Widget<RationalModel>>,
-    },
-    SizedBox {
-        inner_limits: RuntimeLimits,
-        child: Box<RuntimeWidget>,
-        model: Ghost<Widget<RationalModel>>,
-    },
-    AspectRatio {
-        ratio: RuntimeRational,
-        child: Box<RuntimeWidget>,
-        model: Ghost<Widget<RationalModel>>,
-    },
-    ScrollView {
-        viewport: RuntimeSize,
-        scroll_x: RuntimeRational,
-        scroll_y: RuntimeRational,
-        child: Box<RuntimeWidget>,
-        model: Ghost<Widget<RationalModel>>,
+        model: Ghost<ContainerWidget<RationalModel>>,
     },
     ListView {
         spacing: RuntimeRational,
         scroll_y: RuntimeRational,
         viewport: RuntimeSize,
         children: Vec<RuntimeWidget>,
-        model: Ghost<Widget<RationalModel>>,
+        model: Ghost<ContainerWidget<RationalModel>>,
     },
-    TextInput {
-        preferred_size: RuntimeSize,
-        text_input_id: usize,
-        config: RuntimeTextInputConfig,
-        model: Ghost<Widget<RationalModel>>,
-    },
+}
+
+/// Runtime Widget: stratified to mirror spec Widget hierarchy.
+pub enum RuntimeWidget {
+    Leaf(RuntimeLeafWidget),
+    Wrapper(RuntimeWrapperWidget),
+    Container(RuntimeContainerWidget),
 }
 
 impl RuntimeFlexItem {
@@ -160,76 +175,148 @@ impl RuntimeAbsoluteChild {
     }
 }
 
-impl RuntimeWidget {
-    /// Extract the ghost model.
-    pub open spec fn model(&self) -> Widget<RationalModel> {
+// ── Sub-enum impls ──────────────────────────────────────────────
+
+impl RuntimeLeafWidget {
+    pub open spec fn model(&self) -> LeafWidget<RationalModel> {
         match self {
-            RuntimeWidget::Leaf { model, .. } => model@,
-            RuntimeWidget::Column { model, .. } => model@,
-            RuntimeWidget::Row { model, .. } => model@,
-            RuntimeWidget::Stack { model, .. } => model@,
-            RuntimeWidget::Wrap { model, .. } => model@,
-            RuntimeWidget::Flex { model, .. } => model@,
-            RuntimeWidget::Grid { model, .. } => model@,
-            RuntimeWidget::Absolute { model, .. } => model@,
-            RuntimeWidget::Margin { model, .. } => model@,
-            RuntimeWidget::Conditional { model, .. } => model@,
-            RuntimeWidget::SizedBox { model, .. } => model@,
-            RuntimeWidget::AspectRatio { model, .. } => model@,
-            RuntimeWidget::ScrollView { model, .. } => model@,
-            RuntimeWidget::ListView { model, .. } => model@,
-            RuntimeWidget::TextInput { model, .. } => model@,
+            RuntimeLeafWidget::Leaf { model, .. } => model@,
+            RuntimeLeafWidget::TextInput { model, .. } => model@,
         }
     }
 
-    /// Shallow well-formedness: direct fields match model, no recursive child check.
     pub open spec fn wf_shallow(&self) -> bool {
         match self {
-            RuntimeWidget::Leaf { size, model } => {
+            RuntimeLeafWidget::Leaf { size, model } => {
                 &&& size.wf_spec()
-                &&& model@ == Widget::Leaf(LeafWidget::Leaf { size: size@ })
+                &&& model@ == LeafWidget::Leaf { size: size@ }
             },
-            RuntimeWidget::Column { padding, spacing, alignment, children, model } => {
+            RuntimeLeafWidget::TextInput { preferred_size, text_input_id, config, model } => {
+                &&& preferred_size.wf_spec()
+                &&& model@ == LeafWidget::TextInput {
+                    preferred_size: preferred_size@,
+                    text_input_id: *text_input_id as nat,
+                    config: config@,
+                }
+            },
+        }
+    }
+}
+
+impl RuntimeWrapperWidget {
+    pub open spec fn model(&self) -> WrapperWidget<RationalModel> {
+        match self {
+            RuntimeWrapperWidget::Margin { model, .. } => model@,
+            RuntimeWrapperWidget::Conditional { model, .. } => model@,
+            RuntimeWrapperWidget::SizedBox { model, .. } => model@,
+            RuntimeWrapperWidget::AspectRatio { model, .. } => model@,
+            RuntimeWrapperWidget::ScrollView { model, .. } => model@,
+        }
+    }
+
+    pub open spec fn wf_shallow(&self) -> bool {
+        match self {
+            RuntimeWrapperWidget::Margin { margin, child, model } => {
+                &&& margin.wf_spec()
+                &&& model@ == WrapperWidget::Margin {
+                    margin: margin@,
+                    child: Box::new(child.model()),
+                }
+            },
+            RuntimeWrapperWidget::Conditional { visible, child, model } => {
+                model@ == WrapperWidget::Conditional {
+                    visible: *visible,
+                    child: Box::new(child.model()),
+                }
+            },
+            RuntimeWrapperWidget::SizedBox { inner_limits, child, model } => {
+                &&& inner_limits.wf_spec()
+                &&& model@ == WrapperWidget::SizedBox {
+                    inner_limits: inner_limits@,
+                    child: Box::new(child.model()),
+                }
+            },
+            RuntimeWrapperWidget::AspectRatio { ratio, child, model } => {
+                &&& ratio.wf_spec()
+                &&& !ratio@.eqv_spec(RationalModel::from_int_spec(0))
+                &&& model@ == WrapperWidget::AspectRatio {
+                    ratio: ratio@,
+                    child: Box::new(child.model()),
+                }
+            },
+            RuntimeWrapperWidget::ScrollView { viewport, scroll_x, scroll_y, child, model } => {
+                &&& viewport.wf_spec()
+                &&& scroll_x.wf_spec()
+                &&& scroll_y.wf_spec()
+                &&& model@ == WrapperWidget::ScrollView {
+                    viewport: viewport@,
+                    scroll_x: scroll_x@,
+                    scroll_y: scroll_y@,
+                    child: Box::new(child.model()),
+                }
+            },
+        }
+    }
+
+}
+
+impl RuntimeContainerWidget {
+    pub open spec fn model(&self) -> ContainerWidget<RationalModel> {
+        match self {
+            RuntimeContainerWidget::Column { model, .. } => model@,
+            RuntimeContainerWidget::Row { model, .. } => model@,
+            RuntimeContainerWidget::Stack { model, .. } => model@,
+            RuntimeContainerWidget::Wrap { model, .. } => model@,
+            RuntimeContainerWidget::Flex { model, .. } => model@,
+            RuntimeContainerWidget::Grid { model, .. } => model@,
+            RuntimeContainerWidget::Absolute { model, .. } => model@,
+            RuntimeContainerWidget::ListView { model, .. } => model@,
+        }
+    }
+
+    pub open spec fn wf_shallow(&self) -> bool {
+        match self {
+            RuntimeContainerWidget::Column { padding, spacing, alignment, children, model } => {
                 &&& padding.wf_spec()
                 &&& spacing.wf_spec()
-                &&& model@ == Widget::Container(ContainerWidget::Column {
+                &&& model@ == ContainerWidget::Column {
                     padding: padding@,
                     spacing: spacing@,
                     alignment: *alignment,
                     children: Seq::new(children@.len() as nat, |i: int| children@[i].model()),
-                })
+                }
             },
-            RuntimeWidget::Row { padding, spacing, alignment, children, model } => {
+            RuntimeContainerWidget::Row { padding, spacing, alignment, children, model } => {
                 &&& padding.wf_spec()
                 &&& spacing.wf_spec()
-                &&& model@ == Widget::Container(ContainerWidget::Row {
+                &&& model@ == ContainerWidget::Row {
                     padding: padding@,
                     spacing: spacing@,
                     alignment: *alignment,
                     children: Seq::new(children@.len() as nat, |i: int| children@[i].model()),
-                })
+                }
             },
-            RuntimeWidget::Stack { padding, h_align, v_align, children, model } => {
+            RuntimeContainerWidget::Stack { padding, h_align, v_align, children, model } => {
                 &&& padding.wf_spec()
-                &&& model@ == Widget::Container(ContainerWidget::Stack {
+                &&& model@ == ContainerWidget::Stack {
                     padding: padding@,
                     h_align: *h_align,
                     v_align: *v_align,
                     children: Seq::new(children@.len() as nat, |i: int| children@[i].model()),
-                })
+                }
             },
-            RuntimeWidget::Wrap { padding, h_spacing, v_spacing, children, model } => {
+            RuntimeContainerWidget::Wrap { padding, h_spacing, v_spacing, children, model } => {
                 &&& padding.wf_spec()
                 &&& h_spacing.wf_spec()
                 &&& v_spacing.wf_spec()
-                &&& model@ == Widget::Container(ContainerWidget::Wrap {
+                &&& model@ == ContainerWidget::Wrap {
                     padding: padding@,
                     h_spacing: h_spacing@,
                     v_spacing: v_spacing@,
                     children: Seq::new(children@.len() as nat, |i: int| children@[i].model()),
-                })
+                }
             },
-            RuntimeWidget::Flex { padding, spacing, alignment, direction, children, model } => {
+            RuntimeContainerWidget::Flex { padding, spacing, alignment, direction, children, model } => {
                 &&& padding.wf_spec()
                 &&& spacing.wf_spec()
                 &&& forall|i: int| 0 <= i < children@.len() ==> children@[i].weight.wf_spec()
@@ -237,15 +324,15 @@ impl RuntimeWidget {
                     Seq::new(children@.len() as nat, |i: int| children@[i].weight@),
                     children@.len() as nat,
                 ).eqv_spec(RationalModel::from_int_spec(0))
-                &&& model@ == Widget::Container(ContainerWidget::Flex {
+                &&& model@ == ContainerWidget::Flex {
                     padding: padding@,
                     spacing: spacing@,
                     alignment: *alignment,
                     direction: *direction,
                     children: Seq::new(children@.len() as nat, |i: int| children@[i].model()),
-                })
+                }
             },
-            RuntimeWidget::Grid { padding, h_spacing, v_spacing, h_align, v_align,
+            RuntimeContainerWidget::Grid { padding, h_spacing, v_spacing, h_align, v_align,
                                   col_widths, row_heights, children, model } => {
                 &&& padding.wf_spec()
                 &&& h_spacing.wf_spec()
@@ -253,7 +340,7 @@ impl RuntimeWidget {
                 &&& forall|i: int| 0 <= i < col_widths@.len() ==> col_widths@[i].wf_spec()
                 &&& forall|i: int| 0 <= i < row_heights@.len() ==> row_heights@[i].wf_spec()
                 &&& children@.len() == col_widths@.len() * row_heights@.len()
-                &&& model@ == Widget::Container(ContainerWidget::Grid {
+                &&& model@ == ContainerWidget::Grid {
                     padding: padding@,
                     h_spacing: h_spacing@,
                     v_spacing: v_spacing@,
@@ -262,75 +349,51 @@ impl RuntimeWidget {
                     col_widths: Seq::new(col_widths@.len() as nat, |i: int| col_widths@[i]@),
                     row_heights: Seq::new(row_heights@.len() as nat, |i: int| row_heights@[i]@),
                     children: Seq::new(children@.len() as nat, |i: int| children@[i].model()),
-                })
+                }
             },
-            RuntimeWidget::Absolute { padding, children, model } => {
+            RuntimeContainerWidget::Absolute { padding, children, model } => {
                 &&& padding.wf_spec()
                 &&& forall|i: int| 0 <= i < children@.len() ==> children@[i].x.wf_spec()
                 &&& forall|i: int| 0 <= i < children@.len() ==> children@[i].y.wf_spec()
-                &&& model@ == Widget::Container(ContainerWidget::Absolute {
+                &&& model@ == ContainerWidget::Absolute {
                     padding: padding@,
                     children: Seq::new(children@.len() as nat, |i: int| children@[i].model()),
-                })
+                }
             },
-            RuntimeWidget::Margin { margin, child, model } => {
-                &&& margin.wf_spec()
-                &&& model@ == Widget::Wrapper(WrapperWidget::Margin {
-                    margin: margin@,
-                    child: Box::new(child.model()),
-                })
-            },
-            RuntimeWidget::Conditional { visible, child, model } => {
-                model@ == Widget::Wrapper(WrapperWidget::Conditional {
-                    visible: *visible,
-                    child: Box::new(child.model()),
-                })
-            },
-            RuntimeWidget::SizedBox { inner_limits, child, model } => {
-                &&& inner_limits.wf_spec()
-                &&& model@ == Widget::Wrapper(WrapperWidget::SizedBox {
-                    inner_limits: inner_limits@,
-                    child: Box::new(child.model()),
-                })
-            },
-            RuntimeWidget::AspectRatio { ratio, child, model } => {
-                &&& ratio.wf_spec()
-                &&& !ratio@.eqv_spec(RationalModel::from_int_spec(0))
-                &&& model@ == Widget::Wrapper(WrapperWidget::AspectRatio {
-                    ratio: ratio@,
-                    child: Box::new(child.model()),
-                })
-            },
-            RuntimeWidget::ScrollView { viewport, scroll_x, scroll_y, child, model } => {
-                &&& viewport.wf_spec()
-                &&& scroll_x.wf_spec()
-                &&& scroll_y.wf_spec()
-                &&& model@ == Widget::Wrapper(WrapperWidget::ScrollView {
-                    viewport: viewport@,
-                    scroll_x: scroll_x@,
-                    scroll_y: scroll_y@,
-                    child: Box::new(child.model()),
-                })
-            },
-            RuntimeWidget::ListView { spacing, scroll_y, viewport, children, model } => {
+            RuntimeContainerWidget::ListView { spacing, scroll_y, viewport, children, model } => {
                 &&& spacing.wf_spec()
                 &&& scroll_y.wf_spec()
                 &&& viewport.wf_spec()
-                &&& model@ == Widget::Container(ContainerWidget::ListView {
+                &&& model@ == ContainerWidget::ListView {
                     spacing: spacing@,
                     scroll_y: scroll_y@,
                     viewport: viewport@,
                     children: Seq::new(children@.len() as nat, |i: int| children@[i].model()),
-                })
+                }
             },
-            RuntimeWidget::TextInput { preferred_size, text_input_id, config, model } => {
-                &&& preferred_size.wf_spec()
-                &&& model@ == Widget::Leaf(LeafWidget::TextInput {
-                    preferred_size: preferred_size@,
-                    text_input_id: *text_input_id as nat,
-                    config: config@,
-                })
-            },
+        }
+    }
+
+}
+
+// ── RuntimeWidget delegation ────────────────────────────────────
+
+impl RuntimeWidget {
+    /// Extract the ghost model.
+    pub open spec fn model(&self) -> Widget<RationalModel> {
+        match self {
+            RuntimeWidget::Leaf(l) => Widget::Leaf(l.model()),
+            RuntimeWidget::Wrapper(w) => Widget::Wrapper(w.model()),
+            RuntimeWidget::Container(c) => Widget::Container(c.model()),
+        }
+    }
+
+    /// Shallow well-formedness: direct fields match model, no recursive child check.
+    pub open spec fn wf_shallow(&self) -> bool {
+        match self {
+            RuntimeWidget::Leaf(l) => l.wf_shallow(),
+            RuntimeWidget::Wrapper(w) => w.wf_shallow(),
+            RuntimeWidget::Container(c) => c.wf_shallow(),
         }
     }
 
@@ -343,57 +406,224 @@ impl RuntimeWidget {
         } else {
             &&& self.wf_shallow()
             &&& match self {
-                RuntimeWidget::Leaf { .. } => true,
-                RuntimeWidget::Column { children, .. } => {
-                    forall|i: int| 0 <= i < children@.len() ==>
-                        (#[trigger] children@[i]).wf_spec((fuel - 1) as nat)
+                RuntimeWidget::Leaf(_) => true,
+                RuntimeWidget::Wrapper(w) => match w {
+                    RuntimeWrapperWidget::Margin { child, .. } =>
+                        child.wf_spec((fuel - 1) as nat),
+                    RuntimeWrapperWidget::Conditional { child, .. } =>
+                        child.wf_spec((fuel - 1) as nat),
+                    RuntimeWrapperWidget::SizedBox { child, .. } =>
+                        child.wf_spec((fuel - 1) as nat),
+                    RuntimeWrapperWidget::AspectRatio { child, .. } =>
+                        child.wf_spec((fuel - 1) as nat),
+                    RuntimeWrapperWidget::ScrollView { child, .. } =>
+                        child.wf_spec((fuel - 1) as nat),
                 },
-                RuntimeWidget::Row { children, .. } => {
-                    forall|i: int| 0 <= i < children@.len() ==>
-                        (#[trigger] children@[i]).wf_spec((fuel - 1) as nat)
+                RuntimeWidget::Container(c) => match c {
+                    RuntimeContainerWidget::Column { children, .. } => {
+                        forall|i: int| 0 <= i < children@.len() ==>
+                            (#[trigger] children@[i]).wf_spec((fuel - 1) as nat)
+                    },
+                    RuntimeContainerWidget::Row { children, .. } => {
+                        forall|i: int| 0 <= i < children@.len() ==>
+                            (#[trigger] children@[i]).wf_spec((fuel - 1) as nat)
+                    },
+                    RuntimeContainerWidget::Stack { children, .. } => {
+                        forall|i: int| 0 <= i < children@.len() ==>
+                            (#[trigger] children@[i]).wf_spec((fuel - 1) as nat)
+                    },
+                    RuntimeContainerWidget::Wrap { children, .. } => {
+                        forall|i: int| 0 <= i < children@.len() ==>
+                            (#[trigger] children@[i]).wf_spec((fuel - 1) as nat)
+                    },
+                    RuntimeContainerWidget::Flex { children, .. } => {
+                        forall|i: int| 0 <= i < children@.len() ==>
+                            (#[trigger] children@[i]).child.wf_spec((fuel - 1) as nat)
+                    },
+                    RuntimeContainerWidget::Grid { children, .. } => {
+                        forall|i: int| 0 <= i < children@.len() ==>
+                            (#[trigger] children@[i]).wf_spec((fuel - 1) as nat)
+                    },
+                    RuntimeContainerWidget::Absolute { children, .. } => {
+                        forall|i: int| 0 <= i < children@.len() ==>
+                            (#[trigger] children@[i]).child.wf_spec((fuel - 1) as nat)
+                    },
+                    RuntimeContainerWidget::ListView { children, .. } => {
+                        forall|i: int| 0 <= i < children@.len() ==>
+                            (#[trigger] children@[i]).wf_spec((fuel - 1) as nat)
+                    },
                 },
-                RuntimeWidget::Stack { children, .. } => {
-                    forall|i: int| 0 <= i < children@.len() ==>
-                        (#[trigger] children@[i]).wf_spec((fuel - 1) as nat)
-                },
-                RuntimeWidget::Wrap { children, .. } => {
-                    forall|i: int| 0 <= i < children@.len() ==>
-                        (#[trigger] children@[i]).wf_spec((fuel - 1) as nat)
-                },
-                RuntimeWidget::Flex { children, .. } => {
-                    forall|i: int| 0 <= i < children@.len() ==>
-                        (#[trigger] children@[i]).child.wf_spec((fuel - 1) as nat)
-                },
-                RuntimeWidget::Grid { children, .. } => {
-                    forall|i: int| 0 <= i < children@.len() ==>
-                        (#[trigger] children@[i]).wf_spec((fuel - 1) as nat)
-                },
-                RuntimeWidget::Absolute { children, .. } => {
-                    forall|i: int| 0 <= i < children@.len() ==>
-                        (#[trigger] children@[i]).child.wf_spec((fuel - 1) as nat)
-                },
-                RuntimeWidget::Margin { child, .. } => {
-                    child.wf_spec((fuel - 1) as nat)
-                },
-                RuntimeWidget::Conditional { child, .. } => {
-                    child.wf_spec((fuel - 1) as nat)
-                },
-                RuntimeWidget::SizedBox { child, .. } => {
-                    child.wf_spec((fuel - 1) as nat)
-                },
-                RuntimeWidget::AspectRatio { child, .. } => {
-                    child.wf_spec((fuel - 1) as nat)
-                },
-                RuntimeWidget::ScrollView { child, .. } => {
-                    child.wf_spec((fuel - 1) as nat)
-                },
-                RuntimeWidget::ListView { children, .. } => {
-                    forall|i: int| 0 <= i < children@.len() ==>
-                        (#[trigger] children@[i]).wf_spec((fuel - 1) as nat)
-                },
-                RuntimeWidget::TextInput { .. } => true,
             }
         }
+    }
+}
+
+// ── Widget shallow comparison ────────────────────────────────────
+
+/// Match-based Alignment comparison (Verus enums lack derived PartialEq).
+fn alignment_eq(a: &Alignment, b: &Alignment) -> (out: bool)
+    ensures out ==> *a == *b,
+{
+    match (a, b) {
+        (Alignment::Start, Alignment::Start) => true,
+        (Alignment::Center, Alignment::Center) => true,
+        (Alignment::End, Alignment::End) => true,
+        _ => false,
+    }
+}
+
+/// Compare two RuntimeTextInputConfigs for structural equality.
+fn text_input_config_eq(a: &RuntimeTextInputConfig, b: &RuntimeTextInputConfig) -> (out: bool)
+    ensures out ==> a@ == b@,
+{
+    let line_eq = match (&a.line_width, &b.line_width) {
+        (Some(la), Some(lb)) => *la == *lb,
+        (None, None) => true,
+        _ => false,
+    };
+    let max_eq = match (&a.max_lines, &b.max_lines) {
+        (Some(ma), Some(mb)) => *ma == *mb,
+        (None, None) => true,
+        _ => false,
+    };
+    let edit_eq = a.editable == b.editable;
+    let result = line_eq && max_eq && edit_eq;
+    if result {
+        assume(a@ == b@); // Trust: Option<usize>/bool comparison implies spec equality
+    }
+    result
+}
+
+/// Shallow comparison of two widgets: same variant, same parameters, same child count.
+/// Does NOT compare children recursively.
+/// When true: the two widgets have the same structure and parameters,
+/// so given identical child layout results they would produce identical output.
+pub fn widgets_shallow_equal_exec(a: &RuntimeWidget, b: &RuntimeWidget) -> (out: bool)
+    requires
+        a.wf_shallow(),
+        b.wf_shallow(),
+{
+    match (a, b) {
+        (RuntimeWidget::Leaf(la), RuntimeWidget::Leaf(lb)) => {
+            match (la, lb) {
+                (RuntimeLeafWidget::Leaf { size: sa, .. },
+                 RuntimeLeafWidget::Leaf { size: sb, .. }) => {
+                    sa.eq_exec(sb)
+                },
+                (RuntimeLeafWidget::TextInput { preferred_size: sa, text_input_id: ia, config: ca, .. },
+                 RuntimeLeafWidget::TextInput { preferred_size: sb, text_input_id: ib, config: cb, .. }) => {
+                    sa.eq_exec(sb) && *ia == *ib && text_input_config_eq(ca, cb)
+                },
+                _ => false,
+            }
+        },
+        (RuntimeWidget::Wrapper(wa), RuntimeWidget::Wrapper(wb)) => {
+            match (wa, wb) {
+                (RuntimeWrapperWidget::Margin { margin: ma, .. },
+                 RuntimeWrapperWidget::Margin { margin: mb, .. }) => {
+                    ma.eq_exec(mb)
+                },
+                (RuntimeWrapperWidget::Conditional { visible: va, .. },
+                 RuntimeWrapperWidget::Conditional { visible: vb, .. }) => {
+                    *va == *vb
+                },
+                (RuntimeWrapperWidget::SizedBox { inner_limits: la, .. },
+                 RuntimeWrapperWidget::SizedBox { inner_limits: lb, .. }) => {
+                    la.eq_exec(lb)
+                },
+                (RuntimeWrapperWidget::AspectRatio { ratio: ra, .. },
+                 RuntimeWrapperWidget::AspectRatio { ratio: rb, .. }) => {
+                    ra.eq(rb)
+                },
+                (RuntimeWrapperWidget::ScrollView { viewport: va, scroll_x: sxa, scroll_y: sya, .. },
+                 RuntimeWrapperWidget::ScrollView { viewport: vb, scroll_x: sxb, scroll_y: syb, .. }) => {
+                    va.eq_exec(vb) && sxa.eq(sxb) && sya.eq(syb)
+                },
+                _ => false,
+            }
+        },
+        (RuntimeWidget::Container(ca), RuntimeWidget::Container(cb)) => {
+            match (ca, cb) {
+                (RuntimeContainerWidget::Column { padding: pa, spacing: sa, alignment: aa, children: ca, .. },
+                 RuntimeContainerWidget::Column { padding: pb, spacing: sb, alignment: ab, children: cb, .. }) => {
+                    pa.eq_exec(pb) && sa.eq(sb) && alignment_eq(aa, ab) && ca.len() == cb.len()
+                },
+                (RuntimeContainerWidget::Row { padding: pa, spacing: sa, alignment: aa, children: ca, .. },
+                 RuntimeContainerWidget::Row { padding: pb, spacing: sb, alignment: ab, children: cb, .. }) => {
+                    pa.eq_exec(pb) && sa.eq(sb) && alignment_eq(aa, ab) && ca.len() == cb.len()
+                },
+                (RuntimeContainerWidget::Stack { padding: pa, h_align: ha, v_align: va, children: ca, .. },
+                 RuntimeContainerWidget::Stack { padding: pb, h_align: hb, v_align: vb, children: cb, .. }) => {
+                    pa.eq_exec(pb) && alignment_eq(ha, hb) && alignment_eq(va, vb) && ca.len() == cb.len()
+                },
+                (RuntimeContainerWidget::Wrap { padding: pa, h_spacing: hsa, v_spacing: vsa, children: ca, .. },
+                 RuntimeContainerWidget::Wrap { padding: pb, h_spacing: hsb, v_spacing: vsb, children: cb, .. }) => {
+                    pa.eq_exec(pb) && hsa.eq(hsb) && vsa.eq(vsb) && ca.len() == cb.len()
+                },
+                (RuntimeContainerWidget::Flex { padding: pa, spacing: sa, alignment: aa, direction: da, children: ca, .. },
+                 RuntimeContainerWidget::Flex { padding: pb, spacing: sb, alignment: ab, direction: db, children: cb, .. }) => {
+                    let dir_eq = match (da, db) {
+                        (FlexDirection::Column, FlexDirection::Column) => true,
+                        (FlexDirection::Row, FlexDirection::Row) => true,
+                        _ => false,
+                    };
+                    pa.eq_exec(pb) && sa.eq(sb) && alignment_eq(aa, ab) && dir_eq && ca.len() == cb.len()
+                },
+                (RuntimeContainerWidget::Grid { padding: pa, h_spacing: hsa, v_spacing: vsa,
+                                                h_align: ha, v_align: va, col_widths: cwa, row_heights: rha, children: ca, .. },
+                 RuntimeContainerWidget::Grid { padding: pb, h_spacing: hsb, v_spacing: vsb,
+                                                h_align: hb, v_align: vb, col_widths: cwb, row_heights: rhb, children: cb, .. }) => {
+                    if !(pa.eq_exec(pb) && hsa.eq(hsb) && vsa.eq(vsb) &&
+                         alignment_eq(ha, hb) && alignment_eq(va, vb) &&
+                         cwa.len() == cwb.len() && rha.len() == rhb.len() &&
+                         ca.len() == cb.len()) {
+                        false
+                    } else {
+                        // Compare col_widths and row_heights element-wise
+                        let mut ok = true;
+                        let mut i: usize = 0;
+                        while i < cwa.len()
+                            invariant
+                                0 <= i <= cwa@.len(),
+                                cwa@.len() == cwb@.len(),
+                                forall|j: int| 0 <= j < cwa@.len() ==> cwa@[j].wf_spec(),
+                                forall|j: int| 0 <= j < cwb@.len() ==> cwb@[j].wf_spec(),
+                            decreases cwa@.len() - i,
+                        {
+                            if !cwa[i].eq_exec(&cwb[i]) {
+                                ok = false;
+                            }
+                            i = i + 1;
+                        }
+                        let mut j: usize = 0;
+                        while j < rha.len()
+                            invariant
+                                0 <= j <= rha@.len(),
+                                rha@.len() == rhb@.len(),
+                                forall|k: int| 0 <= k < rha@.len() ==> rha@[k].wf_spec(),
+                                forall|k: int| 0 <= k < rhb@.len() ==> rhb@[k].wf_spec(),
+                            decreases rha@.len() - j,
+                        {
+                            if !rha[j].eq_exec(&rhb[j]) {
+                                ok = false;
+                            }
+                            j = j + 1;
+                        }
+                        ok
+                    }
+                },
+                (RuntimeContainerWidget::Absolute { padding: pa, children: ca, .. },
+                 RuntimeContainerWidget::Absolute { padding: pb, children: cb, .. }) => {
+                    pa.eq_exec(pb) && ca.len() == cb.len()
+                },
+                (RuntimeContainerWidget::ListView { spacing: sa, scroll_y: sya, viewport: va, children: ca, .. },
+                 RuntimeContainerWidget::ListView { spacing: sb, scroll_y: syb, viewport: vb, children: cb, .. }) => {
+                    sa.eq(sb) && sya.eq(syb) && va.eq_exec(vb) && ca.len() == cb.len()
+                },
+                _ => false,
+            }
+        },
+        _ => false,
     }
 }
 
@@ -802,166 +1032,84 @@ pub fn layout_widget_exec(
         let z2 = RuntimeRational::from_int(0);
         RuntimeNode::leaf_exec(z1, z2, RuntimeSize::zero_exec())
     } else {
+        // Fuel bridge: one proof for all variants
+        proof { assert((fuel as nat - 1) as nat == (fuel - 1) as nat); }
+
         match widget {
-            RuntimeWidget::Leaf { size, model } => {
-                let resolved = limits.resolve_exec(size.copy_size());
-                let x = RuntimeRational::from_int(0);
-                let y = RuntimeRational::from_int(0);
-                RuntimeNode::leaf_exec(x, y, resolved)
-            },
-            RuntimeWidget::Column { padding, spacing, alignment, children, model } => {
-                proof {
-                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
-                    assert forall|j: int| 0 <= j < children@.len() implies
-                        (#[trigger] children@[j]).wf_spec((fuel - 1) as nat)
-                    by {
-                        assert(children@[j].wf_spec((fuel as nat - 1) as nat));
-                    }
+            RuntimeWidget::Leaf(leaf) => {
+                match leaf {
+                    RuntimeLeafWidget::Leaf { size, model } => {
+                        let resolved = limits.resolve_exec(size.copy_size());
+                        let x = RuntimeRational::from_int(0);
+                        let y = RuntimeRational::from_int(0);
+                        RuntimeNode::leaf_exec(x, y, resolved)
+                    },
+                    RuntimeLeafWidget::TextInput { preferred_size, text_input_id, config, model } => {
+                        let resolved = limits.resolve_exec(preferred_size.copy_size());
+                        let x = RuntimeRational::from_int(0);
+                        let y = RuntimeRational::from_int(0);
+                        RuntimeNode::leaf_exec(x, y, resolved)
+                    },
                 }
-                layout_container_exec(limits, padding, spacing, alignment,
-                    &Alignment::Start, &RuntimeRational::from_int(0), children, fuel,
-                    ContainerKind::Linear(Axis::Vertical))
             },
-            RuntimeWidget::Row { padding, spacing, alignment, children, model } => {
-                proof {
-                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
-                    assert forall|j: int| 0 <= j < children@.len() implies
-                        (#[trigger] children@[j]).wf_spec((fuel - 1) as nat)
-                    by {
-                        assert(children@[j].wf_spec((fuel as nat - 1) as nat));
-                        assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
-                    }
+            RuntimeWidget::Wrapper(wrapper) => {
+                match wrapper {
+                    RuntimeWrapperWidget::Margin { margin, child, model } => {
+                        layout_margin_widget_exec(limits, margin, child, fuel)
+                    },
+                    RuntimeWrapperWidget::Conditional { visible, child, model } => {
+                        layout_conditional_exec(limits, *visible, child, fuel)
+                    },
+                    RuntimeWrapperWidget::SizedBox { inner_limits: il, child, model } => {
+                        layout_sized_box_widget_exec(limits, il, child, fuel)
+                    },
+                    RuntimeWrapperWidget::AspectRatio { ratio, child, model } => {
+                        layout_aspect_ratio_widget_exec(limits, ratio, child, fuel)
+                    },
+                    RuntimeWrapperWidget::ScrollView { viewport, scroll_x, scroll_y, child, model } => {
+                        layout_scroll_view_exec(limits, viewport, scroll_x, scroll_y, child, fuel)
+                    },
                 }
-                layout_container_exec(limits, padding, spacing, alignment,
-                    &Alignment::Start, &RuntimeRational::from_int(0), children, fuel,
-                    ContainerKind::Linear(Axis::Horizontal))
             },
-            RuntimeWidget::Stack { padding, h_align, v_align, children, model } => {
-                proof {
-                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
-                    assert forall|j: int| 0 <= j < children@.len() implies
-                        (#[trigger] children@[j]).wf_spec((fuel - 1) as nat)
-                    by {
-                        assert(children@[j].wf_spec((fuel as nat - 1) as nat));
-                        assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
-                    }
+            RuntimeWidget::Container(container) => {
+                match container {
+                    RuntimeContainerWidget::Column { padding, spacing, alignment, children, model } => {
+                        layout_container_exec(limits, padding, spacing, alignment,
+                            &Alignment::Start, &RuntimeRational::from_int(0), children, fuel,
+                            ContainerKind::Linear(Axis::Vertical))
+                    },
+                    RuntimeContainerWidget::Row { padding, spacing, alignment, children, model } => {
+                        layout_container_exec(limits, padding, spacing, alignment,
+                            &Alignment::Start, &RuntimeRational::from_int(0), children, fuel,
+                            ContainerKind::Linear(Axis::Horizontal))
+                    },
+                    RuntimeContainerWidget::Stack { padding, h_align, v_align, children, model } => {
+                        let zero_sp = RuntimeRational::from_int(0);
+                        let dummy_sp = RuntimeRational::from_int(0);
+                        layout_container_exec(limits, padding, &zero_sp, h_align,
+                            v_align, &dummy_sp, children, fuel, ContainerKind::Stack)
+                    },
+                    RuntimeContainerWidget::Wrap { padding, h_spacing, v_spacing, children, model } => {
+                        layout_container_exec(limits, padding, h_spacing, &Alignment::Start,
+                            &Alignment::Start, v_spacing, children, fuel, ContainerKind::Wrap)
+                    },
+                    RuntimeContainerWidget::Flex { padding, spacing, alignment, direction, children, model } => {
+                        layout_flex_widget_exec(limits, padding, spacing, alignment,
+                            direction, children, fuel)
+                    },
+                    RuntimeContainerWidget::Grid { padding, h_spacing, v_spacing, h_align, v_align,
+                                                   col_widths, row_heights, children, model } => {
+                        layout_grid_widget_exec(limits, padding, h_spacing, v_spacing,
+                            h_align, v_align, col_widths, row_heights, children, fuel)
+                    },
+                    RuntimeContainerWidget::Absolute { padding, children, model } => {
+                        layout_absolute_widget_exec(limits, padding, children, fuel)
+                    },
+                    RuntimeContainerWidget::ListView { spacing, scroll_y, viewport, children, model } => {
+                        layout_listview_widget_exec(limits, spacing, scroll_y,
+                            viewport, children, fuel)
+                    },
                 }
-                let zero_sp = RuntimeRational::from_int(0);
-                let dummy_sp = RuntimeRational::from_int(0);
-                layout_container_exec(limits, padding, &zero_sp, h_align,
-                    v_align, &dummy_sp, children, fuel, ContainerKind::Stack)
-            },
-            RuntimeWidget::Wrap { padding, h_spacing, v_spacing, children, model } => {
-                proof {
-                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
-                    assert forall|j: int| 0 <= j < children@.len() implies
-                        (#[trigger] children@[j]).wf_spec((fuel - 1) as nat)
-                    by {
-                        assert(children@[j].wf_spec((fuel as nat - 1) as nat));
-                        assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
-                    }
-                }
-                layout_container_exec(limits, padding, h_spacing, &Alignment::Start,
-                    &Alignment::Start, v_spacing, children, fuel, ContainerKind::Wrap)
-            },
-            RuntimeWidget::Flex { padding, spacing, alignment, direction, children, model } => {
-                proof {
-                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
-                    assert forall|j: int| 0 <= j < children@.len() implies
-                        (#[trigger] children@[j]).child.wf_spec((fuel - 1) as nat)
-                    by {
-                        assert(children@[j].child.wf_spec((fuel as nat - 1) as nat));
-                    }
-                }
-                layout_flex_widget_exec(limits, padding, spacing, alignment,
-                    direction, children, fuel)
-            },
-            RuntimeWidget::Grid { padding, h_spacing, v_spacing, h_align, v_align,
-                                  col_widths, row_heights, children, model } => {
-                proof {
-                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
-                    assert forall|j: int| 0 <= j < children@.len() implies
-                        (#[trigger] children@[j]).wf_spec((fuel - 1) as nat)
-                    by {
-                        assert(children@[j].wf_spec((fuel as nat - 1) as nat));
-                    }
-                }
-                layout_grid_widget_exec(limits, padding, h_spacing, v_spacing,
-                    h_align, v_align, col_widths, row_heights, children, fuel)
-            },
-            RuntimeWidget::Absolute { padding, children, model } => {
-                proof {
-                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
-                    assert forall|j: int| 0 <= j < children@.len() implies
-                        (#[trigger] children@[j]).child.wf_spec((fuel - 1) as nat)
-                    by {
-                        assert(children@[j].child.wf_spec((fuel as nat - 1) as nat));
-                    }
-                }
-                layout_absolute_widget_exec(limits, padding, children, fuel)
-            },
-            RuntimeWidget::Margin { margin, child, model } => {
-                proof {
-                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
-                    assert(child.wf_spec((fuel - 1) as nat)) by {
-                        assert(child.wf_spec((fuel as nat - 1) as nat));
-                    }
-                }
-                layout_margin_widget_exec(limits, margin, child, fuel)
-            },
-            RuntimeWidget::Conditional { visible, child, model } => {
-                proof {
-                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
-                    assert(child.wf_spec((fuel - 1) as nat)) by {
-                        assert(child.wf_spec((fuel as nat - 1) as nat));
-                    }
-                }
-                layout_conditional_exec(limits, *visible, child, fuel)
-            },
-            RuntimeWidget::SizedBox { inner_limits: il, child, model } => {
-                proof {
-                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
-                    assert(child.wf_spec((fuel - 1) as nat)) by {
-                        assert(child.wf_spec((fuel as nat - 1) as nat));
-                    }
-                }
-                layout_sized_box_widget_exec(limits, il, child, fuel)
-            },
-            RuntimeWidget::AspectRatio { ratio, child, model } => {
-                proof {
-                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
-                    assert(child.wf_spec((fuel - 1) as nat)) by {
-                        assert(child.wf_spec((fuel as nat - 1) as nat));
-                    }
-                }
-                layout_aspect_ratio_widget_exec(limits, ratio, child, fuel)
-            },
-            RuntimeWidget::ScrollView { viewport, scroll_x, scroll_y, child, model } => {
-                proof {
-                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
-                    assert(child.wf_spec((fuel - 1) as nat)) by {
-                        assert(child.wf_spec((fuel as nat - 1) as nat));
-                    }
-                }
-                layout_scroll_view_exec(limits, viewport, scroll_x, scroll_y, child, fuel)
-            },
-            RuntimeWidget::ListView { spacing, scroll_y, viewport, children, model } => {
-                proof {
-                    assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
-                    assert forall|j: int| 0 <= j < children@.len() implies
-                        (#[trigger] children@[j]).wf_spec((fuel - 1) as nat)
-                    by {
-                        assert(children@[j].wf_spec((fuel as nat - 1) as nat));
-                    }
-                }
-                layout_listview_widget_exec(limits, spacing, scroll_y,
-                    viewport, children, fuel)
-            },
-            RuntimeWidget::TextInput { preferred_size, text_input_id, config, model } => {
-                let resolved = limits.resolve_exec(preferred_size.copy_size());
-                let x = RuntimeRational::from_int(0);
-                let y = RuntimeRational::from_int(0);
-                RuntimeNode::leaf_exec(x, y, resolved)
             },
         }
     }

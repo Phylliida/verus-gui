@@ -59,6 +59,23 @@ impl RuntimePadding {
         RuntimePadding { top, right, bottom, left, model: Ghost(model) }
     }
 
+    /// Check semantic equality of two paddings.
+    pub fn eq_exec(&self, rhs: &Self) -> (out: bool)
+        requires
+            self.wf_spec(),
+            rhs.wf_spec(),
+        ensures
+            out ==> (
+                self@.top.eqv_spec(rhs@.top) &&
+                self@.right.eqv_spec(rhs@.right) &&
+                self@.bottom.eqv_spec(rhs@.bottom) &&
+                self@.left.eqv_spec(rhs@.left)
+            ),
+    {
+        self.top.eq(&rhs.top) && self.right.eq(&rhs.right) &&
+        self.bottom.eq(&rhs.bottom) && self.left.eq(&rhs.left)
+    }
+
     /// Compute horizontal padding (left + right).
     pub fn horizontal_exec(&self) -> (out: RuntimeRational)
         requires

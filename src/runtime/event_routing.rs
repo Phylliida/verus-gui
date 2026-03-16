@@ -3,8 +3,7 @@ use verus_rational::RuntimeRational;
 use crate::runtime::RationalModel;
 use crate::runtime::copy_rational;
 use crate::runtime::node::RuntimeNode;
-use crate::runtime::widget::RuntimeWidget;
-use crate::runtime::text_input::RuntimeTextInputConfig;
+use crate::runtime::widget::{RuntimeWidget, RuntimeLeafWidget, RuntimeWrapperWidget, RuntimeContainerWidget};
 use crate::widget::*;
 use crate::text_input::TextInputConfig;
 use crate::text_model::session::*;
@@ -45,46 +44,54 @@ fn build_sub_path(path: &Vec<usize>) -> (out: Vec<usize>)
 fn get_runtime_child_at<'a>(widget: &'a RuntimeWidget, idx: usize) -> (out: Option<&'a RuntimeWidget>)
 {
     match widget {
-        RuntimeWidget::Column { children, .. } => {
-            if idx < children.len() { Some(&children[idx]) } else { None }
+        RuntimeWidget::Leaf(_) => None,
+        RuntimeWidget::Wrapper(w) => {
+            match w {
+                RuntimeWrapperWidget::Margin { child, .. } => {
+                    if idx == 0 { Some(child) } else { None }
+                },
+                RuntimeWrapperWidget::Conditional { child, .. } => {
+                    if idx == 0 { Some(child) } else { None }
+                },
+                RuntimeWrapperWidget::SizedBox { child, .. } => {
+                    if idx == 0 { Some(child) } else { None }
+                },
+                RuntimeWrapperWidget::AspectRatio { child, .. } => {
+                    if idx == 0 { Some(child) } else { None }
+                },
+                RuntimeWrapperWidget::ScrollView { child, .. } => {
+                    if idx == 0 { Some(child) } else { None }
+                },
+            }
         },
-        RuntimeWidget::Row { children, .. } => {
-            if idx < children.len() { Some(&children[idx]) } else { None }
+        RuntimeWidget::Container(c) => {
+            match c {
+                RuntimeContainerWidget::Column { children, .. } => {
+                    if idx < children.len() { Some(&children[idx]) } else { None }
+                },
+                RuntimeContainerWidget::Row { children, .. } => {
+                    if idx < children.len() { Some(&children[idx]) } else { None }
+                },
+                RuntimeContainerWidget::Stack { children, .. } => {
+                    if idx < children.len() { Some(&children[idx]) } else { None }
+                },
+                RuntimeContainerWidget::Wrap { children, .. } => {
+                    if idx < children.len() { Some(&children[idx]) } else { None }
+                },
+                RuntimeContainerWidget::Flex { children, .. } => {
+                    if idx < children.len() { Some(&children[idx].child) } else { None }
+                },
+                RuntimeContainerWidget::Grid { children, .. } => {
+                    if idx < children.len() { Some(&children[idx]) } else { None }
+                },
+                RuntimeContainerWidget::Absolute { children, .. } => {
+                    if idx < children.len() { Some(&children[idx].child) } else { None }
+                },
+                RuntimeContainerWidget::ListView { children, .. } => {
+                    if idx < children.len() { Some(&children[idx]) } else { None }
+                },
+            }
         },
-        RuntimeWidget::Stack { children, .. } => {
-            if idx < children.len() { Some(&children[idx]) } else { None }
-        },
-        RuntimeWidget::Wrap { children, .. } => {
-            if idx < children.len() { Some(&children[idx]) } else { None }
-        },
-        RuntimeWidget::Grid { children, .. } => {
-            if idx < children.len() { Some(&children[idx]) } else { None }
-        },
-        RuntimeWidget::ListView { children, .. } => {
-            if idx < children.len() { Some(&children[idx]) } else { None }
-        },
-        RuntimeWidget::Flex { children, .. } => {
-            if idx < children.len() { Some(&children[idx].child) } else { None }
-        },
-        RuntimeWidget::Absolute { children, .. } => {
-            if idx < children.len() { Some(&children[idx].child) } else { None }
-        },
-        RuntimeWidget::Margin { child, .. } => {
-            if idx == 0 { Some(child) } else { None }
-        },
-        RuntimeWidget::Conditional { child, .. } => {
-            if idx == 0 { Some(child) } else { None }
-        },
-        RuntimeWidget::SizedBox { child, .. } => {
-            if idx == 0 { Some(child) } else { None }
-        },
-        RuntimeWidget::AspectRatio { child, .. } => {
-            if idx == 0 { Some(child) } else { None }
-        },
-        RuntimeWidget::ScrollView { child, .. } => {
-            if idx == 0 { Some(child) } else { None }
-        },
-        _ => None,  // Leaf, TextInput — no children
     }
 }
 
@@ -114,7 +121,7 @@ pub fn focused_text_input_id_exec(
 
     if path_offset == path.len() {
         match widget {
-            RuntimeWidget::TextInput { text_input_id, .. } => {
+            RuntimeWidget::Leaf(RuntimeLeafWidget::TextInput { text_input_id, .. }) => {
                 assume(focused_text_input_id::<RationalModel>(
                     widget.model(), spec_path) == Some(*text_input_id as nat));
                 return Some(*text_input_id);
