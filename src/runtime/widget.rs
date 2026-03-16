@@ -48,6 +48,7 @@ pub struct RuntimeAbsoluteChild {
 }
 
 /// Runtime Widget tree mirroring the spec Widget enum.
+#[allow(inconsistent_fields)]
 pub enum RuntimeWidget {
     Leaf {
         size: RuntimeSize,

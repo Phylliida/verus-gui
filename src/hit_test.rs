@@ -111,7 +111,7 @@ pub proof fn lemma_hit_test_point_in_node<T: OrderedRing>(
     fuel: nat,
 )
     requires
-        hit_test(node, px, py, fuel).is_Some(),
+        hit_test(node, px, py, fuel) is Some,
     ensures
         point_in_node(node, px, py),
 {
@@ -140,7 +140,7 @@ proof fn lemma_hit_test_scan_path_valid<T: OrderedRing>(
     depth: nat,
 )
     requires
-        hit_test_scan(node, px, py, index, depth).is_Some(),
+        hit_test_scan(node, px, py, index, depth) is Some,
     ensures
         path_valid(node, hit_test_scan(node, px, py, index, depth).unwrap()),
     decreases depth, index,
@@ -185,7 +185,7 @@ proof fn lemma_hit_test_inner_path_valid<T: OrderedRing>(
     depth: nat,
 )
     requires
-        hit_test_inner(node, px, py, depth).is_Some(),
+        hit_test_inner(node, px, py, depth) is Some,
     ensures
         path_valid(node, hit_test_inner(node, px, py, depth).unwrap()),
     decreases depth, node.children.len() + 1,
@@ -214,7 +214,7 @@ pub proof fn lemma_hit_test_path_valid<T: OrderedRing>(
     fuel: nat,
 )
     requires
-        hit_test(node, px, py, fuel).is_Some(),
+        hit_test(node, px, py, fuel) is Some,
     ensures
         path_valid(node, hit_test(node, px, py, fuel).unwrap()),
 {
@@ -260,7 +260,7 @@ pub proof fn lemma_scrollview_clips<T: OrderedRing>(
         hit_test(
             scrollview_node(viewport_w, viewport_h, scroll_x, scroll_y, child),
             px, py, fuel,
-        ).is_Some(),
+        ) is Some,
     ensures
         T::zero().le(px) && px.le(viewport_w),
         T::zero().le(py) && py.le(viewport_h),
@@ -310,7 +310,7 @@ pub proof fn lemma_hit_test_child_offset<T: OrderedRing>(
     requires
         fuel > 0,
         node.children.len() == 1,
-        hit_test(node, px, py, fuel).is_Some(),
+        hit_test(node, px, py, fuel) is Some,
         hit_test(node, px, py, fuel).unwrap().len() > 0,
     ensures
         ({
@@ -321,7 +321,7 @@ pub proof fn lemma_hit_test_child_offset<T: OrderedRing>(
             // The child index is 0, and the rest of the path comes from
             // hit_test_inner on the child at local coords
             &&& path[0] == 0nat
-            &&& hit_test_inner(child, local_x, local_y, (fuel - 1) as nat).is_Some()
+            &&& hit_test_inner(child, local_x, local_y, (fuel - 1) as nat) is Some
             &&& path.subrange(1, path.len() as int)
                 === hit_test_inner(child, local_x, local_y, (fuel - 1) as nat).unwrap()
         }),

@@ -66,6 +66,7 @@ pub enum WrapperWidget<T: OrderedRing> {
 }
 
 /// Container widgets: multiple children with layout strategy.
+#[allow(inconsistent_fields)]
 #[verifier::reject_recursive_types(T)]
 pub enum ContainerWidget<T: OrderedRing> {
     Column { padding: Padding<T>, spacing: T, alignment: Alignment, children: Seq<Widget<T>> },
