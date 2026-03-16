@@ -33,12 +33,12 @@ pub fn layout_scroll_view_exec(
     ensures
         out.wf_spec(),
         out@ == ({
-            let spec_w = Widget::ScrollView {
+            let spec_w = Widget::Wrapper(WrapperWidget::ScrollView {
                 viewport: viewport@,
                 scroll_x: scroll_x@,
                 scroll_y: scroll_y@,
                 child: Box::new(child.model()),
-            };
+            });
             layout_widget::<RationalModel>(limits@, spec_w, fuel as nat)
         }),
     decreases fuel, 0nat,
@@ -79,12 +79,12 @@ pub fn layout_scroll_view_exec(
 
     let ghost parent_model = layout_widget::<RationalModel>(
         limits@,
-        Widget::ScrollView {
+        Widget::Wrapper(WrapperWidget::ScrollView {
             viewport: viewport@,
             scroll_x: scroll_x@,
             scroll_y: scroll_y@,
             child: Box::new(child.model()),
-        },
+        }),
         fuel as nat,
     );
 

@@ -15,6 +15,7 @@ use crate::layout::wrap::*;
 use crate::layout::absolute::*;
 use crate::layout::listview::*;
 use crate::widget::*;
+use crate::widget::{LeafWidget, WrapperWidget, ContainerWidget};
 
 verus! {
 
@@ -286,30 +287,30 @@ pub proof fn lemma_layout_widget_respects_limits<T: OrderedField>(
         layout_widget(limits, widget, fuel).size.le(limits.max),
 {
     match widget {
-        Widget::Leaf { size } => {
+        Widget::Leaf(LeafWidget::Leaf { size }) => {
             lemma_resolve_bounds(limits, size);
         },
-        Widget::Column { padding, spacing, alignment, children } => {
+        Widget::Container(ContainerWidget::Column { padding, spacing, alignment, children }) => {
             let inner = limits.shrink(padding.horizontal(), padding.vertical());
             let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
             lemma_linear_respects_limits(limits, padding, spacing, alignment, cn, Axis::Vertical);
         },
-        Widget::Row { padding, spacing, alignment, children } => {
+        Widget::Container(ContainerWidget::Row { padding, spacing, alignment, children }) => {
             let inner = limits.shrink(padding.horizontal(), padding.vertical());
             let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
             lemma_linear_respects_limits(limits, padding, spacing, alignment, cn, Axis::Horizontal);
         },
-        Widget::Stack { padding, h_align, v_align, children } => {
+        Widget::Container(ContainerWidget::Stack { padding, h_align, v_align, children }) => {
             let inner = limits.shrink(padding.horizontal(), padding.vertical());
             let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
             lemma_stack_respects_limits(limits, padding, h_align, v_align, cn);
         },
-        Widget::Wrap { padding, h_spacing, v_spacing, children } => {
+        Widget::Container(ContainerWidget::Wrap { padding, h_spacing, v_spacing, children }) => {
             let inner = limits.shrink(padding.horizontal(), padding.vertical());
             let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
             lemma_wrap_respects_limits(limits, padding, h_spacing, v_spacing, cn);
         },
-        Widget::Flex { padding, spacing, alignment, direction, children } => {
+        Widget::Container(ContainerWidget::Flex { padding, spacing, alignment, direction, children }) => {
             let axis = direction.axis();
             let inner = limits.shrink(padding.horizontal(), padding.vertical());
             let weights = Seq::new(children.len(), |i: int| children[i].weight);
@@ -350,8 +351,8 @@ pub proof fn lemma_layout_widget_respects_limits<T: OrderedField>(
                 },
             }
         },
-        Widget::Grid { padding, h_spacing, v_spacing, h_align, v_align,
-                       col_widths, row_heights, children } => {
+        Widget::Container(ContainerWidget::Grid { padding, h_spacing, v_spacing, h_align, v_align,
+                       col_widths, row_heights, children }) => {
             let inner = limits.shrink(padding.horizontal(), padding.vertical());
             let cn = grid_widget_child_nodes(
                 inner, col_widths, row_heights, children,
@@ -360,14 +361,14 @@ pub proof fn lemma_layout_widget_respects_limits<T: OrderedField>(
             lemma_grid_respects_limits(limits, padding, h_spacing, v_spacing,
                 h_align, v_align, col_widths, row_heights, cn);
         },
-        Widget::Absolute { padding, children } => {
+        Widget::Container(ContainerWidget::Absolute { padding, children }) => {
             let inner = limits.shrink(padding.horizontal(), padding.vertical());
             let cn = absolute_widget_child_nodes(inner, children, (fuel - 1) as nat);
             let offsets = Seq::new(children.len(), |i: int|
                 (children[i].x, children[i].y));
             lemma_absolute_respects_limits(limits, padding, cn, offsets);
         },
-        Widget::Margin { margin, child } => {
+        Widget::Wrapper(WrapperWidget::Margin { margin, child }) => {
             let inner = limits.shrink(margin.horizontal(), margin.vertical());
             let child_node = layout_widget(inner, *child, (fuel - 1) as nat);
             let total_w = margin.horizontal().add(child_node.size.width);
@@ -375,7 +376,7 @@ pub proof fn lemma_layout_widget_respects_limits<T: OrderedField>(
             let s = Size::new(total_w, total_h);
             lemma_resolve_bounds(limits, s);
         },
-        Widget::Conditional { visible, child } => {
+        Widget::Wrapper(WrapperWidget::Conditional { visible, child }) => {
             if visible {
                 let child_node = layout_widget(limits, *child, (fuel - 1) as nat);
                 lemma_resolve_bounds(limits, child_node.size);
@@ -383,12 +384,12 @@ pub proof fn lemma_layout_widget_respects_limits<T: OrderedField>(
                 lemma_resolve_bounds(limits, Size::zero_size());
             }
         },
-        Widget::SizedBox { inner_limits, child } => {
+        Widget::Wrapper(WrapperWidget::SizedBox { inner_limits, child }) => {
             let effective = limits.intersect(inner_limits);
             let child_node = layout_widget(effective, *child, (fuel - 1) as nat);
             lemma_resolve_bounds(limits, child_node.size);
         },
-        Widget::AspectRatio { ratio, child } => {
+        Widget::Wrapper(WrapperWidget::AspectRatio { ratio, child }) => {
             let w1 = limits.max.width;
             let h1 = w1.div(ratio);
             if h1.le(limits.max.height) {
@@ -409,14 +410,14 @@ pub proof fn lemma_layout_widget_respects_limits<T: OrderedField>(
                 lemma_resolve_bounds(limits, child_node.size);
             }
         },
-        Widget::ScrollView { viewport, scroll_x, scroll_y, child } => {
+        Widget::Wrapper(WrapperWidget::ScrollView { viewport, scroll_x, scroll_y, child }) => {
             lemma_resolve_bounds(limits, viewport);
         },
-        Widget::ListView { spacing, scroll_y, viewport, children } => {
+        Widget::Container(ContainerWidget::ListView { spacing, scroll_y, viewport, children }) => {
             reveal(layout_listview_body);
             lemma_resolve_bounds(limits, viewport);
         },
-        Widget::TextInput { preferred_size, .. } => {
+        Widget::Leaf(LeafWidget::TextInput { preferred_size, .. }) => {
             lemma_resolve_bounds(limits, preferred_size);
         },
     }

@@ -7,8 +7,7 @@ use crate::runtime::size::RuntimeSize;
 use crate::runtime::limits::RuntimeLimits;
 use crate::runtime::padding::RuntimePadding;
 use crate::runtime::node::RuntimeNode;
-use crate::runtime::column::*;
-use crate::runtime::row::*;
+use crate::runtime::linear::*;
 use crate::runtime::stack::*;
 use crate::runtime::wrap::*;
 use crate::layout::listview::*;
@@ -187,47 +186,47 @@ impl RuntimeWidget {
         match self {
             RuntimeWidget::Leaf { size, model } => {
                 &&& size.wf_spec()
-                &&& model@ == Widget::Leaf { size: size@ }
+                &&& model@ == Widget::Leaf(LeafWidget::Leaf { size: size@ })
             },
             RuntimeWidget::Column { padding, spacing, alignment, children, model } => {
                 &&& padding.wf_spec()
                 &&& spacing.wf_spec()
-                &&& model@ == Widget::Column {
+                &&& model@ == Widget::Container(ContainerWidget::Column {
                     padding: padding@,
                     spacing: spacing@,
                     alignment: *alignment,
                     children: Seq::new(children@.len() as nat, |i: int| children@[i].model()),
-                }
+                })
             },
             RuntimeWidget::Row { padding, spacing, alignment, children, model } => {
                 &&& padding.wf_spec()
                 &&& spacing.wf_spec()
-                &&& model@ == Widget::Row {
+                &&& model@ == Widget::Container(ContainerWidget::Row {
                     padding: padding@,
                     spacing: spacing@,
                     alignment: *alignment,
                     children: Seq::new(children@.len() as nat, |i: int| children@[i].model()),
-                }
+                })
             },
             RuntimeWidget::Stack { padding, h_align, v_align, children, model } => {
                 &&& padding.wf_spec()
-                &&& model@ == Widget::Stack {
+                &&& model@ == Widget::Container(ContainerWidget::Stack {
                     padding: padding@,
                     h_align: *h_align,
                     v_align: *v_align,
                     children: Seq::new(children@.len() as nat, |i: int| children@[i].model()),
-                }
+                })
             },
             RuntimeWidget::Wrap { padding, h_spacing, v_spacing, children, model } => {
                 &&& padding.wf_spec()
                 &&& h_spacing.wf_spec()
                 &&& v_spacing.wf_spec()
-                &&& model@ == Widget::Wrap {
+                &&& model@ == Widget::Container(ContainerWidget::Wrap {
                     padding: padding@,
                     h_spacing: h_spacing@,
                     v_spacing: v_spacing@,
                     children: Seq::new(children@.len() as nat, |i: int| children@[i].model()),
-                }
+                })
             },
             RuntimeWidget::Flex { padding, spacing, alignment, direction, children, model } => {
                 &&& padding.wf_spec()
@@ -237,13 +236,13 @@ impl RuntimeWidget {
                     Seq::new(children@.len() as nat, |i: int| children@[i].weight@),
                     children@.len() as nat,
                 ).eqv_spec(RationalModel::from_int_spec(0))
-                &&& model@ == Widget::Flex {
+                &&& model@ == Widget::Container(ContainerWidget::Flex {
                     padding: padding@,
                     spacing: spacing@,
                     alignment: *alignment,
                     direction: *direction,
                     children: Seq::new(children@.len() as nat, |i: int| children@[i].model()),
-                }
+                })
             },
             RuntimeWidget::Grid { padding, h_spacing, v_spacing, h_align, v_align,
                                   col_widths, row_heights, children, model } => {
@@ -253,7 +252,7 @@ impl RuntimeWidget {
                 &&& forall|i: int| 0 <= i < col_widths@.len() ==> col_widths@[i].wf_spec()
                 &&& forall|i: int| 0 <= i < row_heights@.len() ==> row_heights@[i].wf_spec()
                 &&& children@.len() == col_widths@.len() * row_heights@.len()
-                &&& model@ == Widget::Grid {
+                &&& model@ == Widget::Container(ContainerWidget::Grid {
                     padding: padding@,
                     h_spacing: h_spacing@,
                     v_spacing: v_spacing@,
@@ -262,74 +261,74 @@ impl RuntimeWidget {
                     col_widths: Seq::new(col_widths@.len() as nat, |i: int| col_widths@[i]@),
                     row_heights: Seq::new(row_heights@.len() as nat, |i: int| row_heights@[i]@),
                     children: Seq::new(children@.len() as nat, |i: int| children@[i].model()),
-                }
+                })
             },
             RuntimeWidget::Absolute { padding, children, model } => {
                 &&& padding.wf_spec()
                 &&& forall|i: int| 0 <= i < children@.len() ==> children@[i].x.wf_spec()
                 &&& forall|i: int| 0 <= i < children@.len() ==> children@[i].y.wf_spec()
-                &&& model@ == Widget::Absolute {
+                &&& model@ == Widget::Container(ContainerWidget::Absolute {
                     padding: padding@,
                     children: Seq::new(children@.len() as nat, |i: int| children@[i].model()),
-                }
+                })
             },
             RuntimeWidget::Margin { margin, child, model } => {
                 &&& margin.wf_spec()
-                &&& model@ == Widget::Margin {
+                &&& model@ == Widget::Wrapper(WrapperWidget::Margin {
                     margin: margin@,
                     child: Box::new(child.model()),
-                }
+                })
             },
             RuntimeWidget::Conditional { visible, child, model } => {
-                model@ == Widget::Conditional {
+                model@ == Widget::Wrapper(WrapperWidget::Conditional {
                     visible: *visible,
                     child: Box::new(child.model()),
-                }
+                })
             },
             RuntimeWidget::SizedBox { inner_limits, child, model } => {
                 &&& inner_limits.wf_spec()
-                &&& model@ == Widget::SizedBox {
+                &&& model@ == Widget::Wrapper(WrapperWidget::SizedBox {
                     inner_limits: inner_limits@,
                     child: Box::new(child.model()),
-                }
+                })
             },
             RuntimeWidget::AspectRatio { ratio, child, model } => {
                 &&& ratio.wf_spec()
                 &&& !ratio@.eqv_spec(RationalModel::from_int_spec(0))
-                &&& model@ == Widget::AspectRatio {
+                &&& model@ == Widget::Wrapper(WrapperWidget::AspectRatio {
                     ratio: ratio@,
                     child: Box::new(child.model()),
-                }
+                })
             },
             RuntimeWidget::ScrollView { viewport, scroll_x, scroll_y, child, model } => {
                 &&& viewport.wf_spec()
                 &&& scroll_x.wf_spec()
                 &&& scroll_y.wf_spec()
-                &&& model@ == Widget::ScrollView {
+                &&& model@ == Widget::Wrapper(WrapperWidget::ScrollView {
                     viewport: viewport@,
                     scroll_x: scroll_x@,
                     scroll_y: scroll_y@,
                     child: Box::new(child.model()),
-                }
+                })
             },
             RuntimeWidget::ListView { spacing, scroll_y, viewport, children, model } => {
                 &&& spacing.wf_spec()
                 &&& scroll_y.wf_spec()
                 &&& viewport.wf_spec()
-                &&& model@ == Widget::ListView {
+                &&& model@ == Widget::Container(ContainerWidget::ListView {
                     spacing: spacing@,
                     scroll_y: scroll_y@,
                     viewport: viewport@,
                     children: Seq::new(children@.len() as nat, |i: int| children@[i].model()),
-                }
+                })
             },
             RuntimeWidget::TextInput { preferred_size, text_input_id, config, model } => {
                 &&& preferred_size.wf_spec()
-                &&& model@ == Widget::TextInput {
+                &&& model@ == Widget::Leaf(LeafWidget::TextInput {
                     preferred_size: preferred_size@,
                     text_input_id: *text_input_id as nat,
                     config: config@,
-                }
+                })
             },
         }
     }
@@ -414,7 +413,7 @@ fn layout_conditional_exec(
         out.wf_spec(),
         out@ == layout_widget::<RationalModel>(
             limits@,
-            Widget::Conditional { visible, child: Box::new(child.model()) },
+            Widget::Wrapper(WrapperWidget::Conditional { visible, child: Box::new(child.model()) }),
             fuel as nat,
         ),
     decreases fuel, 0nat,
@@ -426,7 +425,7 @@ fn layout_conditional_exec(
         let y = RuntimeRational::from_int(0);
         let ghost parent_model = layout_widget::<RationalModel>(
             limits@,
-            Widget::Conditional { visible: true, child: Box::new(child.model()) },
+            Widget::Wrapper(WrapperWidget::Conditional { visible: true, child: Box::new(child.model()) }),
             fuel as nat,
         );
         RuntimeNode {
@@ -473,10 +472,10 @@ fn layout_flex_widget_exec(
         out.wf_spec(),
         out@ == ({
             let spec_fi = Seq::new(children@.len() as nat, |i: int| children@[i].model());
-            let spec_w = Widget::Flex {
+            let spec_w = Widget::Container(ContainerWidget::Flex {
                 padding: padding@, spacing: spacing@, alignment: *alignment,
                 direction: *direction, children: spec_fi,
-            };
+            });
             layout_widget::<RationalModel>(limits@, spec_w, fuel as nat)
         }),
     decreases fuel, 0nat,
@@ -818,9 +817,9 @@ pub fn layout_widget_exec(
                         assert(children@[j].wf_spec((fuel as nat - 1) as nat));
                     }
                 }
-                let dummy_sp = RuntimeRational::from_int(0);
-                layout_container_exec(limits, padding, spacing, &Alignment::Start,
-                    alignment, &dummy_sp, children, fuel, ContainerKind::Column)
+                layout_container_exec(limits, padding, spacing, alignment,
+                    &Alignment::Start, &RuntimeRational::from_int(0), children, fuel,
+                    ContainerKind::Linear(Axis::Vertical))
             },
             RuntimeWidget::Row { padding, spacing, alignment, children, model } => {
                 proof {
@@ -832,9 +831,9 @@ pub fn layout_widget_exec(
                         assert((fuel as nat - 1) as nat == (fuel - 1) as nat);
                     }
                 }
-                let dummy_sp = RuntimeRational::from_int(0);
                 layout_container_exec(limits, padding, spacing, alignment,
-                    &Alignment::Start, &dummy_sp, children, fuel, ContainerKind::Row)
+                    &Alignment::Start, &RuntimeRational::from_int(0), children, fuel,
+                    ContainerKind::Linear(Axis::Horizontal))
             },
             RuntimeWidget::Stack { padding, h_align, v_align, children, model } => {
                 proof {
@@ -996,8 +995,7 @@ pub fn layout_widget_checked(
 
 /// Which layout strategy to use.
 pub enum ContainerKind {
-    Column,
-    Row,
+    Linear(Axis),
     Stack,
     Wrap,
 }
@@ -1029,10 +1027,8 @@ fn layout_container_exec(
             let spec_wc = Seq::new(children@.len() as nat, |i: int| children@[i].model());
             let cn = widget_child_nodes(inner, spec_wc, (fuel - 1) as nat);
             match kind {
-                ContainerKind::Column =>
-                    layout_column_body(limits@, padding@, spacing1@, *align2, cn),
-                ContainerKind::Row =>
-                    layout_row_body(limits@, padding@, spacing1@, *align1, cn),
+                ContainerKind::Linear(axis) =>
+                    layout_linear_body(limits@, padding@, spacing1@, *align1, cn, axis),
                 ContainerKind::Stack =>
                     layout_stack_body(limits@, padding@, *align1, *align2, cn),
                 ContainerKind::Wrap =>
@@ -1099,11 +1095,8 @@ fn layout_container_exec(
 
     // 2. Call the appropriate layout exec
     let layout_result = match kind {
-        ContainerKind::Column => {
-            column_layout_exec(limits, padding, spacing1, align2, &child_sizes)
-        },
-        ContainerKind::Row => {
-            row_layout_exec(limits, padding, spacing1, align1, &child_sizes)
+        ContainerKind::Linear(axis) => {
+            linear_layout_exec(limits, padding, spacing1, align1, &child_sizes, &axis)
         },
         ContainerKind::Stack => {
             stack_layout_exec(limits, padding, align1, align2, &child_sizes)
@@ -1118,17 +1111,11 @@ fn layout_container_exec(
         let child_sizes_seq: Seq<Size<RationalModel>> =
             Seq::new(child_sizes@.len() as nat, |j: int| child_sizes@[j]@);
         match kind {
-            ContainerKind::Column => {
-                reveal(column_layout);
-                let avail_w = limits@.max.width.sub(padding@.horizontal());
-                lemma_column_children_len::<RationalModel>(
-                    padding@, spacing1@, *align2, child_sizes_seq, avail_w, 0nat);
-            },
-            ContainerKind::Row => {
-                reveal(row_layout);
-                let avail_h = limits@.max.height.sub(padding@.vertical());
-                lemma_row_children_len::<RationalModel>(
-                    padding@, spacing1@, *align1, child_sizes_seq, avail_h, 0nat);
+            ContainerKind::Linear(axis) => {
+                reveal(linear_layout);
+                let avail_cross = limits@.max.cross_dim(axis).sub(padding@.cross_padding(axis));
+                lemma_linear_children_len::<RationalModel>(
+                    padding@, spacing1@, *align1, child_sizes_seq, axis, avail_cross, 0nat);
             },
             ContainerKind::Stack => {
                 reveal(crate::layout::stack::stack_layout);

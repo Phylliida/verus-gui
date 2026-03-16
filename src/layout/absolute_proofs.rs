@@ -186,9 +186,9 @@ pub proof fn lemma_absolute_children_within_bounds<T: OrderedField>(
             limits, padding, children, (fuel - 1) as nat,
         ),
     ensures
-        crate::widget::layout_widget(limits, crate::widget::Widget::Absolute {
+        crate::widget::layout_widget(limits, crate::widget::Widget::Container(crate::widget::ContainerWidget::Absolute {
             padding, children,
-        }, fuel).children_within_bounds(),
+        }), fuel).children_within_bounds(),
 {
     let h = padding.horizontal();
     let v = padding.vertical();

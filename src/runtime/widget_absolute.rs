@@ -38,10 +38,10 @@ pub fn layout_absolute_widget_exec(
         out.wf_spec(),
         out@ == ({
             let spec_ac = Seq::new(children@.len() as nat, |i: int| children@[i].model());
-            let spec_w = Widget::Absolute {
+            let spec_w = Widget::Container(ContainerWidget::Absolute {
                 padding: padding@,
                 children: spec_ac,
-            };
+            });
             layout_widget::<RationalModel>(limits@, spec_w, fuel as nat)
         }),
     decreases fuel, 0nat,

@@ -537,12 +537,12 @@ pub proof fn lemma_stack_start_children_within_bounds<T: OrderedField>(
         padding.horizontal().add(limits.min.width).le(limits.max.width),
         padding.vertical().add(limits.min.height).le(limits.max.height),
     ensures
-        layout_widget(limits, Widget::Stack {
+        layout_widget(limits, Widget::Container(ContainerWidget::Stack {
             padding,
             h_align: Alignment::Start,
             v_align: Alignment::Start,
             children,
-        }, fuel).children_within_bounds(),
+        }), fuel).children_within_bounds(),
 {
     reveal(stack_layout);
     reveal(stack_content_size);

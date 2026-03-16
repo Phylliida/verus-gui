@@ -6,6 +6,7 @@ use crate::runtime::size::RuntimeSize;
 use crate::runtime::limits::RuntimeLimits;
 use crate::runtime::padding::RuntimePadding;
 use crate::runtime::widget::{RuntimeWidget, RuntimeAbsoluteChild, ContainerKind};
+use crate::layout::Axis;
 use crate::runtime::grid::{grid_content_width_exec, grid_content_height_exec};
 use crate::runtime::measure_helpers::*;
 use crate::size::Size;
@@ -56,7 +57,7 @@ pub fn measure_widget_exec(
                 }
                 let dummy_sp = RuntimeRational::from_int(0);
                 measure_container_exec(limits, padding, spacing, &dummy_sp,
-                    children, fuel, ContainerKind::Column)
+                    children, fuel, ContainerKind::Linear(Axis::Vertical))
             },
             RuntimeWidget::Row { padding, spacing, alignment, children, model } => {
                 proof {
@@ -69,7 +70,7 @@ pub fn measure_widget_exec(
                 }
                 let dummy_sp = RuntimeRational::from_int(0);
                 measure_container_exec(limits, padding, spacing, &dummy_sp,
-                    children, fuel, ContainerKind::Row)
+                    children, fuel, ContainerKind::Linear(Axis::Horizontal))
             },
             RuntimeWidget::Stack { padding, h_align, v_align, children, model } => {
                 proof {
@@ -241,9 +242,9 @@ fn measure_container_exec(
             let spec_wc = Seq::new(children@.len() as nat, |i: int| children@[i].model());
             let cs = measure_children(inner, spec_wc, (fuel - 1) as nat);
             match kind {
-                ContainerKind::Column =>
+                ContainerKind::Linear(Axis::Vertical) =>
                     measure_column_result::<RationalModel>(limits@, padding@, spacing1@, cs),
-                ContainerKind::Row =>
+                ContainerKind::Linear(Axis::Horizontal) =>
                     measure_row_result::<RationalModel>(limits@, padding@, spacing1@, cs),
                 ContainerKind::Stack =>
                     measure_stack_result::<RationalModel>(limits@, padding@, cs),
@@ -310,11 +311,11 @@ fn measure_container_exec(
 
     // 2. Compute content size and resolve per variant
     match kind {
-        ContainerKind::Column => {
+        ContainerKind::Linear(Axis::Vertical) => {
             measure_column_size_exec(limits, padding, spacing1, &child_sizes,
                 Ghost(child_sizes_seq), &pad_h, &pad_v)
         },
-        ContainerKind::Row => {
+        ContainerKind::Linear(Axis::Horizontal) => {
             measure_row_size_exec(limits, padding, spacing1, &child_sizes,
                 Ghost(child_sizes_seq), &pad_h, &pad_v)
         },

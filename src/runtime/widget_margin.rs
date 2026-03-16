@@ -30,10 +30,10 @@ pub fn layout_margin_widget_exec(
     ensures
         out.wf_spec(),
         out@ == ({
-            let spec_w = Widget::Margin {
+            let spec_w = Widget::Wrapper(WrapperWidget::Margin {
                 margin: margin@,
                 child: Box::new(child.model()),
-            };
+            });
             layout_widget::<RationalModel>(limits@, spec_w, fuel as nat)
         }),
     decreases fuel, 0nat,
@@ -87,7 +87,7 @@ pub fn layout_margin_widget_exec(
 
     let ghost parent_model = layout_widget::<RationalModel>(
         limits@,
-        Widget::Margin { margin: margin@, child: Box::new(child.model()) },
+        Widget::Wrapper(WrapperWidget::Margin { margin: margin@, child: Box::new(child.model()) }),
         fuel as nat,
     );
 

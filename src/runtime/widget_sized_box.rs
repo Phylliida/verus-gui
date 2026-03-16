@@ -28,10 +28,10 @@ pub fn layout_sized_box_widget_exec(
     ensures
         out.wf_spec(),
         out@ == ({
-            let spec_w = Widget::SizedBox {
+            let spec_w = Widget::Wrapper(WrapperWidget::SizedBox {
                 inner_limits: inner_limits@,
                 child: Box::new(child.model()),
-            };
+            });
             layout_widget::<RationalModel>(limits@, spec_w, fuel as nat)
         }),
     decreases fuel, 0nat,
@@ -63,7 +63,7 @@ pub fn layout_sized_box_widget_exec(
 
     let ghost parent_model = layout_widget::<RationalModel>(
         limits@,
-        Widget::SizedBox { inner_limits: inner_limits@, child: Box::new(child.model()) },
+        Widget::Wrapper(WrapperWidget::SizedBox { inner_limits: inner_limits@, child: Box::new(child.model()) }),
         fuel as nat,
     );
 

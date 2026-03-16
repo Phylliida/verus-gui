@@ -30,7 +30,7 @@ verus! {
 // ── Axis enum ───────────────────────────────────────────────────────
 
 /// Layout axis: Vertical for column-like layouts, Horizontal for row-like layouts.
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Copy, Clone)]
 pub enum Axis {
     Horizontal,
     Vertical,

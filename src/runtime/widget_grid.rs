@@ -50,11 +50,11 @@ pub fn layout_grid_widget_exec(
             let spec_cw = Seq::new(col_widths@.len() as nat, |i: int| col_widths@[i]@);
             let spec_rh = Seq::new(row_heights@.len() as nat, |i: int| row_heights@[i]@);
             let spec_wc = Seq::new(children@.len() as nat, |i: int| children@[i].model());
-            let spec_w = Widget::Grid {
+            let spec_w = Widget::Container(ContainerWidget::Grid {
                 padding: padding@, h_spacing: h_spacing@, v_spacing: v_spacing@,
                 h_align: *h_align, v_align: *v_align,
                 col_widths: spec_cw, row_heights: spec_rh, children: spec_wc,
-            };
+            });
             layout_widget::<RationalModel>(limits@, spec_w, fuel as nat)
         }),
     decreases fuel, 0nat,

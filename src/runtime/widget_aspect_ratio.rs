@@ -31,10 +31,10 @@ pub fn layout_aspect_ratio_widget_exec(
     ensures
         out.wf_spec(),
         out@ == ({
-            let spec_w = Widget::AspectRatio {
+            let spec_w = Widget::Wrapper(WrapperWidget::AspectRatio {
                 ratio: ratio@,
                 child: Box::new(child.model()),
-            };
+            });
             layout_widget::<RationalModel>(limits@, spec_w, fuel as nat)
         }),
     decreases fuel, 0nat,
@@ -104,7 +104,7 @@ pub fn layout_aspect_ratio_widget_exec(
 
     let ghost parent_model = layout_widget::<RationalModel>(
         limits@,
-        Widget::AspectRatio { ratio: ratio@, child: Box::new(child.model()) },
+        Widget::Wrapper(WrapperWidget::AspectRatio { ratio: ratio@, child: Box::new(child.model()) }),
         fuel as nat,
     );
 

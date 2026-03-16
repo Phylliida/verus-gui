@@ -357,12 +357,12 @@ pub fn layout_listview_widget_exec(
         out.wf_spec(),
         out@ == ({
             let spec_wc = Seq::new(children@.len() as nat, |i: int| children@[i].model());
-            let spec_w = Widget::ListView {
+            let spec_w = Widget::Container(ContainerWidget::ListView {
                 spacing: spacing@,
                 scroll_y: scroll_y@,
                 viewport: viewport@,
                 children: spec_wc,
-            };
+            });
             layout_widget::<RationalModel>(limits@, spec_w, fuel as nat)
         }),
     decreases fuel, 0nat,
@@ -468,12 +468,12 @@ pub fn layout_listview_widget_exec(
 
     let ghost parent_model = layout_widget::<RationalModel>(
         limits@,
-        Widget::ListView {
+        Widget::Container(ContainerWidget::ListView {
             spacing: spacing@,
             scroll_y: scroll_y@,
             viewport: viewport@,
             children: spec_wc,
-        },
+        }),
         fuel as nat,
     );
 

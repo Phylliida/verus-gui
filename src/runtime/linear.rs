@@ -45,13 +45,15 @@ pub fn align_offset_exec(
     }
 }
 
-/// Execute column layout: build a parent Node with children laid out vertically.
-pub fn column_layout_exec(
+/// Execute linear layout: build a parent Node with children laid out along axis.
+/// Replaces column_layout_exec (Vertical) and row_layout_exec (Horizontal).
+pub fn linear_layout_exec(
     limits: &RuntimeLimits,
     padding: &RuntimePadding,
     spacing: &RuntimeRational,
     alignment: &Alignment,
     child_sizes: &Vec<RuntimeSize>,
+    axis: &Axis,
 ) -> (out: RuntimeNode)
     requires
         limits.wf_spec(),
@@ -60,35 +62,36 @@ pub fn column_layout_exec(
         forall|i: int| 0 <= i < child_sizes@.len() ==> child_sizes@[i].wf_spec(),
     ensures
         out.wf_spec(),
-        out@ == column_layout::<RationalModel>(
+        out@ == linear_layout::<RationalModel>(
             limits@, padding@, spacing@, *alignment,
             Seq::new(child_sizes@.len() as nat, |i: int| child_sizes@[i]@),
+            *axis,
         ),
 {
-    proof { reveal(column_layout); }
+    proof { reveal(linear_layout); }
     let ghost spec_sizes: Seq<Size<RationalModel>> =
         Seq::new(child_sizes@.len() as nat, |i: int| child_sizes@[i]@);
 
-    // Compute available width
-    let pad_h = padding.horizontal_exec();
-    let available_width = limits.max.width.sub(&pad_h);
+    // Compute available cross-axis dimension
+    let pad_cross = padding.cross_padding_exec(axis);
+    let available_cross = limits.max.cross_exec(axis).sub(&pad_cross);
 
-    // Compute content height: sum of child heights + (n-1) * spacing
+    // Compute content main: sum of child main dimensions + (n-1) * spacing
     let n = child_sizes.len();
-    let mut content_height = RuntimeRational::from_int(0);
+    let mut content_main = RuntimeRational::from_int(0);
     let mut i: usize = 0;
 
     while i < n
         invariant
             0 <= i <= n,
             n == child_sizes@.len(),
-            content_height.wf_spec(),
-            content_height@ == sum_heights::<RationalModel>(spec_sizes, i as nat),
+            content_main.wf_spec(),
+            content_main@ == sum_main::<RationalModel>(spec_sizes, *axis, i as nat),
             forall|j: int| 0 <= j < child_sizes@.len() ==> child_sizes@[j].wf_spec(),
             forall|j: int| 0 <= j < child_sizes@.len() ==> spec_sizes[j] == child_sizes@[j]@,
         decreases n - i,
     {
-        content_height = content_height.add(&child_sizes[i].height);
+        content_main = content_main.add(&child_sizes[i].main_exec(axis));
         i = i + 1;
     }
 
@@ -112,29 +115,28 @@ pub fn column_layout_exec(
             j = j + 1;
         }
 
-        content_height = content_height.add(&sp_total);
+        content_main = content_main.add(&sp_total);
     }
 
-    // Compute total height and resolve parent size
-    let pad_v = padding.vertical_exec();
-    let total_height = pad_v.add(&content_height);
-    let total_width = copy_rational(&limits.max.width);
+    // Compute parent size: pad + content for main, max for cross, then resolve
+    let pad_main = padding.main_padding_exec(axis);
+    let total_main = pad_main.add(&content_main);
+    let max_cross = limits.max.cross_exec(axis);
+    let parent_size_unclamped = RuntimeSize::from_axes_exec(axis, total_main, max_cross);
 
-    // Resolve: clamp each dimension — max(min, min(val, max)) to match limits.resolve()
-    let parent_width = limits.min.width.max(&total_width.min(&limits.max.width));
-    let parent_height = limits.min.height.max(&total_height.min(&limits.max.height));
-    let parent_size = RuntimeSize::new(parent_width, parent_height);
+    // Resolve: clamp to limits
+    let parent_size = limits.resolve_exec(parent_size_unclamped);
 
     // Establish children sequence length
     proof {
-        lemma_column_children_len::<RationalModel>(
-            padding@, spacing@, *alignment, spec_sizes, available_width@, 0,
+        lemma_linear_children_len::<RationalModel>(
+            padding@, spacing@, *alignment, spec_sizes, *axis, available_cross@, 0,
         );
     }
 
     // Build children
     let mut children: Vec<RuntimeNode> = Vec::new();
-    let mut y_pos = copy_rational(&padding.top);
+    let mut main_pos = padding.main_start_exec(axis);
     let mut k: usize = 0;
 
     while k < n
@@ -142,44 +144,50 @@ pub fn column_layout_exec(
             0 <= k <= n,
             n == child_sizes@.len(),
             spec_sizes.len() == n as nat,
-            y_pos.wf_spec(),
-            k < n ==> y_pos@ == child_y_position::<RationalModel>(padding@.top, spec_sizes, spacing@, k as nat),
-            available_width.wf_spec(),
+            main_pos.wf_spec(),
+            k < n ==> main_pos@ == child_main_position::<RationalModel>(
+                padding@.main_start(*axis), spec_sizes, *axis, spacing@, k as nat),
+            available_cross.wf_spec(),
             spacing.wf_spec(),
             padding.wf_spec(),
             children@.len() == k as int,
             forall|j: int| 0 <= j < child_sizes@.len() ==> child_sizes@[j].wf_spec(),
             forall|j: int| 0 <= j < child_sizes@.len() ==> spec_sizes[j] == child_sizes@[j]@,
-            column_children::<RationalModel>(
-                padding@, spacing@, *alignment, spec_sizes, available_width@, 0,
+            linear_children::<RationalModel>(
+                padding@, spacing@, *alignment, spec_sizes, *axis, available_cross@, 0,
             ).len() == spec_sizes.len(),
             forall|j: int| 0 <= j < k ==> {
                 &&& (#[trigger] children@[j]).wf_spec()
-                &&& children@[j]@ == column_children::<RationalModel>(
-                    padding@, spacing@, *alignment, spec_sizes, available_width@, 0,
+                &&& children@[j]@ == linear_children::<RationalModel>(
+                    padding@, spacing@, *alignment, spec_sizes, *axis, available_cross@, 0,
                 )[j]
             },
         decreases n - k,
     {
-        // Tell Z3 what column_children[k] should be
+        // Tell Z3 what linear_children[k] should be
         proof {
-            lemma_column_children_element::<RationalModel>(
-                padding@, spacing@, *alignment, spec_sizes, available_width@, k as nat,
+            lemma_linear_children_element::<RationalModel>(
+                padding@, spacing@, *alignment, spec_sizes, *axis, available_cross@, k as nat,
             );
         }
 
-        let child_w = copy_rational(&child_sizes[k].width);
-        let x_offset = align_offset_exec(alignment, &available_width, &child_w);
-        let child_x = padding.left.add(&x_offset);
-        let child_y = copy_rational(&y_pos);
+        let child_cross = child_sizes[k].cross_exec(axis);
+        let cross_offset = align_offset_exec(alignment, &available_cross, &child_cross);
+        let child_cross_pos = padding.cross_start_exec(axis).add(&cross_offset);
+        let child_main_pos = copy_rational(&main_pos);
         let cs = child_sizes[k].copy_size();
-        let child_node = RuntimeNode::leaf_exec(child_x, child_y, cs);
+
+        // Build node with correct (x, y) based on axis
+        let child_node = match axis {
+            Axis::Vertical => RuntimeNode::leaf_exec(child_cross_pos, child_main_pos, cs),
+            Axis::Horizontal => RuntimeNode::leaf_exec(child_main_pos, child_cross_pos, cs),
+        };
         children.push(child_node);
 
-        // Advance y position
+        // Advance main position
         if k + 1 < n {
-            y_pos = y_pos.add(&child_sizes[k].height);
-            y_pos = y_pos.add(spacing);
+            main_pos = main_pos.add(&child_sizes[k].main_exec(axis));
+            main_pos = main_pos.add(spacing);
         }
 
         k = k + 1;
@@ -188,8 +196,8 @@ pub fn column_layout_exec(
     let x = RuntimeRational::from_int(0);
     let y = RuntimeRational::from_int(0);
 
-    let ghost parent_model = column_layout::<RationalModel>(
-        limits@, padding@, spacing@, *alignment, spec_sizes,
+    let ghost parent_model = linear_layout::<RationalModel>(
+        limits@, padding@, spacing@, *alignment, spec_sizes, *axis,
     );
 
     let out = RuntimeNode {
@@ -202,10 +210,10 @@ pub fn column_layout_exec(
 
     proof {
         // Help Z3: children match model
-        let cc = column_children::<RationalModel>(
-            padding@, spacing@, *alignment, spec_sizes, available_width@, 0,
+        let lc = linear_children::<RationalModel>(
+            padding@, spacing@, *alignment, spec_sizes, *axis, available_cross@, 0,
         );
-        assert(out@.children == cc);
+        assert(out@.children == lc);
         assert(out.children@.len() == out@.children.len());
         assert forall|i: int| 0 <= i < out.children@.len() implies {
             &&& (#[trigger] out.children@[i]).wf_shallow()

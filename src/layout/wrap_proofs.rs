@@ -828,9 +828,9 @@ pub proof fn lemma_wrap_children_within_bounds<T: OrderedField>(
             && padding.vertical().add(content.height).le(limits.max.height)
         }),
     ensures
-        crate::widget::layout_widget(limits, crate::widget::Widget::Wrap {
+        crate::widget::layout_widget(limits, crate::widget::Widget::Container(crate::widget::ContainerWidget::Wrap {
             padding, h_spacing, v_spacing, children,
-        }, fuel).children_within_bounds(),
+        }), fuel).children_within_bounds(),
 {
     let h = padding.horizontal();
     let v = padding.vertical();

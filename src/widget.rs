@@ -48,116 +48,66 @@ pub struct AbsoluteChild<T: OrderedRing> {
     pub child: Widget<T>,
 }
 
+/// Leaf widgets: no children, size determined by content or configuration.
+#[verifier::reject_recursive_types(T)]
+pub enum LeafWidget<T: OrderedRing> {
+    Leaf { size: Size<T> },
+    TextInput { preferred_size: Size<T>, text_input_id: nat, config: TextInputConfig },
+}
+
+/// Wrapper widgets: exactly one child, modified layout constraints.
+#[verifier::reject_recursive_types(T)]
+pub enum WrapperWidget<T: OrderedRing> {
+    Margin { margin: Padding<T>, child: Box<Widget<T>> },
+    Conditional { visible: bool, child: Box<Widget<T>> },
+    SizedBox { inner_limits: Limits<T>, child: Box<Widget<T>> },
+    AspectRatio { ratio: T, child: Box<Widget<T>> },
+    ScrollView { viewport: Size<T>, scroll_x: T, scroll_y: T, child: Box<Widget<T>> },
+}
+
+/// Container widgets: multiple children with layout strategy.
+#[verifier::reject_recursive_types(T)]
+pub enum ContainerWidget<T: OrderedRing> {
+    Column { padding: Padding<T>, spacing: T, alignment: Alignment, children: Seq<Widget<T>> },
+    Row { padding: Padding<T>, spacing: T, alignment: Alignment, children: Seq<Widget<T>> },
+    Stack { padding: Padding<T>, h_align: Alignment, v_align: Alignment, children: Seq<Widget<T>> },
+    Wrap { padding: Padding<T>, h_spacing: T, v_spacing: T, children: Seq<Widget<T>> },
+    Flex { padding: Padding<T>, spacing: T, alignment: Alignment, direction: FlexDirection, children: Seq<FlexItem<T>> },
+    Grid { padding: Padding<T>, h_spacing: T, v_spacing: T, h_align: Alignment, v_align: Alignment,
+           col_widths: Seq<Size<T>>, row_heights: Seq<Size<T>>, children: Seq<Widget<T>> },
+    Absolute { padding: Padding<T>, children: Seq<AbsoluteChild<T>> },
+    ListView { spacing: T, scroll_y: T, viewport: Size<T>, children: Seq<Widget<T>> },
+}
+
 /// A composable layout widget that can nest heterogeneous layout strategies.
+/// Split into Leaf/Wrapper/Container sub-enums for efficient dispatch.
 #[verifier::reject_recursive_types(T)]
 pub enum Widget<T: OrderedRing> {
-    Leaf { size: Size<T> },
-    Column {
-        padding: Padding<T>,
-        spacing: T,
-        alignment: Alignment,
-        children: Seq<Widget<T>>,
-    },
-    Row {
-        padding: Padding<T>,
-        spacing: T,
-        alignment: Alignment,
-        children: Seq<Widget<T>>,
-    },
-    Stack {
-        padding: Padding<T>,
-        h_align: Alignment,
-        v_align: Alignment,
-        children: Seq<Widget<T>>,
-    },
-    Wrap {
-        padding: Padding<T>,
-        h_spacing: T,
-        v_spacing: T,
-        children: Seq<Widget<T>>,
-    },
-    Flex {
-        padding: Padding<T>,
-        spacing: T,
-        alignment: Alignment,
-        direction: FlexDirection,
-        children: Seq<FlexItem<T>>,
-    },
-    Grid {
-        padding: Padding<T>,
-        h_spacing: T,
-        v_spacing: T,
-        h_align: Alignment,
-        v_align: Alignment,
-        col_widths: Seq<Size<T>>,
-        row_heights: Seq<Size<T>>,
-        children: Seq<Widget<T>>,
-    },
-    Absolute {
-        padding: Padding<T>,
-        children: Seq<AbsoluteChild<T>>,
-    },
-    Margin {
-        margin: Padding<T>,
-        child: Box<Widget<T>>,
-    },
-    Conditional {
-        visible: bool,
-        child: Box<Widget<T>>,
-    },
-    SizedBox {
-        inner_limits: Limits<T>,
-        child: Box<Widget<T>>,
-    },
-    AspectRatio {
-        ratio: T,
-        child: Box<Widget<T>>,
-    },
-    /// Scrollable viewport: child laid out with fixed viewport-sized limits,
-    /// positioned at (-scroll_x, -scroll_y). Output size = limits.resolve(viewport).
-    ScrollView {
-        viewport: Size<T>,
-        scroll_x: T,
-        scroll_y: T,
-        child: Box<Widget<T>>,
-    },
-    /// Virtualized list: variable-height children, only visible children are laid out.
-    /// Child heights determined by measure_widget. Output size = limits.resolve(viewport).
-    ListView {
-        spacing: T,
-        scroll_y: T,
-        viewport: Size<T>,
-        children: Seq<Widget<T>>,
-    },
-    /// Text input: leaf widget whose size comes from pre-computed text metrics.
-    /// The text_input_id references an external TextEditSession.
-    TextInput {
-        preferred_size: Size<T>,
-        text_input_id: nat,
-        config: TextInputConfig,
-    },
+    Leaf(LeafWidget<T>),
+    Wrapper(WrapperWidget<T>),
+    Container(ContainerWidget<T>),
 }
 
 // ── Convenience constructors ──────────────────────────────────────
 
 /// Center a single child (stack with center alignment, no padding).
 pub open spec fn center_widget<T: OrderedRing>(child: Widget<T>) -> Widget<T> {
-    Widget::Stack {
+    Widget::Container(ContainerWidget::Stack {
         padding: Padding { top: T::zero(), right: T::zero(), bottom: T::zero(), left: T::zero() },
         h_align: Alignment::Center,
         v_align: Alignment::Center,
         children: Seq::empty().push(child),
-    }
+    })
 }
 
 /// Align a single child with explicit h/v alignment (stack wrapper).
 pub open spec fn align_widget<T: OrderedRing>(h: Alignment, v: Alignment, child: Widget<T>) -> Widget<T> {
-    Widget::Stack {
+    Widget::Container(ContainerWidget::Stack {
         padding: Padding { top: T::zero(), right: T::zero(), bottom: T::zero(), left: T::zero() },
         h_align: h,
         v_align: v,
         children: Seq::empty().push(child),
-    }
+    })
 }
 
 // ── Variant body helpers ───────────────────────────────────────────
@@ -319,7 +269,7 @@ pub open spec fn widget_child_nodes<T: OrderedField>(
     children: Seq<Widget<T>>,
     fuel: nat,
 ) -> Seq<Node<T>>
-    decreases fuel, 1nat,
+    decreases fuel, 2nat,
 {
     Seq::new(children.len(), |i: int| layout_widget(inner_limits, children[i], fuel))
 }
@@ -333,7 +283,7 @@ pub open spec fn flex_column_widget_child_nodes<T: OrderedField>(
     available_height: T,
     fuel: nat,
 ) -> Seq<Node<T>>
-    decreases fuel, 1nat,
+    decreases fuel, 2nat,
 {
     Seq::new(children.len(), |i: int| {
         let main_alloc = flex_child_main_size(weights[i], total_weight, available_height);
@@ -354,7 +304,7 @@ pub open spec fn flex_row_widget_child_nodes<T: OrderedField>(
     available_width: T,
     fuel: nat,
 ) -> Seq<Node<T>>
-    decreases fuel, 1nat,
+    decreases fuel, 2nat,
 {
     Seq::new(children.len(), |i: int| {
         let main_alloc = flex_child_main_size(weights[i], total_weight, available_width);
@@ -377,7 +327,7 @@ pub open spec fn flex_linear_widget_child_nodes<T: OrderedField>(
     axis: Axis,
     fuel: nat,
 ) -> Seq<Node<T>>
-    decreases fuel, 2nat,
+    decreases fuel, 3nat,
 {
     match axis {
         Axis::Vertical => flex_column_widget_child_nodes(
@@ -398,7 +348,7 @@ pub open spec fn grid_widget_child_nodes<T: OrderedField>(
     num_cols: nat,
     fuel: nat,
 ) -> Seq<Node<T>>
-    decreases fuel, 1nat,
+    decreases fuel, 2nat,
 {
     Seq::new(children.len(), |i: int| {
         let r = i / num_cols as int;
@@ -417,7 +367,7 @@ pub open spec fn absolute_widget_child_nodes<T: OrderedField>(
     children: Seq<AbsoluteChild<T>>,
     fuel: nat,
 ) -> Seq<Node<T>>
-    decreases fuel, 1nat,
+    decreases fuel, 2nat,
 {
     Seq::new(children.len(), |i: int| layout_widget(inner_limits, children[i].child, fuel))
 }
@@ -432,7 +382,7 @@ pub open spec fn layout_widget<T: OrderedField>(
     widget: Widget<T>,
     fuel: nat,
 ) -> Node<T>
-    decreases fuel, 0nat,
+    decreases fuel, 1nat,
 {
     if fuel == 0 {
         Node {
@@ -443,71 +393,51 @@ pub open spec fn layout_widget<T: OrderedField>(
         }
     } else {
         match widget {
-            Widget::Leaf { size } => {
-                Node {
-                    x: T::zero(),
-                    y: T::zero(),
-                    size: limits.resolve(size),
-                    children: Seq::empty(),
-                }
-            },
-            Widget::Column { padding, spacing, alignment, children } => {
-                let inner = limits.shrink(padding.horizontal(), padding.vertical());
-                let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
-                layout_linear_body(limits, padding, spacing, alignment, cn, Axis::Vertical)
-            },
-            Widget::Row { padding, spacing, alignment, children } => {
-                let inner = limits.shrink(padding.horizontal(), padding.vertical());
-                let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
-                layout_linear_body(limits, padding, spacing, alignment, cn, Axis::Horizontal)
-            },
-            Widget::Stack { padding, h_align, v_align, children } => {
-                let inner = limits.shrink(padding.horizontal(), padding.vertical());
-                let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
-                layout_stack_body(limits, padding, h_align, v_align, cn)
-            },
-            Widget::Wrap { padding, h_spacing, v_spacing, children } => {
-                let inner = limits.shrink(padding.horizontal(), padding.vertical());
-                let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
-                layout_wrap_body(limits, padding, h_spacing, v_spacing, cn)
-            },
-            Widget::Flex { padding, spacing, alignment, direction, children } => {
-                let axis = direction.axis();
-                let inner = limits.shrink(padding.horizontal(), padding.vertical());
-                let weights = Seq::new(children.len(), |i: int| children[i].weight);
-                let total_weight = sum_weights(weights, weights.len() as nat);
-                let total_spacing = if children.len() > 0 {
-                    repeated_add(spacing, (children.len() - 1) as nat)
-                } else { T::zero() };
-                let available_main = inner.max.main_dim(axis).sub(total_spacing);
-                let cn = flex_linear_widget_child_nodes(
-                    inner, children, weights, total_weight,
-                    available_main, axis, (fuel - 1) as nat,
-                );
-                layout_flex_linear_body(
-                    limits, padding, spacing, alignment, weights, cn, axis,
-                )
-            },
-            Widget::Grid { padding, h_spacing, v_spacing, h_align, v_align,
-                           col_widths, row_heights, children } => {
-                let inner = limits.shrink(padding.horizontal(), padding.vertical());
-                let cn = grid_widget_child_nodes(
-                    inner, col_widths, row_heights, children,
-                    col_widths.len(), (fuel - 1) as nat,
-                );
-                layout_grid_body(
-                    limits, padding, h_spacing, v_spacing, h_align, v_align,
-                    col_widths, row_heights, cn,
-                )
-            },
-            Widget::Absolute { padding, children } => {
-                let inner = limits.shrink(padding.horizontal(), padding.vertical());
-                let cn = absolute_widget_child_nodes(inner, children, (fuel - 1) as nat);
-                let offsets = Seq::new(children.len(), |i: int|
-                    (children[i].x, children[i].y));
-                layout_absolute_body(limits, padding, cn, offsets)
-            },
-            Widget::Margin { margin, child } => {
+            Widget::Leaf(leaf) => layout_leaf(limits, leaf),
+            Widget::Wrapper(wrapper) => layout_wrapper(limits, wrapper, fuel),
+            Widget::Container(container) => layout_container(limits, container, fuel),
+        }
+    }
+}
+
+/// Lay out a leaf widget (no children).
+pub open spec fn layout_leaf<T: OrderedField>(
+    limits: Limits<T>,
+    leaf: LeafWidget<T>,
+) -> Node<T> {
+    match leaf {
+        LeafWidget::Leaf { size } => {
+            Node {
+                x: T::zero(),
+                y: T::zero(),
+                size: limits.resolve(size),
+                children: Seq::empty(),
+            }
+        },
+        LeafWidget::TextInput { preferred_size, .. } => {
+            Node {
+                x: T::zero(),
+                y: T::zero(),
+                size: limits.resolve(preferred_size),
+                children: Seq::empty(),
+            }
+        },
+    }
+}
+
+/// Lay out a wrapper widget (single child).
+pub open spec fn layout_wrapper<T: OrderedField>(
+    limits: Limits<T>,
+    wrapper: WrapperWidget<T>,
+    fuel: nat,
+) -> Node<T>
+    decreases fuel, 0nat,
+{
+    if fuel == 0 {
+        Node { x: T::zero(), y: T::zero(), size: Size::new(T::zero(), T::zero()), children: Seq::empty() }
+    } else {
+        match wrapper {
+            WrapperWidget::Margin { margin, child } => {
                 let inner = limits.shrink(margin.horizontal(), margin.vertical());
                 let child_node = layout_widget(inner, *child, (fuel - 1) as nat);
                 let total_w = margin.horizontal().add(child_node.size.width);
@@ -525,7 +455,7 @@ pub open spec fn layout_widget<T: OrderedField>(
                     }),
                 }
             },
-            Widget::Conditional { visible, child } => {
+            WrapperWidget::Conditional { visible, child } => {
                 if visible {
                     let child_node = layout_widget(limits, *child, (fuel - 1) as nat);
                     Node {
@@ -543,7 +473,7 @@ pub open spec fn layout_widget<T: OrderedField>(
                     }
                 }
             },
-            Widget::SizedBox { inner_limits, child } => {
+            WrapperWidget::SizedBox { inner_limits, child } => {
                 let effective = limits.intersect(inner_limits);
                 let child_node = layout_widget(effective, *child, (fuel - 1) as nat);
                 Node {
@@ -558,7 +488,7 @@ pub open spec fn layout_widget<T: OrderedField>(
                     }),
                 }
             },
-            Widget::AspectRatio { ratio, child } => {
+            WrapperWidget::AspectRatio { ratio, child } => {
                 let w1 = limits.max.width;
                 let h1 = w1.div(ratio);
                 let child_node = if h1.le(limits.max.height) {
@@ -588,7 +518,7 @@ pub open spec fn layout_widget<T: OrderedField>(
                     }),
                 }
             },
-            Widget::ScrollView { viewport, scroll_x, scroll_y, child } => {
+            WrapperWidget::ScrollView { viewport, scroll_x, scroll_y, child } => {
                 let child_limits = Limits {
                     min: Size::zero_size(),
                     max: viewport,
@@ -606,7 +536,79 @@ pub open spec fn layout_widget<T: OrderedField>(
                     }),
                 }
             },
-            Widget::ListView { spacing, scroll_y, viewport, children } => {
+        }
+    }
+}
+
+/// Lay out a container widget (multiple children).
+pub open spec fn layout_container<T: OrderedField>(
+    limits: Limits<T>,
+    container: ContainerWidget<T>,
+    fuel: nat,
+) -> Node<T>
+    decreases fuel, 0nat,
+{
+    if fuel == 0 {
+        Node { x: T::zero(), y: T::zero(), size: Size::new(T::zero(), T::zero()), children: Seq::empty() }
+    } else {
+        match container {
+            ContainerWidget::Column { padding, spacing, alignment, children } => {
+                let inner = limits.shrink(padding.horizontal(), padding.vertical());
+                let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
+                layout_linear_body(limits, padding, spacing, alignment, cn, Axis::Vertical)
+            },
+            ContainerWidget::Row { padding, spacing, alignment, children } => {
+                let inner = limits.shrink(padding.horizontal(), padding.vertical());
+                let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
+                layout_linear_body(limits, padding, spacing, alignment, cn, Axis::Horizontal)
+            },
+            ContainerWidget::Stack { padding, h_align, v_align, children } => {
+                let inner = limits.shrink(padding.horizontal(), padding.vertical());
+                let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
+                layout_stack_body(limits, padding, h_align, v_align, cn)
+            },
+            ContainerWidget::Wrap { padding, h_spacing, v_spacing, children } => {
+                let inner = limits.shrink(padding.horizontal(), padding.vertical());
+                let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
+                layout_wrap_body(limits, padding, h_spacing, v_spacing, cn)
+            },
+            ContainerWidget::Flex { padding, spacing, alignment, direction, children } => {
+                let axis = direction.axis();
+                let inner = limits.shrink(padding.horizontal(), padding.vertical());
+                let weights = Seq::new(children.len(), |i: int| children[i].weight);
+                let total_weight = sum_weights(weights, weights.len() as nat);
+                let total_spacing = if children.len() > 0 {
+                    repeated_add(spacing, (children.len() - 1) as nat)
+                } else { T::zero() };
+                let available_main = inner.max.main_dim(axis).sub(total_spacing);
+                let cn = flex_linear_widget_child_nodes(
+                    inner, children, weights, total_weight,
+                    available_main, axis, (fuel - 1) as nat,
+                );
+                layout_flex_linear_body(
+                    limits, padding, spacing, alignment, weights, cn, axis,
+                )
+            },
+            ContainerWidget::Grid { padding, h_spacing, v_spacing, h_align, v_align,
+                           col_widths, row_heights, children } => {
+                let inner = limits.shrink(padding.horizontal(), padding.vertical());
+                let cn = grid_widget_child_nodes(
+                    inner, col_widths, row_heights, children,
+                    col_widths.len(), (fuel - 1) as nat,
+                );
+                layout_grid_body(
+                    limits, padding, h_spacing, v_spacing, h_align, v_align,
+                    col_widths, row_heights, cn,
+                )
+            },
+            ContainerWidget::Absolute { padding, children } => {
+                let inner = limits.shrink(padding.horizontal(), padding.vertical());
+                let cn = absolute_widget_child_nodes(inner, children, (fuel - 1) as nat);
+                let offsets = Seq::new(children.len(), |i: int|
+                    (children[i].x, children[i].y));
+                layout_absolute_body(limits, padding, cn, offsets)
+            },
+            ContainerWidget::ListView { spacing, scroll_y, viewport, children } => {
                 let child_limits = Limits {
                     min: Size::zero_size(),
                     max: Size::new(viewport.width, viewport.height),
@@ -619,14 +621,6 @@ pub open spec fn layout_widget<T: OrderedField>(
                     child_limits, children, first, end, (fuel - 1) as nat,
                 );
                 layout_listview_body(limits, child_sizes, spacing, scroll_y, viewport, cn, first)
-            },
-            Widget::TextInput { preferred_size, .. } => {
-                Node {
-                    x: T::zero(),
-                    y: T::zero(),
-                    size: limits.resolve(preferred_size),
-                    children: Seq::empty(),
-                }
             },
         }
     }
@@ -655,23 +649,26 @@ pub open spec fn merge_layout<T: OrderedRing>(
 /// Extract the children sequence from any Widget variant.
 pub open spec fn get_children<T: OrderedRing>(widget: Widget<T>) -> Seq<Widget<T>> {
     match widget {
-        Widget::Leaf { .. } => Seq::empty(),
-        Widget::Column { children, .. } => children,
-        Widget::Row { children, .. } => children,
-        Widget::Stack { children, .. } => children,
-        Widget::Wrap { children, .. } => children,
-        Widget::Flex { children, .. } =>
-            Seq::new(children.len(), |i: int| children[i].child),
-        Widget::Grid { children, .. } => children,
-        Widget::Absolute { children, .. } =>
-            Seq::new(children.len(), |i: int| children[i].child),
-        Widget::Margin { child, .. } => Seq::empty().push(*child),
-        Widget::Conditional { child, .. } => Seq::empty().push(*child),
-        Widget::SizedBox { child, .. } => Seq::empty().push(*child),
-        Widget::AspectRatio { child, .. } => Seq::empty().push(*child),
-        Widget::ScrollView { child, .. } => Seq::empty().push(*child),
-        Widget::ListView { children, .. } => children,
-        Widget::TextInput { .. } => Seq::empty(),
+        Widget::Leaf(_) => Seq::empty(),
+        Widget::Wrapper(wrapper) => match wrapper {
+            WrapperWidget::Margin { child, .. } => Seq::empty().push(*child),
+            WrapperWidget::Conditional { child, .. } => Seq::empty().push(*child),
+            WrapperWidget::SizedBox { child, .. } => Seq::empty().push(*child),
+            WrapperWidget::AspectRatio { child, .. } => Seq::empty().push(*child),
+            WrapperWidget::ScrollView { child, .. } => Seq::empty().push(*child),
+        },
+        Widget::Container(container) => match container {
+            ContainerWidget::Column { children, .. } => children,
+            ContainerWidget::Row { children, .. } => children,
+            ContainerWidget::Stack { children, .. } => children,
+            ContainerWidget::Wrap { children, .. } => children,
+            ContainerWidget::Flex { children, .. } =>
+                Seq::new(children.len(), |i: int| children[i].child),
+            ContainerWidget::Grid { children, .. } => children,
+            ContainerWidget::Absolute { children, .. } =>
+                Seq::new(children.len(), |i: int| children[i].child),
+            ContainerWidget::ListView { children, .. } => children,
+        },
     }
 }
 
@@ -932,203 +929,170 @@ pub proof fn lemma_layout_widget_fuel_monotone<T: OrderedField>(
     // widget_converged(widget, fuel) implies fuel >= 1
     assert(fuel >= 1nat);
     match widget {
-        Widget::Leaf { .. } => {},
-        Widget::Column { padding, spacing, alignment, children } => {
-            assert(get_children(widget) =~= children);
-            let inner = limits.shrink(padding.horizontal(), padding.vertical());
-            if children.len() > 0 {
-                lemma_child_nodes_fuel_monotone(inner, children, (fuel - 1) as nat);
-            }
-            let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
-            assert(cn =~= widget_child_nodes(inner, children, fuel));
-            assert(layout_widget(limits, widget, fuel)
-                == layout_linear_body(limits, padding, spacing, alignment, cn, Axis::Vertical));
-            assert(layout_widget(limits, widget, fuel + 1)
-                == layout_linear_body(limits, padding, spacing, alignment,
-                    widget_child_nodes(inner, children, fuel), Axis::Vertical));
-        },
-        Widget::Row { padding, spacing, alignment, children } => {
-            assert(get_children(widget) =~= children);
-            let inner = limits.shrink(padding.horizontal(), padding.vertical());
-            if children.len() > 0 {
-                lemma_child_nodes_fuel_monotone(inner, children, (fuel - 1) as nat);
-            }
-            let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
-            assert(cn =~= widget_child_nodes(inner, children, fuel));
-            assert(layout_widget(limits, widget, fuel)
-                == layout_linear_body(limits, padding, spacing, alignment, cn, Axis::Horizontal));
-            assert(layout_widget(limits, widget, fuel + 1)
-                == layout_linear_body(limits, padding, spacing, alignment,
-                    widget_child_nodes(inner, children, fuel), Axis::Horizontal));
-        },
-        Widget::Stack { padding, h_align, v_align, children } => {
-            assert(get_children(widget) =~= children);
-            let inner = limits.shrink(padding.horizontal(), padding.vertical());
-            if children.len() > 0 {
-                lemma_child_nodes_fuel_monotone(inner, children, (fuel - 1) as nat);
-            }
-            let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
-            assert(cn =~= widget_child_nodes(inner, children, fuel));
-            assert(layout_widget(limits, widget, fuel)
-                == layout_stack_body(limits, padding, h_align, v_align, cn));
-            assert(layout_widget(limits, widget, fuel + 1)
-                == layout_stack_body(limits, padding, h_align, v_align,
-                    widget_child_nodes(inner, children, fuel)));
-        },
-        Widget::Wrap { padding, h_spacing, v_spacing, children } => {
-            assert(get_children(widget) =~= children);
-            let inner = limits.shrink(padding.horizontal(), padding.vertical());
-            if children.len() > 0 {
-                lemma_child_nodes_fuel_monotone(inner, children, (fuel - 1) as nat);
-            }
-            let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
-            assert(cn =~= widget_child_nodes(inner, children, fuel));
-            assert(layout_widget(limits, widget, fuel)
-                == layout_wrap_body(limits, padding, h_spacing, v_spacing, cn));
-            assert(layout_widget(limits, widget, fuel + 1)
-                == layout_wrap_body(limits, padding, h_spacing, v_spacing,
-                    widget_child_nodes(inner, children, fuel)));
-        },
-        Widget::Flex { padding, spacing, alignment, direction, children } => {
-            let gc = get_children(widget);
-            assert(gc =~= Seq::new(children.len(), |i: int| children[i].child));
-            // Connect get_children convergence to children[i].child convergence
-            assert forall|i: int| 0 <= i < children.len() implies
-                widget_converged(#[trigger] children[i].child, (fuel - 1) as nat)
-            by {
-                assert(gc[i] == children[i].child);
-            }
-            let inner = limits.shrink(padding.horizontal(), padding.vertical());
-            let weights = Seq::new(children.len(), |i: int| children[i].weight);
-            let total_weight = sum_weights(weights, weights.len() as nat);
-            let total_spacing = if children.len() > 0 {
-                repeated_add(spacing, (children.len() - 1) as nat)
-            } else { T::zero() };
-
-            let axis = direction.axis();
-            let am = inner.max.main_dim(axis).sub(total_spacing);
-            if children.len() > 0 {
-                lemma_flex_linear_child_nodes_fuel_monotone(
-                    inner, children, weights, total_weight, am, axis, (fuel - 1) as nat);
-            }
-            let cn = flex_linear_widget_child_nodes(
-                inner, children, weights, total_weight, am, axis, (fuel - 1) as nat);
-            assert(cn =~= flex_linear_widget_child_nodes(
-                inner, children, weights, total_weight, am, axis, fuel));
-            assert(layout_widget(limits, widget, fuel)
-                == layout_flex_linear_body(limits, padding, spacing, alignment, weights, cn, axis));
-            assert(layout_widget(limits, widget, fuel + 1)
-                == layout_flex_linear_body(limits, padding, spacing, alignment, weights,
-                    flex_linear_widget_child_nodes(inner, children, weights, total_weight, am, axis, fuel), axis));
-        },
-        Widget::Grid { padding, h_spacing, v_spacing, h_align, v_align,
-                       col_widths, row_heights, children } => {
-            assert(get_children(widget) =~= children);
-            let inner = limits.shrink(padding.horizontal(), padding.vertical());
-            if children.len() > 0 {
-                lemma_grid_child_nodes_fuel_monotone(
-                    inner, col_widths, row_heights, children,
-                    col_widths.len(), (fuel - 1) as nat);
-            }
-            let cn = grid_widget_child_nodes(
-                inner, col_widths, row_heights, children,
-                col_widths.len(), (fuel - 1) as nat);
-            assert(cn =~= grid_widget_child_nodes(
-                inner, col_widths, row_heights, children,
-                col_widths.len(), fuel));
-        },
-        Widget::Absolute { padding, children } => {
-            let gc = get_children(widget);
-            assert(gc =~= Seq::new(children.len(), |i: int| children[i].child));
-            assert forall|i: int| 0 <= i < children.len() implies
-                widget_converged(#[trigger] children[i].child, (fuel - 1) as nat)
-            by {
-                assert(gc[i] == children[i].child);
-            }
-            let inner = limits.shrink(padding.horizontal(), padding.vertical());
-            if children.len() > 0 {
-                lemma_absolute_child_nodes_fuel_monotone(inner, children, (fuel - 1) as nat);
-            }
-            let cn = absolute_widget_child_nodes(inner, children, (fuel - 1) as nat);
-            assert(cn =~= absolute_widget_child_nodes(inner, children, fuel));
-            let offsets = Seq::new(children.len(), |i: int|
-                (children[i].x, children[i].y));
-            assert(layout_widget(limits, widget, fuel)
-                == layout_absolute_body(limits, padding, cn, offsets));
-            assert(layout_widget(limits, widget, fuel + 1)
-                == layout_absolute_body(limits, padding,
-                    absolute_widget_child_nodes(inner, children, fuel), offsets));
-        },
-        Widget::Margin { margin, child } => {
-            let gc = get_children(widget);
-            assert(gc =~= Seq::empty().push(*child));
-            assert(widget_converged(*child, (fuel - 1) as nat)) by {
-                assert(gc[0] == *child);
-            }
-            let inner = limits.shrink(margin.horizontal(), margin.vertical());
-            lemma_layout_widget_fuel_monotone(inner, *child, (fuel - 1) as nat);
-        },
-        Widget::Conditional { visible, child } => {
-            if visible {
+        Widget::Leaf(_) => {},
+        Widget::Wrapper(wrapper) => match wrapper {
+            WrapperWidget::Margin { margin, child } => {
                 let gc = get_children(widget);
                 assert(gc =~= Seq::empty().push(*child));
                 assert(widget_converged(*child, (fuel - 1) as nat)) by {
                     assert(gc[0] == *child);
                 }
-                lemma_layout_widget_fuel_monotone(limits, *child, (fuel - 1) as nat);
-            } else {
-                // !visible: no recursion, both fuel levels produce same zero-size leaf
-            }
-        },
-        Widget::SizedBox { inner_limits, child } => {
-            let gc = get_children(widget);
-            assert(gc =~= Seq::empty().push(*child));
-            assert(widget_converged(*child, (fuel - 1) as nat)) by {
-                assert(gc[0] == *child);
-            }
-            let effective = limits.intersect(inner_limits);
-            lemma_layout_widget_fuel_monotone(effective, *child, (fuel - 1) as nat);
-        },
-        Widget::AspectRatio { ratio, child } => {
-            let gc = get_children(widget);
-            assert(gc =~= Seq::empty().push(*child));
-            assert(widget_converged(*child, (fuel - 1) as nat)) by {
-                assert(gc[0] == *child);
-            }
-            let w1 = limits.max.width;
-            let h1 = w1.div(ratio);
-            if h1.le(limits.max.height) {
-                let eff = Limits {
-                    min: limits.min,
-                    max: Size::new(w1, h1),
+                let inner = limits.shrink(margin.horizontal(), margin.vertical());
+                lemma_layout_widget_fuel_monotone(inner, *child, (fuel - 1) as nat);
+            },
+            WrapperWidget::Conditional { visible, child } => {
+                if visible {
+                    let gc = get_children(widget);
+                    assert(gc =~= Seq::empty().push(*child));
+                    assert(widget_converged(*child, (fuel - 1) as nat)) by {
+                        assert(gc[0] == *child);
+                    }
+                    lemma_layout_widget_fuel_monotone(limits, *child, (fuel - 1) as nat);
+                } else {
+                    // !visible: no recursion, both fuel levels produce same zero-size leaf
+                }
+            },
+            WrapperWidget::SizedBox { inner_limits, child } => {
+                let gc = get_children(widget);
+                assert(gc =~= Seq::empty().push(*child));
+                assert(widget_converged(*child, (fuel - 1) as nat)) by {
+                    assert(gc[0] == *child);
+                }
+                let effective = limits.intersect(inner_limits);
+                lemma_layout_widget_fuel_monotone(effective, *child, (fuel - 1) as nat);
+            },
+            WrapperWidget::AspectRatio { ratio, child } => {
+                let gc = get_children(widget);
+                assert(gc =~= Seq::empty().push(*child));
+                assert(widget_converged(*child, (fuel - 1) as nat)) by {
+                    assert(gc[0] == *child);
+                }
+                let w1 = limits.max.width;
+                let h1 = w1.div(ratio);
+                if h1.le(limits.max.height) {
+                    let eff = Limits {
+                        min: limits.min,
+                        max: Size::new(w1, h1),
+                    };
+                    lemma_layout_widget_fuel_monotone(eff, *child, (fuel - 1) as nat);
+                } else {
+                    let h2 = limits.max.height;
+                    let w2 = h2.mul(ratio);
+                    let eff = Limits {
+                        min: limits.min,
+                        max: Size::new(w2, h2),
+                    };
+                    lemma_layout_widget_fuel_monotone(eff, *child, (fuel - 1) as nat);
+                }
+            },
+            WrapperWidget::ScrollView { viewport, scroll_x, scroll_y, child } => {
+                let gc = get_children(widget);
+                assert(gc =~= Seq::empty().push(*child));
+                assert(widget_converged(*child, (fuel - 1) as nat)) by {
+                    assert(gc[0] == *child);
+                }
+                let child_limits = Limits {
+                    min: Size::zero_size(),
+                    max: viewport,
                 };
-                lemma_layout_widget_fuel_monotone(eff, *child, (fuel - 1) as nat);
-            } else {
-                let h2 = limits.max.height;
-                let w2 = h2.mul(ratio);
-                let eff = Limits {
-                    min: limits.min,
-                    max: Size::new(w2, h2),
-                };
-                lemma_layout_widget_fuel_monotone(eff, *child, (fuel - 1) as nat);
-            }
+                lemma_layout_widget_fuel_monotone(child_limits, *child, (fuel - 1) as nat);
+            },
         },
-        Widget::ScrollView { viewport, scroll_x, scroll_y, child } => {
-            let gc = get_children(widget);
-            assert(gc =~= Seq::empty().push(*child));
-            assert(widget_converged(*child, (fuel - 1) as nat)) by {
-                assert(gc[0] == *child);
-            }
-            let child_limits = Limits {
-                min: Size::zero_size(),
-                max: viewport,
-            };
-            lemma_layout_widget_fuel_monotone(child_limits, *child, (fuel - 1) as nat);
-        },
-        Widget::TextInput { .. } => {
-            // Leaf-like: no recursion, both fuel levels produce same result
-        },
-        Widget::ListView { spacing, scroll_y, viewport, children } => {
+        Widget::Container(container) => match container {
+            ContainerWidget::Column { padding, spacing, alignment, children } => {
+                assert(get_children(widget) =~= children);
+                let inner = limits.shrink(padding.horizontal(), padding.vertical());
+                if children.len() > 0 {
+                    lemma_child_nodes_fuel_monotone(inner, children, (fuel - 1) as nat);
+                }
+                let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
+                assert(cn =~= widget_child_nodes(inner, children, fuel));
+            },
+            ContainerWidget::Row { padding, spacing, alignment, children } => {
+                assert(get_children(widget) =~= children);
+                let inner = limits.shrink(padding.horizontal(), padding.vertical());
+                if children.len() > 0 {
+                    lemma_child_nodes_fuel_monotone(inner, children, (fuel - 1) as nat);
+                }
+                let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
+                assert(cn =~= widget_child_nodes(inner, children, fuel));
+            },
+            ContainerWidget::Stack { padding, h_align, v_align, children } => {
+                assert(get_children(widget) =~= children);
+                let inner = limits.shrink(padding.horizontal(), padding.vertical());
+                if children.len() > 0 {
+                    lemma_child_nodes_fuel_monotone(inner, children, (fuel - 1) as nat);
+                }
+                let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
+                assert(cn =~= widget_child_nodes(inner, children, fuel));
+            },
+            ContainerWidget::Wrap { padding, h_spacing, v_spacing, children } => {
+                assert(get_children(widget) =~= children);
+                let inner = limits.shrink(padding.horizontal(), padding.vertical());
+                if children.len() > 0 {
+                    lemma_child_nodes_fuel_monotone(inner, children, (fuel - 1) as nat);
+                }
+                let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
+                assert(cn =~= widget_child_nodes(inner, children, fuel));
+            },
+            ContainerWidget::Flex { padding, spacing, alignment, direction, children } => {
+                let gc = get_children(widget);
+                assert(gc =~= Seq::new(children.len(), |i: int| children[i].child));
+                assert forall|i: int| 0 <= i < children.len() implies
+                    widget_converged(#[trigger] children[i].child, (fuel - 1) as nat)
+                by {
+                    assert(gc[i] == children[i].child);
+                }
+                let inner = limits.shrink(padding.horizontal(), padding.vertical());
+                let weights = Seq::new(children.len(), |i: int| children[i].weight);
+                let total_weight = sum_weights(weights, weights.len() as nat);
+                let total_spacing = if children.len() > 0 {
+                    repeated_add(spacing, (children.len() - 1) as nat)
+                } else { T::zero() };
+
+                let axis = direction.axis();
+                let am = inner.max.main_dim(axis).sub(total_spacing);
+                if children.len() > 0 {
+                    lemma_flex_linear_child_nodes_fuel_monotone(
+                        inner, children, weights, total_weight, am, axis, (fuel - 1) as nat);
+                }
+                let cn = flex_linear_widget_child_nodes(
+                    inner, children, weights, total_weight, am, axis, (fuel - 1) as nat);
+                assert(cn =~= flex_linear_widget_child_nodes(
+                    inner, children, weights, total_weight, am, axis, fuel));
+            },
+            ContainerWidget::Grid { padding, h_spacing, v_spacing, h_align, v_align,
+                           col_widths, row_heights, children } => {
+                assert(get_children(widget) =~= children);
+                let inner = limits.shrink(padding.horizontal(), padding.vertical());
+                if children.len() > 0 {
+                    lemma_grid_child_nodes_fuel_monotone(
+                        inner, col_widths, row_heights, children,
+                        col_widths.len(), (fuel - 1) as nat);
+                }
+                let cn = grid_widget_child_nodes(
+                    inner, col_widths, row_heights, children,
+                    col_widths.len(), (fuel - 1) as nat);
+                assert(cn =~= grid_widget_child_nodes(
+                    inner, col_widths, row_heights, children,
+                    col_widths.len(), fuel));
+            },
+            ContainerWidget::Absolute { padding, children } => {
+                let gc = get_children(widget);
+                assert(gc =~= Seq::new(children.len(), |i: int| children[i].child));
+                assert forall|i: int| 0 <= i < children.len() implies
+                    widget_converged(#[trigger] children[i].child, (fuel - 1) as nat)
+                by {
+                    assert(gc[i] == children[i].child);
+                }
+                let inner = limits.shrink(padding.horizontal(), padding.vertical());
+                if children.len() > 0 {
+                    lemma_absolute_child_nodes_fuel_monotone(inner, children, (fuel - 1) as nat);
+                }
+                let cn = absolute_widget_child_nodes(inner, children, (fuel - 1) as nat);
+                assert(cn =~= absolute_widget_child_nodes(inner, children, fuel));
+            },
+            ContainerWidget::ListView { spacing, scroll_y, viewport, children } => {
             let gc = get_children(widget);
             assert(gc =~= children);
             let child_limits = Limits {
@@ -1184,6 +1148,7 @@ pub proof fn lemma_layout_widget_fuel_monotone<T: OrderedField>(
                 lemma_layout_widget_fuel_monotone(child_limits, children[ci], (fuel - 1) as nat);
             };
             assert(cn1 =~= cn2);
+            },
         },
     }
 }
@@ -1309,7 +1274,7 @@ pub open spec fn focused_text_input_id<T: OrderedRing>(
     widget: Widget<T>, path: Seq<nat>,
 ) -> Option<nat> {
     match widget_at_path(widget, path) {
-        Some(Widget::TextInput { text_input_id, .. }) => Some(text_input_id),
+        Some(Widget::Leaf(LeafWidget::TextInput { text_input_id, .. })) => Some(text_input_id),
         _ => None,
     }
 }
@@ -1319,7 +1284,7 @@ pub open spec fn focused_text_input_config<T: OrderedRing>(
     widget: Widget<T>, path: Seq<nat>,
 ) -> Option<TextInputConfig> {
     match widget_at_path(widget, path) {
-        Some(Widget::TextInput { config, .. }) => Some(config),
+        Some(Widget::Leaf(LeafWidget::TextInput { config, .. })) => Some(config),
         _ => None,
     }
 }

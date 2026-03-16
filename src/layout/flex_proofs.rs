@@ -652,11 +652,11 @@ pub proof fn lemma_flex_column_children_within_bounds<T: OrderedField>(
             v.add(total_spacing).le(limits.max.height)
         }),
     ensures
-        crate::widget::layout_widget(limits, crate::widget::Widget::Flex {
+        crate::widget::layout_widget(limits, crate::widget::Widget::Container(crate::widget::ContainerWidget::Flex {
             padding, spacing, alignment,
             direction: crate::widget::FlexDirection::Column,
             children,
-        }, fuel).children_within_bounds(),
+        }), fuel).children_within_bounds(),
 {
     reveal(flex_column_layout);
     let h = padding.horizontal();
@@ -1108,11 +1108,11 @@ pub proof fn lemma_flex_row_children_within_bounds<T: OrderedField>(
             h.add(total_spacing).le(limits.max.width)
         }),
     ensures
-        crate::widget::layout_widget(limits, crate::widget::Widget::Flex {
+        crate::widget::layout_widget(limits, crate::widget::Widget::Container(crate::widget::ContainerWidget::Flex {
             padding, spacing, alignment,
             direction: crate::widget::FlexDirection::Row,
             children,
-        }, fuel).children_within_bounds(),
+        }), fuel).children_within_bounds(),
 {
     reveal(flex_row_layout);
     let h = padding.horizontal();

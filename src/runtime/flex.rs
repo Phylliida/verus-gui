@@ -6,7 +6,7 @@ use crate::runtime::size::RuntimeSize;
 use crate::runtime::limits::RuntimeLimits;
 use crate::runtime::padding::RuntimePadding;
 use crate::runtime::node::RuntimeNode;
-use crate::runtime::column::align_offset_exec;
+use crate::runtime::linear::align_offset_exec;
 use crate::size::Size;
 use crate::node::Node;
 use crate::alignment::Alignment;

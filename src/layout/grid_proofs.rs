@@ -1017,10 +1017,10 @@ pub proof fn lemma_grid_children_within_bounds<T: OrderedField>(
             children, (fuel - 1) as nat,
         ),
     ensures
-        crate::widget::layout_widget(limits, crate::widget::Widget::Grid {
+        crate::widget::layout_widget(limits, crate::widget::Widget::Container(crate::widget::ContainerWidget::Grid {
             padding, h_spacing, v_spacing, h_align, v_align,
             col_widths, row_heights, children,
-        }, fuel).children_within_bounds(),
+        }), fuel).children_within_bounds(),
 {
     let h = padding.horizontal();
     let v = padding.vertical();
