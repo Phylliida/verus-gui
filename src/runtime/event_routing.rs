@@ -41,7 +41,26 @@ fn build_sub_path(path: &Vec<usize>) -> (out: Vec<usize>)
 
 /// Helper: get the child at index from a RuntimeWidget container variant.
 /// Returns None if the widget has no children or index is out of bounds.
-fn get_runtime_child_at<'a>(widget: &'a RuntimeWidget, idx: usize) -> (out: Option<&'a RuntimeWidget>)
+/// Proved: the returned child's model matches get_children(widget.model())[idx],
+/// and the child inherits wf_spec(fuel - 1) from the parent's wf_spec(fuel).
+fn get_runtime_child_at<'a>(
+    widget: &'a RuntimeWidget,
+    idx: usize,
+    ghost_fuel: Ghost<nat>,
+) -> (out: Option<&'a RuntimeWidget>)
+    requires
+        ghost_fuel@ > 0,
+        widget.wf_spec(ghost_fuel@),
+    ensures
+        match out {
+            Some(child) => {
+                let spec_children = get_children::<RationalModel>(widget.model());
+                &&& (idx as nat) < spec_children.len()
+                &&& child.model() == spec_children[idx as int]
+                &&& child.wf_spec((ghost_fuel@ - 1) as nat)
+            },
+            None => (idx as nat) >= get_children::<RationalModel>(widget.model()).len(),
+        },
 {
     match widget {
         RuntimeWidget::Leaf(_) => None,
@@ -79,13 +98,27 @@ fn get_runtime_child_at<'a>(widget: &'a RuntimeWidget, idx: usize) -> (out: Opti
                     if idx < children.len() { Some(&children[idx]) } else { None }
                 },
                 RuntimeContainerWidget::Flex { children, .. } => {
-                    if idx < children.len() { Some(&children[idx].child) } else { None }
+                    if idx < children.len() {
+                        proof {
+                            // Help Z3: FlexItem.model().child == FlexItem.child.model()
+                            assert(children@[idx as int].model().child
+                                == children@[idx as int].child.model());
+                        }
+                        Some(&children[idx].child)
+                    } else { None }
                 },
                 RuntimeContainerWidget::Grid { children, .. } => {
                     if idx < children.len() { Some(&children[idx]) } else { None }
                 },
                 RuntimeContainerWidget::Absolute { children, .. } => {
-                    if idx < children.len() { Some(&children[idx].child) } else { None }
+                    if idx < children.len() {
+                        proof {
+                            // Help Z3: AbsoluteChild.model().child == AbsoluteChild.child.model()
+                            assert(children@[idx as int].model().child
+                                == children@[idx as int].child.model());
+                        }
+                        Some(&children[idx].child)
+                    } else { None }
                 },
                 RuntimeContainerWidget::ListView { children, .. } => {
                     if idx < children.len() { Some(&children[idx]) } else { None }
@@ -103,6 +136,7 @@ pub fn focused_text_input_id_exec(
 ) -> (out: Option<usize>)
     requires
         path_offset <= path@.len(),
+        widget.wf_spec((path@.len() - path_offset + 1) as nat),
     ensures
         ({
             let spec_path = Seq::new((path@.len() - path_offset) as nat, |i: int|
@@ -118,32 +152,76 @@ pub fn focused_text_input_id_exec(
 {
     let ghost spec_path = Seq::new((path@.len() - path_offset) as nat, |i: int|
         path@[i + path_offset as int] as nat);
+    let ghost fuel = (path@.len() - path_offset + 1) as nat;
 
     if path_offset == path.len() {
+        proof {
+            // spec_path is empty ⇒ widget_at_path returns Some(widget.model())
+            assert(spec_path =~= Seq::<nat>::empty());
+            lemma_widget_at_path_empty::<RationalModel>(widget.model());
+        }
         match widget {
             RuntimeWidget::Leaf(RuntimeLeafWidget::TextInput { text_input_id, .. }) => {
-                assume(focused_text_input_id::<RationalModel>(
-                    widget.model(), spec_path) == Some(*text_input_id as nat));
+                // widget.model() = Widget::Leaf(LeafWidget::TextInput { text_input_id: id, .. })
+                // focused_text_input_id matches ⇒ Some(id)
                 return Some(*text_input_id);
             },
-            _ => {
-                assume(focused_text_input_id::<RationalModel>(
-                    widget.model(), spec_path).is_none());
+            RuntimeWidget::Leaf(RuntimeLeafWidget::Leaf { .. }) => {
+                return None;
+            },
+            RuntimeWidget::Wrapper(_) => {
+                return None;
+            },
+            RuntimeWidget::Container(_) => {
                 return None;
             },
         }
     }
 
     let idx = path[path_offset];
-    let child = get_runtime_child_at(widget, idx);
+    let ghost gf = fuel;
+    let child = get_runtime_child_at(widget, idx, Ghost(gf));
     match child {
         Some(c) => {
-            assume(false); // Trust: child model + get_children correspondence
+            proof {
+                let spec_children = get_children::<RationalModel>(widget.model());
+                // From get_runtime_child_at ensures:
+                //   c.model() == spec_children[idx]
+                //   c.wf_spec(fuel - 1)
+
+                assert(spec_path.len() > 0);
+                assert(spec_path[0] == idx as nat);
+
+                // Connect spec_path[1..] to the recursive invocation's spec_path
+                let sub_spec_path = Seq::new(
+                    (path@.len() - (path_offset + 1)) as nat,
+                    |i: int| path@[i + (path_offset + 1) as int] as nat,
+                );
+                assert(spec_path.subrange(1, spec_path.len() as int) =~= sub_spec_path);
+
+                // Unfold widget_at_path one step
+                assert(widget_at_path::<RationalModel>(widget.model(), spec_path)
+                    == widget_at_path::<RationalModel>(
+                        spec_children[idx as int],
+                        spec_path.subrange(1, spec_path.len() as int)));
+
+                // Chain: c.model() == spec_children[idx], sub_spec_path =~= spec_path[1..]
+                assert(widget_at_path::<RationalModel>(widget.model(), spec_path)
+                    == widget_at_path::<RationalModel>(c.model(), sub_spec_path));
+
+                // Therefore focused_text_input_id is the same for both
+                assert(focused_text_input_id::<RationalModel>(widget.model(), spec_path)
+                    == focused_text_input_id::<RationalModel>(c.model(), sub_spec_path));
+            }
             focused_text_input_id_exec(c, path, path_offset + 1)
         },
         None => {
-            assume(focused_text_input_id::<RationalModel>(
-                widget.model(), spec_path).is_none());
+            proof {
+                // idx >= get_children(widget.model()).len()
+                // widget_at_path returns None when index is out of bounds
+                assert(spec_path.len() > 0);
+                assert(spec_path[0] == idx as nat);
+            }
             None
         },
     }
@@ -160,7 +238,7 @@ pub fn node_local_coords_exec(
     py: RuntimeRational,
 ) -> (out: (RuntimeRational, RuntimeRational))
     requires
-        node.wf_spec(),
+        node.wf_deep((path@.len() - path_offset) as nat),
         px.wf_spec(),
         py.wf_spec(),
         path_offset <= path@.len(),
@@ -184,12 +262,36 @@ pub fn node_local_coords_exec(
         return (px, py);
     }
 
+    proof {
+        let depth = (path@.len() - path_offset) as nat;
+        // depth >= 1 since path_offset < path.len()
+        assert(depth >= 1nat);
+        // wf_deep(depth >= 1) gives children's wf_deep and model correspondence
+        assert(node.children@[idx as int].wf_deep((depth - 1) as nat));
+        assert(node.children@[idx as int]@ == node@.children[idx as int]);
+    }
+
     let child_x = copy_rational(&node.children[idx].x);
     let child_y = copy_rational(&node.children[idx].y);
     let local_x = px.sub(&child_x);
     let local_y = py.sub(&child_y);
 
-    assume(false); // Trust: child wf + spec correspondence
+    proof {
+        let ghost spec_path = Seq::new((path@.len() - path_offset) as nat, |i: int|
+            path@[i + path_offset as int] as nat);
+        let ghost sub_spec_path = Seq::new(
+            (path@.len() - (path_offset + 1)) as nat,
+            |i: int| path@[i + (path_offset + 1) as int] as nat,
+        );
+        assert(spec_path[0] == idx as nat);
+        assert(spec_path.subrange(1, spec_path.len() as int) =~= sub_spec_path);
+
+        // Connect local coords to spec
+        assert(node.children@[idx as int].x@ == node.children@[idx as int]@.x);
+        assert(child_x@ == node@.children[idx as int].x);
+        assert(child_y@ == node@.children[idx as int].y);
+    }
+
     node_local_coords_exec(&node.children[idx], path, path_offset + 1, local_x, local_y)
 }
 
