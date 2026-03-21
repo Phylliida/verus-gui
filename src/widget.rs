@@ -1307,4 +1307,35 @@ pub proof fn lemma_widget_at_path_valid<T: OrderedRing>(
         path.len() == 0 ==> widget_at_path(widget, path).is_some(),
 {}
 
+/// Layout is deterministic: once fuel exceeds the widget tree depth,
+/// the result is independent of the specific fuel value.
+/// Generalizes lemma_layout_widget_fuel_monotone from fuel vs fuel+1
+/// to any two converged fuel levels.
+pub proof fn lemma_layout_deterministic<T: OrderedField>(
+    limits: Limits<T>,
+    widget: Widget<T>,
+    fuel1: nat,
+    fuel2: nat,
+)
+    requires
+        widget_converged(widget, fuel1),
+        widget_converged(widget, fuel2),
+    ensures
+        layout_widget(limits, widget, fuel1) == layout_widget(limits, widget, fuel2),
+    decreases if fuel1 <= fuel2 { fuel2 - fuel1 } else { fuel1 - fuel2 },
+{
+    if fuel1 == fuel2 {
+        // trivial
+    } else if fuel1 < fuel2 {
+        // Induct: fuel1 -> fuel1+1 -> ... -> fuel2
+        lemma_layout_widget_fuel_monotone(limits, widget, fuel1);
+        // widget_converged is monotone (existing lemma at line ~1160)
+        lemma_widget_converged_monotone(widget, fuel1, fuel1 + 1);
+        lemma_layout_deterministic(limits, widget, fuel1 + 1, fuel2);
+    } else {
+        // fuel2 < fuel1: symmetric
+        lemma_layout_deterministic(limits, widget, fuel2, fuel1);
+    }
+}
+
 } // verus!

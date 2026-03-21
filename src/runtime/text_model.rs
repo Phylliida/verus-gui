@@ -3078,4 +3078,101 @@ pub fn wrapped_visual_to_pos_exec(
     text.len()
 }
 
+// ── Unicode boundary exec bridges ────────────────────────────────
+
+/// Compute grapheme cluster boundaries using unicode-segmentation.
+/// Bridges the uninterpreted spec fn to runtime.
+#[verifier::external_body]
+pub fn grapheme_boundaries_exec(text: &Vec<char>) -> (out: Vec<usize>)
+    requires text@.len() > 0,
+    ensures
+        out@.len() == grapheme_boundaries(text@).len(),
+        forall|i: int| 0 <= i < out@.len() ==>
+            out@[i] as nat == (#[trigger] grapheme_boundaries(text@))[i],
+{
+    use unicode_segmentation::UnicodeSegmentation;
+    let s: String = text.iter().collect();
+    let mut bounds: Vec<usize> = Vec::new();
+    bounds.push(0);
+    let mut offset: usize = 0;
+    for grapheme in s.graphemes(true) {
+        offset += grapheme.chars().count();
+        bounds.push(offset);
+    }
+    bounds
+}
+
+/// Compute word start boundaries using unicode-segmentation.
+#[verifier::external_body]
+pub fn word_start_boundaries_exec(text: &Vec<char>) -> (out: Vec<usize>)
+    requires text@.len() > 0,
+    ensures
+        out@.len() == word_start_boundaries(text@).len(),
+        forall|i: int| 0 <= i < out@.len() ==>
+            out@[i] as nat == (#[trigger] word_start_boundaries(text@))[i],
+{
+    use unicode_segmentation::UnicodeSegmentation;
+    let s: String = text.iter().collect();
+    let mut bounds: Vec<usize> = Vec::new();
+    bounds.push(0);
+    let mut offset: usize = 0;
+    for word in s.split_word_bounds() {
+        if offset > 0 {
+            bounds.push(offset);
+        }
+        offset += word.chars().count();
+    }
+    if bounds.last() != Some(&text.len()) {
+        bounds.push(text.len());
+    }
+    bounds
+}
+
+/// Compute word end boundaries using unicode-segmentation.
+#[verifier::external_body]
+pub fn word_end_boundaries_exec(text: &Vec<char>) -> (out: Vec<usize>)
+    requires text@.len() > 0,
+    ensures
+        out@.len() == word_end_boundaries(text@).len(),
+        forall|i: int| 0 <= i < out@.len() ==>
+            out@[i] as nat == (#[trigger] word_end_boundaries(text@))[i],
+{
+    use unicode_segmentation::UnicodeSegmentation;
+    let s: String = text.iter().collect();
+    let mut bounds: Vec<usize> = Vec::new();
+    bounds.push(0);
+    let mut offset: usize = 0;
+    for word in s.split_word_bounds() {
+        offset += word.chars().count();
+        bounds.push(offset);
+    }
+    bounds
+}
+
+/// Compute line break opportunities.
+#[verifier::external_body]
+pub fn line_break_opportunities_exec(text: &Vec<char>) -> (out: Vec<usize>)
+    requires text@.len() > 0,
+    ensures
+        out@.len() == line_break_opportunities(text@).len(),
+        forall|i: int| 0 <= i < out@.len() ==>
+            out@[i] as nat == (#[trigger] line_break_opportunities(text@))[i],
+{
+    // Line breaks occur at '\n' characters
+    let s: String = text.iter().collect();
+    let mut bounds: Vec<usize> = Vec::new();
+    bounds.push(0);
+    let mut char_offset: usize = 0;
+    for ch in s.chars() {
+        char_offset += 1;
+        if ch == '\n' {
+            bounds.push(char_offset);
+        }
+    }
+    if bounds.last() != Some(&text.len()) {
+        bounds.push(text.len());
+    }
+    bounds
+}
+
 } // verus!

@@ -5091,4 +5091,64 @@ pub proof fn lemma_linear_children_within_bounds<T: OrderedField>(
     };
 }
 
+/// A column with zero children produces a padding-only node.
+pub proof fn lemma_column_zero_children<T: OrderedField>(
+    limits: Limits<T>,
+    padding: Padding<T>,
+    spacing: T,
+    alignment: Alignment,
+)
+    ensures
+        ({
+            let sizes: Seq<Size<T>> = Seq::empty();
+            let result = column_layout(limits, padding, spacing, alignment, sizes);
+            &&& result.children.len() == 0
+            &&& result.size == limits.resolve(Size::new(
+                limits.max.width,
+                padding.vertical(),
+            ))
+        }),
+{
+    reveal(column_layout);
+}
+
+/// A row with zero children produces a padding-only node.
+pub proof fn lemma_row_zero_children<T: OrderedField>(
+    limits: Limits<T>,
+    padding: Padding<T>,
+    spacing: T,
+    alignment: Alignment,
+)
+    ensures
+        ({
+            let sizes: Seq<Size<T>> = Seq::empty();
+            let result = row_layout(limits, padding, spacing, alignment, sizes);
+            &&& result.children.len() == 0
+            &&& result.size == limits.resolve(Size::new(
+                padding.horizontal(),
+                limits.max.height,
+            ))
+        }),
+{
+    reveal(row_layout);
+}
+
+/// Linear layout with zero children produces a padding-only node.
+pub proof fn lemma_linear_zero_children<T: OrderedField>(
+    limits: Limits<T>,
+    padding: Padding<T>,
+    spacing: T,
+    alignment: Alignment,
+    axis: Axis,
+)
+    ensures
+        ({
+            let sizes: Seq<Size<T>> = Seq::empty();
+            let result = linear_layout(limits, padding, spacing, alignment, sizes, axis);
+            result.children.len() == 0
+        }),
+{
+    reveal(linear_layout);
+}
+
 } // verus!
