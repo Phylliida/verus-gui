@@ -627,6 +627,203 @@ pub fn widgets_shallow_equal_exec(a: &RuntimeWidget, b: &RuntimeWidget) -> (out:
     }
 }
 
+// ── Deep widget comparison ──────────────────────────────────────
+
+/// Compare two Vec<RuntimeWidget> element-wise using deep comparison.
+fn vec_widgets_deep_equal(a: &Vec<RuntimeWidget>, b: &Vec<RuntimeWidget>, depth: usize) -> (out: bool)
+    requires
+        a@.len() == b@.len(),
+        depth > 0,
+        forall|i: int| 0 <= i < a@.len() ==> (#[trigger] a@[i]).wf_spec(depth as nat),
+        forall|i: int| 0 <= i < b@.len() ==> (#[trigger] b@[i]).wf_spec(depth as nat),
+    decreases depth, 1nat,
+{
+    let mut i: usize = 0;
+    while i < a.len()
+        invariant
+            0 <= i <= a@.len(),
+            a@.len() == b@.len(),
+            depth > 0,
+            forall|j: int| 0 <= j < a@.len() ==> (#[trigger] a@[j]).wf_spec(depth as nat),
+            forall|j: int| 0 <= j < b@.len() ==> (#[trigger] b@[j]).wf_spec(depth as nat),
+        decreases a@.len() - i,
+    {
+        if !widgets_deep_equal_exec(&a[i], &b[i], depth) {
+            return false;
+        }
+        i = i + 1;
+    }
+    true
+}
+
+/// Compare two Vec<RuntimeFlexItem> element-wise: weights + child widgets.
+fn vec_flex_deep_equal(a: &Vec<RuntimeFlexItem>, b: &Vec<RuntimeFlexItem>, depth: usize) -> (out: bool)
+    requires
+        a@.len() == b@.len(),
+        depth > 0,
+        forall|i: int| 0 <= i < a@.len() ==> (#[trigger] a@[i]).weight.wf_spec(),
+        forall|i: int| 0 <= i < b@.len() ==> (#[trigger] b@[i]).weight.wf_spec(),
+        forall|i: int| 0 <= i < a@.len() ==> (#[trigger] a@[i]).child.wf_spec(depth as nat),
+        forall|i: int| 0 <= i < b@.len() ==> (#[trigger] b@[i]).child.wf_spec(depth as nat),
+    decreases depth, 1nat,
+{
+    let mut i: usize = 0;
+    while i < a.len()
+        invariant
+            0 <= i <= a@.len(),
+            a@.len() == b@.len(),
+            depth > 0,
+            forall|j: int| 0 <= j < a@.len() ==> (#[trigger] a@[j]).weight.wf_spec(),
+            forall|j: int| 0 <= j < b@.len() ==> (#[trigger] b@[j]).weight.wf_spec(),
+            forall|j: int| 0 <= j < a@.len() ==> (#[trigger] a@[j]).child.wf_spec(depth as nat),
+            forall|j: int| 0 <= j < b@.len() ==> (#[trigger] b@[j]).child.wf_spec(depth as nat),
+        decreases a@.len() - i,
+    {
+        if !a[i].weight.eq(&b[i].weight) {
+            return false;
+        }
+        if !widgets_deep_equal_exec(&a[i].child, &b[i].child, depth) {
+            return false;
+        }
+        i = i + 1;
+    }
+    true
+}
+
+/// Compare two Vec<RuntimeAbsoluteChild> element-wise: offsets + child widgets.
+fn vec_absolute_deep_equal(a: &Vec<RuntimeAbsoluteChild>, b: &Vec<RuntimeAbsoluteChild>, depth: usize) -> (out: bool)
+    requires
+        a@.len() == b@.len(),
+        depth > 0,
+        forall|i: int| 0 <= i < a@.len() ==> (#[trigger] a@[i]).x.wf_spec(),
+        forall|i: int| 0 <= i < a@.len() ==> (#[trigger] a@[i]).y.wf_spec(),
+        forall|i: int| 0 <= i < b@.len() ==> (#[trigger] b@[i]).x.wf_spec(),
+        forall|i: int| 0 <= i < b@.len() ==> (#[trigger] b@[i]).y.wf_spec(),
+        forall|i: int| 0 <= i < a@.len() ==> (#[trigger] a@[i]).child.wf_spec(depth as nat),
+        forall|i: int| 0 <= i < b@.len() ==> (#[trigger] b@[i]).child.wf_spec(depth as nat),
+    decreases depth, 1nat,
+{
+    let mut i: usize = 0;
+    while i < a.len()
+        invariant
+            0 <= i <= a@.len(),
+            a@.len() == b@.len(),
+            depth > 0,
+            forall|j: int| 0 <= j < a@.len() ==> (#[trigger] a@[j]).x.wf_spec(),
+            forall|j: int| 0 <= j < a@.len() ==> (#[trigger] a@[j]).y.wf_spec(),
+            forall|j: int| 0 <= j < b@.len() ==> (#[trigger] b@[j]).x.wf_spec(),
+            forall|j: int| 0 <= j < b@.len() ==> (#[trigger] b@[j]).y.wf_spec(),
+            forall|j: int| 0 <= j < a@.len() ==> (#[trigger] a@[j]).child.wf_spec(depth as nat),
+            forall|j: int| 0 <= j < b@.len() ==> (#[trigger] b@[j]).child.wf_spec(depth as nat),
+        decreases a@.len() - i,
+    {
+        if !a[i].x.eq(&b[i].x) || !a[i].y.eq(&b[i].y) {
+            return false;
+        }
+        if !widgets_deep_equal_exec(&a[i].child, &b[i].child, depth) {
+            return false;
+        }
+        i = i + 1;
+    }
+    true
+}
+
+/// Deep comparison of two widgets: same variant, same parameters, and
+/// recursively equal children. Returns false conservatively when depth
+/// is insufficient (non-leaf widgets need depth >= 2).
+pub fn widgets_deep_equal_exec(a: &RuntimeWidget, b: &RuntimeWidget, depth: usize) -> (out: bool)
+    requires
+        depth > 0,
+        a.wf_spec(depth as nat),
+        b.wf_spec(depth as nat),
+    decreases depth, 0nat,
+{
+    // Check shallow equality first (parameters + variant match + child count)
+    if !widgets_shallow_equal_exec(a, b) {
+        return false;
+    }
+
+    // Parameters match. Now recursively compare children.
+    match (a, b) {
+        (RuntimeWidget::Leaf(_), RuntimeWidget::Leaf(_)) => {
+            // No children — shallow equality is sufficient.
+            true
+        },
+        (RuntimeWidget::Wrapper(wa), RuntimeWidget::Wrapper(wb)) => {
+            if depth <= 1 {
+                return false; // not enough depth for child comparison
+            }
+            match (wa, wb) {
+                (RuntimeWrapperWidget::Margin { child: ca, .. },
+                 RuntimeWrapperWidget::Margin { child: cb, .. }) =>
+                    widgets_deep_equal_exec(ca, cb, depth - 1),
+                (RuntimeWrapperWidget::Conditional { child: ca, .. },
+                 RuntimeWrapperWidget::Conditional { child: cb, .. }) =>
+                    widgets_deep_equal_exec(ca, cb, depth - 1),
+                (RuntimeWrapperWidget::SizedBox { child: ca, .. },
+                 RuntimeWrapperWidget::SizedBox { child: cb, .. }) =>
+                    widgets_deep_equal_exec(ca, cb, depth - 1),
+                (RuntimeWrapperWidget::AspectRatio { child: ca, .. },
+                 RuntimeWrapperWidget::AspectRatio { child: cb, .. }) =>
+                    widgets_deep_equal_exec(ca, cb, depth - 1),
+                (RuntimeWrapperWidget::ScrollView { child: ca, .. },
+                 RuntimeWrapperWidget::ScrollView { child: cb, .. }) =>
+                    widgets_deep_equal_exec(ca, cb, depth - 1),
+                _ => false,
+            }
+        },
+        (RuntimeWidget::Container(ca), RuntimeWidget::Container(cb)) => {
+            if depth <= 1 {
+                return false;
+            }
+            match (ca, cb) {
+                (RuntimeContainerWidget::Column { children: ca, .. },
+                 RuntimeContainerWidget::Column { children: cb, .. }) => {
+                    if ca.len() != cb.len() { return false; }
+                    vec_widgets_deep_equal(ca, cb, depth - 1)
+                },
+                (RuntimeContainerWidget::Row { children: ca, .. },
+                 RuntimeContainerWidget::Row { children: cb, .. }) => {
+                    if ca.len() != cb.len() { return false; }
+                    vec_widgets_deep_equal(ca, cb, depth - 1)
+                },
+                (RuntimeContainerWidget::Stack { children: ca, .. },
+                 RuntimeContainerWidget::Stack { children: cb, .. }) => {
+                    if ca.len() != cb.len() { return false; }
+                    vec_widgets_deep_equal(ca, cb, depth - 1)
+                },
+                (RuntimeContainerWidget::Wrap { children: ca, .. },
+                 RuntimeContainerWidget::Wrap { children: cb, .. }) => {
+                    if ca.len() != cb.len() { return false; }
+                    vec_widgets_deep_equal(ca, cb, depth - 1)
+                },
+                (RuntimeContainerWidget::Flex { children: fa, .. },
+                 RuntimeContainerWidget::Flex { children: fb, .. }) => {
+                    if fa.len() != fb.len() { return false; }
+                    vec_flex_deep_equal(fa, fb, depth - 1)
+                },
+                (RuntimeContainerWidget::Grid { children: ca, .. },
+                 RuntimeContainerWidget::Grid { children: cb, .. }) => {
+                    if ca.len() != cb.len() { return false; }
+                    vec_widgets_deep_equal(ca, cb, depth - 1)
+                },
+                (RuntimeContainerWidget::Absolute { children: aa, .. },
+                 RuntimeContainerWidget::Absolute { children: ab, .. }) => {
+                    if aa.len() != ab.len() { return false; }
+                    vec_absolute_deep_equal(aa, ab, depth - 1)
+                },
+                (RuntimeContainerWidget::ListView { children: ca, .. },
+                 RuntimeContainerWidget::ListView { children: cb, .. }) => {
+                    if ca.len() != cb.len() { return false; }
+                    vec_widgets_deep_equal(ca, cb, depth - 1)
+                },
+                _ => false,
+            }
+        },
+        _ => false,
+    }
+}
+
 // ── Conditional widget helper ────────────────────────────────────
 
 /// Layout a conditional widget: visible child or zero-sized leaf.
