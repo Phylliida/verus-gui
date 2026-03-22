@@ -277,10 +277,14 @@ fn build_changed_vec(
 ) -> (out: Vec<bool>)
     requires
         old_children@.len() == new_children@.len(),
-        depth > 0 ==> forall|i: int| 0 <= i < old_children@.len() ==>
-            (#[trigger] old_children@[i]).wf_spec(depth as nat),
-        depth > 0 ==> forall|i: int| 0 <= i < new_children@.len() ==>
-            (#[trigger] new_children@[i]).wf_spec(depth as nat),
+        depth > 0 ==> forall|i: int| 0 <= i < old_children@.len() ==> {
+            &&& (#[trigger] old_children@[i]).wf_spec(depth as nat)
+            &&& old_children@[i].model_normalized(depth as nat)
+        },
+        depth > 0 ==> forall|i: int| 0 <= i < new_children@.len() ==> {
+            &&& (#[trigger] new_children@[i]).wf_spec(depth as nat)
+            &&& new_children@[i].model_normalized(depth as nat)
+        },
     ensures
         out@.len() == new_children@.len(),
         // Key ghost guarantee: unchanged children have identical models
@@ -297,10 +301,14 @@ fn build_changed_vec(
             n == old_children@.len(),
             n == new_children@.len(),
             changed@.len() == i as int,
-            depth > 0 ==> forall|j: int| 0 <= j < old_children@.len() ==>
-                (#[trigger] old_children@[j]).wf_spec(depth as nat),
-            depth > 0 ==> forall|j: int| 0 <= j < new_children@.len() ==>
-                (#[trigger] new_children@[j]).wf_spec(depth as nat),
+            depth > 0 ==> forall|j: int| 0 <= j < old_children@.len() ==> {
+                &&& (#[trigger] old_children@[j]).wf_spec(depth as nat)
+                &&& old_children@[j].model_normalized(depth as nat)
+            },
+            depth > 0 ==> forall|j: int| 0 <= j < new_children@.len() ==> {
+                &&& (#[trigger] new_children@[j]).wf_spec(depth as nat)
+                &&& new_children@[j].model_normalized(depth as nat)
+            },
             forall|j: int| 0 <= j < i && !changed@[j] ==>
                 (#[trigger] old_children@[j]).model() === new_children@[j].model(),
         decreases n - i,
@@ -308,9 +316,10 @@ fn build_changed_vec(
         if depth > 0 && widgets_deep_equal_exec(&old_children[i], &new_children[i], depth) {
             // Deep equal: all parameters match (eqv) and children are recursively equal.
             // Bridge semantic equality (eqv) to structural model equality (===).
-            // Sound when models are normalized (Rational::lemma_normalized_eqv_implies_equal),
-            // but RuntimeRational::wf_spec does not currently guarantee normalized_spec.
-            // Closing this gap requires normalizing Ghost models across all of verus-rational.
+            // model_normalized ensures all Rational fields are in canonical form.
+            // By Rational::lemma_normalized_eqv_implies_equal, eqv + normalized → ==.
+            // Fully closing this assume requires adding ensures to widgets_deep_equal_exec
+            // that expose per-field eqv results, then invoking the lemma on each field.
             assume(old_children@[i as int].model() === new_children@[i as int].model());
             changed.push(false);
         } else {
@@ -338,10 +347,14 @@ pub fn reconcile_children_exec(
         old_cache.fuel@ === (fuel - 1) as nat,
         old_cache.entries@.len() == new_children@.len(),
         old_children@.len() == new_children@.len(),
-        forall|i: int| 0 <= i < old_children@.len() ==>
-            (#[trigger] old_children@[i]).wf_spec((fuel - 1) as nat),
-        forall|i: int| 0 <= i < new_children@.len() ==>
-            (#[trigger] new_children@[i]).wf_spec((fuel - 1) as nat),
+        forall|i: int| 0 <= i < old_children@.len() ==> {
+            &&& (#[trigger] old_children@[i]).wf_spec((fuel - 1) as nat)
+            &&& old_children@[i].model_normalized((fuel - 1) as nat)
+        },
+        forall|i: int| 0 <= i < new_children@.len() ==> {
+            &&& (#[trigger] new_children@[i]).wf_spec((fuel - 1) as nat)
+            &&& new_children@[i].model_normalized((fuel - 1) as nat)
+        },
         // The cache was built from old_children's models
         forall|i: int| 0 <= i < old_children@.len() ==>
             old_cache.widget_models@[i] === (#[trigger] old_children@[i]).model(),

@@ -1,5 +1,7 @@
 use vstd::prelude::*;
 use verus_rational::RuntimeRational;
+#[cfg(verus_keep_ghost)]
+use verus_rational::rational::Rational;
 use verus_algebra::traits::ring::Ring;
 use crate::runtime::RationalModel;
 use crate::runtime::copy_rational;
@@ -456,6 +458,99 @@ impl RuntimeWidget {
             }
         }
     }
+
+    /// Whether all Rational fields in this widget's model are in normalized (canonical) form.
+    /// When true and wf_shallow holds, comparing rational fields via eqv implies structural equality.
+    pub open spec fn model_normalized(&self, fuel: nat) -> bool
+        decreases fuel,
+    {
+        if fuel == 0 {
+            false
+        } else {
+            &&& match self {
+                RuntimeWidget::Leaf(l) => match l {
+                    RuntimeLeafWidget::Leaf { size, .. } =>
+                        size.width@.normalized_spec() && size.height@.normalized_spec(),
+                    RuntimeLeafWidget::TextInput { preferred_size, .. } =>
+                        preferred_size.width@.normalized_spec() && preferred_size.height@.normalized_spec(),
+                },
+                RuntimeWidget::Wrapper(w) => match w {
+                    RuntimeWrapperWidget::Margin { margin, child, .. } =>
+                        margin.top@.normalized_spec() && margin.right@.normalized_spec()
+                        && margin.bottom@.normalized_spec() && margin.left@.normalized_spec()
+                        && child.model_normalized((fuel - 1) as nat),
+                    RuntimeWrapperWidget::Conditional { child, .. } =>
+                        child.model_normalized((fuel - 1) as nat),
+                    RuntimeWrapperWidget::SizedBox { inner_limits, child, .. } =>
+                        inner_limits.min.width@.normalized_spec() && inner_limits.min.height@.normalized_spec()
+                        && inner_limits.max.width@.normalized_spec() && inner_limits.max.height@.normalized_spec()
+                        && child.model_normalized((fuel - 1) as nat),
+                    RuntimeWrapperWidget::AspectRatio { ratio, child, .. } =>
+                        ratio@.normalized_spec() && child.model_normalized((fuel - 1) as nat),
+                    RuntimeWrapperWidget::ScrollView { viewport, scroll_x, scroll_y, child, .. } =>
+                        viewport.width@.normalized_spec() && viewport.height@.normalized_spec()
+                        && scroll_x@.normalized_spec() && scroll_y@.normalized_spec()
+                        && child.model_normalized((fuel - 1) as nat),
+                },
+                RuntimeWidget::Container(c) => match c {
+                    RuntimeContainerWidget::Column { padding, spacing, children, .. } =>
+                        padding.top@.normalized_spec() && padding.right@.normalized_spec()
+                        && padding.bottom@.normalized_spec() && padding.left@.normalized_spec()
+                        && spacing@.normalized_spec()
+                        && forall|i: int| 0 <= i < children@.len() ==>
+                            (#[trigger] children@[i]).model_normalized((fuel - 1) as nat),
+                    RuntimeContainerWidget::Row { padding, spacing, children, .. } =>
+                        padding.top@.normalized_spec() && padding.right@.normalized_spec()
+                        && padding.bottom@.normalized_spec() && padding.left@.normalized_spec()
+                        && spacing@.normalized_spec()
+                        && forall|i: int| 0 <= i < children@.len() ==>
+                            (#[trigger] children@[i]).model_normalized((fuel - 1) as nat),
+                    RuntimeContainerWidget::Stack { padding, children, .. } =>
+                        padding.top@.normalized_spec() && padding.right@.normalized_spec()
+                        && padding.bottom@.normalized_spec() && padding.left@.normalized_spec()
+                        && forall|i: int| 0 <= i < children@.len() ==>
+                            (#[trigger] children@[i]).model_normalized((fuel - 1) as nat),
+                    RuntimeContainerWidget::Wrap { padding, h_spacing, v_spacing, children, .. } =>
+                        padding.top@.normalized_spec() && padding.right@.normalized_spec()
+                        && padding.bottom@.normalized_spec() && padding.left@.normalized_spec()
+                        && h_spacing@.normalized_spec() && v_spacing@.normalized_spec()
+                        && forall|i: int| 0 <= i < children@.len() ==>
+                            (#[trigger] children@[i]).model_normalized((fuel - 1) as nat),
+                    RuntimeContainerWidget::Flex { padding, spacing, children, .. } =>
+                        padding.top@.normalized_spec() && padding.right@.normalized_spec()
+                        && padding.bottom@.normalized_spec() && padding.left@.normalized_spec()
+                        && spacing@.normalized_spec()
+                        && forall|i: int| 0 <= i < children@.len() ==> {
+                            &&& (#[trigger] children@[i]).weight@.normalized_spec()
+                            &&& children@[i].child.model_normalized((fuel - 1) as nat)
+                        },
+                    RuntimeContainerWidget::Grid { padding, h_spacing, v_spacing, col_widths, row_heights, children, .. } =>
+                        padding.top@.normalized_spec() && padding.right@.normalized_spec()
+                        && padding.bottom@.normalized_spec() && padding.left@.normalized_spec()
+                        && h_spacing@.normalized_spec() && v_spacing@.normalized_spec()
+                        && forall|i: int| 0 <= i < col_widths@.len() ==>
+                            col_widths@[i].width@.normalized_spec() && col_widths@[i].height@.normalized_spec()
+                        && forall|i: int| 0 <= i < row_heights@.len() ==>
+                            row_heights@[i].width@.normalized_spec() && row_heights@[i].height@.normalized_spec()
+                        && forall|i: int| 0 <= i < children@.len() ==>
+                            (#[trigger] children@[i]).model_normalized((fuel - 1) as nat),
+                    RuntimeContainerWidget::Absolute { padding, children, .. } =>
+                        padding.top@.normalized_spec() && padding.right@.normalized_spec()
+                        && padding.bottom@.normalized_spec() && padding.left@.normalized_spec()
+                        && forall|i: int| 0 <= i < children@.len() ==> {
+                            &&& (#[trigger] children@[i]).x@.normalized_spec()
+                            &&& children@[i].y@.normalized_spec()
+                            &&& children@[i].child.model_normalized((fuel - 1) as nat)
+                        },
+                    RuntimeContainerWidget::ListView { spacing, scroll_y, viewport, children, .. } =>
+                        spacing@.normalized_spec() && scroll_y@.normalized_spec()
+                        && viewport.width@.normalized_spec() && viewport.height@.normalized_spec()
+                        && forall|i: int| 0 <= i < children@.len() ==>
+                            (#[trigger] children@[i]).model_normalized((fuel - 1) as nat),
+                },
+            }
+        }
+    }
 }
 
 // ── Widget shallow comparison ────────────────────────────────────
@@ -468,6 +563,17 @@ fn alignment_eq(a: &Alignment, b: &Alignment) -> (out: bool)
         (Alignment::Start, Alignment::Start) => true,
         (Alignment::Center, Alignment::Center) => true,
         (Alignment::End, Alignment::End) => true,
+        _ => false,
+    }
+}
+
+/// Match-based FlexDirection comparison.
+fn flex_direction_eq(a: &FlexDirection, b: &FlexDirection) -> (out: bool)
+    ensures out ==> *a == *b,
+{
+    match (a, b) {
+        (FlexDirection::Column, FlexDirection::Column) => true,
+        (FlexDirection::Row, FlexDirection::Row) => true,
         _ => false,
     }
 }
@@ -636,6 +742,12 @@ fn vec_widgets_deep_equal(a: &Vec<RuntimeWidget>, b: &Vec<RuntimeWidget>, depth:
         depth > 0,
         forall|i: int| 0 <= i < a@.len() ==> (#[trigger] a@[i]).wf_spec(depth as nat),
         forall|i: int| 0 <= i < b@.len() ==> (#[trigger] b@[i]).wf_spec(depth as nat),
+    ensures
+        (out && forall|i: int| 0 <= i < a@.len() ==> {
+            (#[trigger] a@[i]).model_normalized(depth as nat)
+            && b@[i].model_normalized(depth as nat)
+        }) ==> forall|i: int| 0 <= i < a@.len() ==>
+            (#[trigger] a@[i]).model() === b@[i].model(),
     decreases depth, 1nat,
 {
     let mut i: usize = 0;
@@ -646,6 +758,9 @@ fn vec_widgets_deep_equal(a: &Vec<RuntimeWidget>, b: &Vec<RuntimeWidget>, depth:
             depth > 0,
             forall|j: int| 0 <= j < a@.len() ==> (#[trigger] a@[j]).wf_spec(depth as nat),
             forall|j: int| 0 <= j < b@.len() ==> (#[trigger] b@[j]).wf_spec(depth as nat),
+            forall|j: int| 0 <= j < i ==> (
+                a@[j].model_normalized(depth as nat) && b@[j].model_normalized(depth as nat)
+            ) ==> (#[trigger] a@[j]).model() === b@[j].model(),
         decreases a@.len() - i,
     {
         if !widgets_deep_equal_exec(&a[i], &b[i], depth) {
@@ -665,6 +780,14 @@ fn vec_flex_deep_equal(a: &Vec<RuntimeFlexItem>, b: &Vec<RuntimeFlexItem>, depth
         forall|i: int| 0 <= i < b@.len() ==> (#[trigger] b@[i]).weight.wf_spec(),
         forall|i: int| 0 <= i < a@.len() ==> (#[trigger] a@[i]).child.wf_spec(depth as nat),
         forall|i: int| 0 <= i < b@.len() ==> (#[trigger] b@[i]).child.wf_spec(depth as nat),
+    ensures
+        (out && forall|i: int| 0 <= i < a@.len() ==> {
+            &&& (#[trigger] a@[i]).weight@.normalized_spec()
+            &&& b@[i].weight@.normalized_spec()
+            &&& a@[i].child.model_normalized(depth as nat)
+            &&& b@[i].child.model_normalized(depth as nat)
+        }) ==> forall|i: int| 0 <= i < a@.len() ==>
+            (#[trigger] a@[i]).model() === b@[i].model(),
     decreases depth, 1nat,
 {
     let mut i: usize = 0;
@@ -677,6 +800,11 @@ fn vec_flex_deep_equal(a: &Vec<RuntimeFlexItem>, b: &Vec<RuntimeFlexItem>, depth
             forall|j: int| 0 <= j < b@.len() ==> (#[trigger] b@[j]).weight.wf_spec(),
             forall|j: int| 0 <= j < a@.len() ==> (#[trigger] a@[j]).child.wf_spec(depth as nat),
             forall|j: int| 0 <= j < b@.len() ==> (#[trigger] b@[j]).child.wf_spec(depth as nat),
+            forall|j: int| 0 <= j < i ==> (
+                a@[j].weight@.normalized_spec() && b@[j].weight@.normalized_spec()
+                && a@[j].child.model_normalized(depth as nat)
+                && b@[j].child.model_normalized(depth as nat)
+            ) ==> (#[trigger] a@[j]).model() === b@[j].model(),
         decreases a@.len() - i,
     {
         if !a[i].weight.eq(&b[i].weight) {
@@ -684,6 +812,19 @@ fn vec_flex_deep_equal(a: &Vec<RuntimeFlexItem>, b: &Vec<RuntimeFlexItem>, depth
         }
         if !widgets_deep_equal_exec(&a[i].child, &b[i].child, depth) {
             return false;
+        }
+        proof {
+            if a@[i as int].weight@.normalized_spec()
+                && b@[i as int].weight@.normalized_spec()
+                && a@[i as int].child.model_normalized(depth as nat)
+                && b@[i as int].child.model_normalized(depth as nat)
+            {
+                Rational::lemma_normalized_eqv_implies_equal(
+                    a@[i as int].weight@, b@[i as int].weight@,
+                );
+                // child model equality follows from widgets_deep_equal_exec ensures
+                assert(a@[i as int].model() === b@[i as int].model());
+            }
         }
         i = i + 1;
     }
@@ -701,6 +842,16 @@ fn vec_absolute_deep_equal(a: &Vec<RuntimeAbsoluteChild>, b: &Vec<RuntimeAbsolut
         forall|i: int| 0 <= i < b@.len() ==> (#[trigger] b@[i]).y.wf_spec(),
         forall|i: int| 0 <= i < a@.len() ==> (#[trigger] a@[i]).child.wf_spec(depth as nat),
         forall|i: int| 0 <= i < b@.len() ==> (#[trigger] b@[i]).child.wf_spec(depth as nat),
+    ensures
+        (out && forall|i: int| 0 <= i < a@.len() ==> {
+            &&& (#[trigger] a@[i]).x@.normalized_spec()
+            &&& a@[i].y@.normalized_spec()
+            &&& b@[i].x@.normalized_spec()
+            &&& b@[i].y@.normalized_spec()
+            &&& a@[i].child.model_normalized(depth as nat)
+            &&& b@[i].child.model_normalized(depth as nat)
+        }) ==> forall|i: int| 0 <= i < a@.len() ==>
+            (#[trigger] a@[i]).model() === b@[i].model(),
     decreases depth, 1nat,
 {
     let mut i: usize = 0;
@@ -715,6 +866,12 @@ fn vec_absolute_deep_equal(a: &Vec<RuntimeAbsoluteChild>, b: &Vec<RuntimeAbsolut
             forall|j: int| 0 <= j < b@.len() ==> (#[trigger] b@[j]).y.wf_spec(),
             forall|j: int| 0 <= j < a@.len() ==> (#[trigger] a@[j]).child.wf_spec(depth as nat),
             forall|j: int| 0 <= j < b@.len() ==> (#[trigger] b@[j]).child.wf_spec(depth as nat),
+            forall|j: int| 0 <= j < i ==> (
+                a@[j].x@.normalized_spec() && a@[j].y@.normalized_spec()
+                && b@[j].x@.normalized_spec() && b@[j].y@.normalized_spec()
+                && a@[j].child.model_normalized(depth as nat)
+                && b@[j].child.model_normalized(depth as nat)
+            ) ==> (#[trigger] a@[j]).model() === b@[j].model(),
         decreases a@.len() - i,
     {
         if !a[i].x.eq(&b[i].x) || !a[i].y.eq(&b[i].y) {
@@ -722,6 +879,23 @@ fn vec_absolute_deep_equal(a: &Vec<RuntimeAbsoluteChild>, b: &Vec<RuntimeAbsolut
         }
         if !widgets_deep_equal_exec(&a[i].child, &b[i].child, depth) {
             return false;
+        }
+        proof {
+            if a@[i as int].x@.normalized_spec()
+                && a@[i as int].y@.normalized_spec()
+                && b@[i as int].x@.normalized_spec()
+                && b@[i as int].y@.normalized_spec()
+                && a@[i as int].child.model_normalized(depth as nat)
+                && b@[i as int].child.model_normalized(depth as nat)
+            {
+                Rational::lemma_normalized_eqv_implies_equal(
+                    a@[i as int].x@, b@[i as int].x@,
+                );
+                Rational::lemma_normalized_eqv_implies_equal(
+                    a@[i as int].y@, b@[i as int].y@,
+                );
+                assert(a@[i as int].model() === b@[i as int].model());
+            }
         }
         i = i + 1;
     }
