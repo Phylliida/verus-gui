@@ -2252,7 +2252,7 @@ pub fn merge_layout_exec(
 /// Normalize a Vec<RuntimeFlexItem> using set_and_swap.
 fn normalize_flex_vec_exec(mut items: Vec<RuntimeFlexItem>, fuel: usize) -> (out: Vec<RuntimeFlexItem>)
     requires
-        fuel > 0,
+        items@.len() > 0 ==> fuel > 0,
         forall|i: int| 0 <= i < items@.len() ==> (#[trigger] items@[i]).weight.wf_spec(),
         forall|i: int| 0 <= i < items@.len() ==> (#[trigger] items@[i]).child.wf_spec(fuel as nat),
     ensures
@@ -2274,7 +2274,7 @@ fn normalize_flex_vec_exec(mut items: Vec<RuntimeFlexItem>, fuel: usize) -> (out
     let mut i: usize = 0;
     while i < n
         invariant
-            0 <= i <= n, n == items@.len(), result@.len() == i as int, fuel > 0,
+            0 <= i <= n, n == items@.len(), result@.len() == i as int, n > 0 ==> fuel > 0,
             forall|j: int| i <= j < n ==> (#[trigger] items@[j]).weight.wf_spec(),
             forall|j: int| i <= j < n ==> (#[trigger] items@[j]).child.wf_spec(fuel as nat),
             forall|j: int| 0 <= j < i ==> (#[trigger] result@[j]).weight.wf_spec(),
@@ -2297,7 +2297,7 @@ fn normalize_flex_vec_exec(mut items: Vec<RuntimeFlexItem>, fuel: usize) -> (out
 /// Normalize a Vec<RuntimeAbsoluteChild> using set_and_swap.
 fn normalize_absolute_vec_exec(mut items: Vec<RuntimeAbsoluteChild>, fuel: usize) -> (out: Vec<RuntimeAbsoluteChild>)
     requires
-        fuel > 0,
+        items@.len() > 0 ==> fuel > 0,
         forall|i: int| 0 <= i < items@.len() ==> (#[trigger] items@[i]).x.wf_spec(),
         forall|i: int| 0 <= i < items@.len() ==> (#[trigger] items@[i]).y.wf_spec(),
         forall|i: int| 0 <= i < items@.len() ==> (#[trigger] items@[i]).child.wf_spec(fuel as nat),
@@ -2321,7 +2321,7 @@ fn normalize_absolute_vec_exec(mut items: Vec<RuntimeAbsoluteChild>, fuel: usize
     let mut i: usize = 0;
     while i < n
         invariant
-            0 <= i <= n, n == items@.len(), result@.len() == i as int, fuel > 0,
+            0 <= i <= n, n == items@.len(), result@.len() == i as int, n > 0 ==> fuel > 0,
             forall|j: int| i <= j < n ==> (#[trigger] items@[j]).x.wf_spec(),
             forall|j: int| i <= j < n ==> (#[trigger] items@[j]).y.wf_spec(),
             forall|j: int| i <= j < n ==> (#[trigger] items@[j]).child.wf_spec(fuel as nat),
@@ -2398,7 +2398,7 @@ fn make_dummy_widget() -> (out: RuntimeWidget)
 /// Normalize all RuntimeRational fields in a Vec of widgets using set_and_swap.
 fn normalize_widget_vec_exec(mut widgets: Vec<RuntimeWidget>, fuel: usize) -> (out: Vec<RuntimeWidget>)
     requires
-        fuel > 0,
+        widgets@.len() > 0 ==> fuel > 0,
         forall|i: int| 0 <= i < widgets@.len() ==>
             (#[trigger] widgets@[i]).wf_spec(fuel as nat),
     ensures
@@ -2421,7 +2421,7 @@ fn normalize_widget_vec_exec(mut widgets: Vec<RuntimeWidget>, fuel: usize) -> (o
             n == orig.len(),
             widgets@.len() == n,
             result@.len() == i as int,
-            fuel > 0,
+            n > 0 ==> fuel > 0,
             forall|j: int| i <= j < n ==>
                 (#[trigger] widgets@[j]).wf_spec(fuel as nat),
             forall|j: int| 0 <= j < i ==> {
@@ -2550,6 +2550,7 @@ pub fn normalize_widget_exec(widget: RuntimeWidget, fuel: usize) -> (out: Runtim
             match container {
             RuntimeContainerWidget::Column { padding, spacing, alignment, children, .. } => {
                 assert(forall|i: int| 0 <= i < children@.len() ==> (#[trigger] children@[i]).wf_spec((fuel - 1) as nat));
+                if children.len() > 0 { assert(children@[0].wf_spec((fuel - 1) as nat)); }
                 let pn = padding.normalize_exec();
                 let sn = spacing.normalize();
                 let cn = normalize_widget_vec_exec(children, fuel - 1);
@@ -2563,6 +2564,7 @@ pub fn normalize_widget_exec(widget: RuntimeWidget, fuel: usize) -> (out: Runtim
             },
             RuntimeContainerWidget::Row { padding, spacing, alignment, children, .. } => {
                 assert(forall|i: int| 0 <= i < children@.len() ==> (#[trigger] children@[i]).wf_spec((fuel - 1) as nat));
+                if children.len() > 0 { assert(children@[0].wf_spec((fuel - 1) as nat)); }
                 let pn = padding.normalize_exec();
                 let sn = spacing.normalize();
                 let cn = normalize_widget_vec_exec(children, fuel - 1);
@@ -2576,6 +2578,7 @@ pub fn normalize_widget_exec(widget: RuntimeWidget, fuel: usize) -> (out: Runtim
             },
             RuntimeContainerWidget::Stack { padding, h_align, v_align, children, .. } => {
                 assert(forall|i: int| 0 <= i < children@.len() ==> (#[trigger] children@[i]).wf_spec((fuel - 1) as nat));
+                if children.len() > 0 { assert(children@[0].wf_spec((fuel - 1) as nat)); }
                 let pn = padding.normalize_exec();
                 let cn = normalize_widget_vec_exec(children, fuel - 1);
                 RuntimeWidget::Container(RuntimeContainerWidget::Stack {
@@ -2588,6 +2591,7 @@ pub fn normalize_widget_exec(widget: RuntimeWidget, fuel: usize) -> (out: Runtim
             },
             RuntimeContainerWidget::Wrap { padding, h_spacing, v_spacing, children, .. } => {
                 assert(forall|i: int| 0 <= i < children@.len() ==> (#[trigger] children@[i]).wf_spec((fuel - 1) as nat));
+                if children.len() > 0 { assert(children@[0].wf_spec((fuel - 1) as nat)); }
                 let pn = padding.normalize_exec();
                 let hsn = h_spacing.normalize();
                 let vsn = v_spacing.normalize();
@@ -2602,6 +2606,7 @@ pub fn normalize_widget_exec(widget: RuntimeWidget, fuel: usize) -> (out: Runtim
             },
             RuntimeContainerWidget::ListView { spacing, scroll_y, viewport, children, .. } => {
                 assert(forall|i: int| 0 <= i < children@.len() ==> (#[trigger] children@[i]).wf_spec((fuel - 1) as nat));
+                if children.len() > 0 { assert(children@[0].wf_spec((fuel - 1) as nat)); }
                 let sn = spacing.normalize();
                 let syn = scroll_y.normalize();
                 let vn = viewport.normalize_exec();
@@ -2616,6 +2621,7 @@ pub fn normalize_widget_exec(widget: RuntimeWidget, fuel: usize) -> (out: Runtim
             },
             RuntimeContainerWidget::Flex { padding, spacing, alignment, direction, children, .. } => {
                 assert(forall|i: int| 0 <= i < children@.len() ==> (#[trigger] children@[i]).child.wf_spec((fuel - 1) as nat));
+                if children.len() > 0 { assert(children@[0].child.wf_spec((fuel - 1) as nat)); }
                 let pn = padding.normalize_exec();
                 let sn = spacing.normalize();
                 let cn = normalize_flex_vec_exec(children, fuel - 1);
@@ -2630,6 +2636,7 @@ pub fn normalize_widget_exec(widget: RuntimeWidget, fuel: usize) -> (out: Runtim
             RuntimeContainerWidget::Grid { padding, h_spacing, v_spacing, h_align, v_align,
                                            col_widths, row_heights, children, .. } => {
                 assert(forall|i: int| 0 <= i < children@.len() ==> (#[trigger] children@[i]).wf_spec((fuel - 1) as nat));
+                if children.len() > 0 { assert(children@[0].wf_spec((fuel - 1) as nat)); }
                 let pn = padding.normalize_exec();
                 let hsn = h_spacing.normalize();
                 let vsn = v_spacing.normalize();
@@ -2649,6 +2656,7 @@ pub fn normalize_widget_exec(widget: RuntimeWidget, fuel: usize) -> (out: Runtim
             },
             RuntimeContainerWidget::Absolute { padding, children, .. } => {
                 assert(forall|i: int| 0 <= i < children@.len() ==> (#[trigger] children@[i]).child.wf_spec((fuel - 1) as nat));
+                if children.len() > 0 { assert(children@[0].child.wf_spec((fuel - 1) as nat)); }
                 let pn = padding.normalize_exec();
                 let cn = normalize_absolute_vec_exec(children, fuel - 1);
                 RuntimeWidget::Container(RuntimeContainerWidget::Absolute {
