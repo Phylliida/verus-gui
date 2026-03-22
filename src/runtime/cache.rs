@@ -308,6 +308,9 @@ fn build_changed_vec(
         if depth > 0 && widgets_deep_equal_exec(&old_children[i], &new_children[i], depth) {
             // Deep equal: all parameters match (eqv) and children are recursively equal.
             // Bridge semantic equality (eqv) to structural model equality (===).
+            // Sound when models are normalized (Rational::lemma_normalized_eqv_implies_equal),
+            // but RuntimeRational::wf_spec does not currently guarantee normalized_spec.
+            // Closing this gap requires normalizing Ghost models across all of verus-rational.
             assume(old_children@[i as int].model() === new_children@[i as int].model());
             changed.push(false);
         } else {
