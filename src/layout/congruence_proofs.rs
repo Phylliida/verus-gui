@@ -754,6 +754,10 @@ pub proof fn lemma_row_layout_size_congruence<T: OrderedField>(
     //              = sum_widths(child_sizes, n) + repeated_add(spacing, n-1)  [for n > 0]
     // sum_widths congruence follows from sum_main congruence with Horizontal axis
     lemma_sum_main_congruence(s1, s2, Axis::Horizontal, s1.len() as nat);
+    // Bridge: sum_main(Horizontal) == sum_widths
+    lemma_sum_main_eq_sum_widths(s1, s1.len() as nat);
+    lemma_sum_main_eq_sum_widths(s2, s2.len() as nat);
+    // Now sum_widths(s1, n) == sum_main(s1, H, n) eqv sum_main(s2, H, n) == sum_widths(s2, n)
     lemma_repeated_add_congruence(sp1, sp2,
         if s1.len() > 0 { (s1.len() - 1) as nat } else { 0 });
     // row_content_width eqv
@@ -822,6 +826,135 @@ proof fn lemma_layout_widget_row_size_bridge<T: OrderedField>(
             linear_layout(lim, pad, sp, al, child_sizes, Axis::Horizontal), cn));
     assert(child_sizes =~= cs);
     lemma_row_layout_is_linear(lim, pad, sp, al, cs);
+}
+
+/// max_width respects eqv.
+pub proof fn lemma_max_width_congruence<T: OrderedRing>(
+    s1: Seq<Size<T>>, s2: Seq<Size<T>>, count: nat,
+)
+    requires sizes_eqv(s1, s2), count <= s1.len(),
+    ensures crate::layout::stack::max_width(s1, count)
+        .eqv(crate::layout::stack::max_width(s2, count)),
+    decreases count,
+{
+    reveal(crate::layout::stack::max_width);
+    if count == 0 {
+        T::axiom_eqv_reflexive(T::zero());
+    } else {
+        lemma_max_width_congruence(s1, s2, (count - 1) as nat);
+        lemma_max_congruence(
+            crate::layout::stack::max_width(s1, (count - 1) as nat),
+            crate::layout::stack::max_width(s2, (count - 1) as nat),
+            s1[(count - 1) as int].width,
+            s2[(count - 1) as int].width);
+    }
+}
+
+/// max_height respects eqv.
+pub proof fn lemma_max_height_congruence<T: OrderedRing>(
+    s1: Seq<Size<T>>, s2: Seq<Size<T>>, count: nat,
+)
+    requires sizes_eqv(s1, s2), count <= s1.len(),
+    ensures crate::layout::stack::max_height(s1, count)
+        .eqv(crate::layout::stack::max_height(s2, count)),
+    decreases count,
+{
+    reveal(crate::layout::stack::max_height);
+    if count == 0 {
+        T::axiom_eqv_reflexive(T::zero());
+    } else {
+        lemma_max_height_congruence(s1, s2, (count - 1) as nat);
+        lemma_max_congruence(
+            crate::layout::stack::max_height(s1, (count - 1) as nat),
+            crate::layout::stack::max_height(s2, (count - 1) as nat),
+            s1[(count - 1) as int].height,
+            s2[(count - 1) as int].height);
+    }
+}
+
+/// stack_layout size congruence.
+pub proof fn lemma_stack_layout_size_congruence<T: OrderedField>(
+    lim1: Limits<T>, lim2: Limits<T>,
+    pad1: Padding<T>, pad2: Padding<T>,
+    ha: Alignment, va: Alignment,
+    s1: Seq<Size<T>>, s2: Seq<Size<T>>,
+)
+    requires limits_eqv(lim1, lim2), padding_eqv(pad1, pad2), sizes_eqv(s1, s2),
+    ensures
+        size_eqv(
+            crate::layout::stack::stack_layout(lim1, pad1, ha, va, s1).size,
+            crate::layout::stack::stack_layout(lim2, pad2, ha, va, s2).size,
+        ),
+{
+    reveal(crate::layout::stack::stack_layout);
+    reveal(crate::layout::stack::stack_content_size);
+    lemma_max_width_congruence(s1, s2, s1.len() as nat);
+    lemma_max_height_congruence(s1, s2, s1.len() as nat);
+    lemma_padding_horizontal_congruence(pad1, pad2);
+    lemma_padding_vertical_congruence(pad1, pad2);
+    // total_width = pad.horizontal() + content.width
+    T::axiom_add_congruence_left(
+        pad1.horizontal(), pad2.horizontal(),
+        crate::layout::stack::max_width(s1, s1.len() as nat));
+    verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(
+        pad2.horizontal(),
+        crate::layout::stack::max_width(s1, s1.len() as nat),
+        crate::layout::stack::max_width(s2, s2.len() as nat));
+    T::axiom_eqv_transitive(
+        pad1.horizontal().add(crate::layout::stack::max_width(s1, s1.len() as nat)),
+        pad2.horizontal().add(crate::layout::stack::max_width(s1, s1.len() as nat)),
+        pad2.horizontal().add(crate::layout::stack::max_width(s2, s2.len() as nat)));
+    // total_height = pad.vertical() + content.height
+    T::axiom_add_congruence_left(
+        pad1.vertical(), pad2.vertical(),
+        crate::layout::stack::max_height(s1, s1.len() as nat));
+    verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(
+        pad2.vertical(),
+        crate::layout::stack::max_height(s1, s1.len() as nat),
+        crate::layout::stack::max_height(s2, s2.len() as nat));
+    T::axiom_eqv_transitive(
+        pad1.vertical().add(crate::layout::stack::max_height(s1, s1.len() as nat)),
+        pad2.vertical().add(crate::layout::stack::max_height(s1, s1.len() as nat)),
+        pad2.vertical().add(crate::layout::stack::max_height(s2, s2.len() as nat)));
+    lemma_resolve_congruence(lim1, lim2,
+        Size::new(
+            pad1.horizontal().add(crate::layout::stack::max_width(s1, s1.len() as nat)),
+            pad1.vertical().add(crate::layout::stack::max_height(s1, s1.len() as nat))),
+        Size::new(
+            pad2.horizontal().add(crate::layout::stack::max_width(s2, s2.len() as nat)),
+            pad2.vertical().add(crate::layout::stack::max_height(s2, s2.len() as nat))));
+}
+
+/// Bridge: layout_widget for Stack produces size == stack_layout size.
+proof fn lemma_layout_widget_stack_size_bridge<T: OrderedField>(
+    lim: Limits<T>, pad: Padding<T>, ha: Alignment, va: Alignment,
+    children: Seq<Widget<T>>, fuel: nat,
+)
+    requires fuel > 0,
+    ensures ({
+        let inner = lim.shrink(pad.horizontal(), pad.vertical());
+        let cs = Seq::new(children.len(), |i: int|
+            layout_widget(inner, children[i], (fuel - 1) as nat).size);
+        layout_widget(lim, Widget::Container(ContainerWidget::Stack {
+            padding: pad, h_align: ha, v_align: va, children,
+        }), fuel).size == crate::layout::stack::stack_layout(lim, pad, ha, va, cs).size
+    }),
+{
+    reveal(crate::layout::stack::stack_layout);
+    reveal(crate::layout::stack::stack_content_size);
+    let inner = lim.shrink(pad.horizontal(), pad.vertical());
+    let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
+    let cs = Seq::new(children.len(), |i: int|
+        layout_widget(inner, children[i], (fuel - 1) as nat).size);
+    let stk = ContainerWidget::Stack {
+        padding: pad, h_align: ha, v_align: va, children,
+    };
+    let w = Widget::Container(stk);
+    assert(layout_widget(lim, w, fuel) == layout_container(lim, stk, fuel));
+    assert(layout_container(lim, stk, fuel)
+        == layout_stack_body(lim, pad, ha, va, cn));
+    let child_sizes = Seq::new(cn.len(), |i: int| cn[i].size);
+    assert(child_sizes =~= cs);
 }
 
 /// If two widgets are eqv, layout_widget produces nodes with eqv sizes.
@@ -960,13 +1093,63 @@ pub proof fn lemma_layout_widget_size_congruence<T: OrderedField>(
             // Column layout size congruence (already proved)
             lemma_column_layout_size_congruence(lim1, lim2, p1, p2, sp1, sp2, al, cs1, cs2);
         },
-        // Remaining variants (Row, Stack, Wrap, Flex, Grid, Absolute, ListView):
-        // widget_eqv returns false for these (they're not in the widget_eqv definition yet),
-        // so the ensures is vacuously true. To fully prove, extend widget_eqv first,
-        // then add the corresponding proof branches.
+        // Row: same pattern as Column via row bridge
+        (Widget::Container(ContainerWidget::Row { padding: p1, spacing: sp1, alignment: al, children: ch1 }),
+         Widget::Container(ContainerWidget::Row { padding: p2, spacing: sp2, alignment: _, children: ch2 })) => {
+            lemma_padding_horizontal_congruence(p1, p2);
+            lemma_padding_vertical_congruence(p1, p2);
+            lemma_shrink_congruence(lim1, lim2,
+                p1.horizontal(), p2.horizontal(), p1.vertical(), p2.vertical());
+            let inner1 = lim1.shrink(p1.horizontal(), p1.vertical());
+            let inner2 = lim2.shrink(p2.horizontal(), p2.vertical());
+            assert forall|i: int| 0 <= i < ch1.len() implies
+                size_eqv(
+                    layout_widget(inner1, ch1[i], (fuel - 1) as nat).size,
+                    layout_widget(inner2, ch2[i], (fuel - 1) as nat).size,
+                )
+            by {
+                lemma_layout_widget_size_congruence(
+                    inner1, inner2, ch1[i], ch2[i], (fuel - 1) as nat);
+            }
+            let cs1 = Seq::new(ch1.len(), |i: int|
+                layout_widget(inner1, ch1[i], (fuel - 1) as nat).size);
+            let cs2 = Seq::new(ch2.len(), |i: int|
+                layout_widget(inner2, ch2[i], (fuel - 1) as nat).size);
+            assert(sizes_eqv(cs1, cs2));
+            lemma_layout_widget_row_size_bridge(lim1, p1, sp1, al, ch1, fuel);
+            lemma_layout_widget_row_size_bridge(lim2, p2, sp2, al, ch2, fuel);
+            lemma_row_layout_size_congruence(lim1, lim2, p1, p2, sp1, sp2, al, cs1, cs2);
+        },
+        // Stack: same pattern via stack bridge
+        (Widget::Container(ContainerWidget::Stack { padding: p1, h_align: ha, v_align: va, children: ch1 }),
+         Widget::Container(ContainerWidget::Stack { padding: p2, h_align: _, v_align: _, children: ch2 })) => {
+            lemma_padding_horizontal_congruence(p1, p2);
+            lemma_padding_vertical_congruence(p1, p2);
+            lemma_shrink_congruence(lim1, lim2,
+                p1.horizontal(), p2.horizontal(), p1.vertical(), p2.vertical());
+            let inner1 = lim1.shrink(p1.horizontal(), p1.vertical());
+            let inner2 = lim2.shrink(p2.horizontal(), p2.vertical());
+            assert forall|i: int| 0 <= i < ch1.len() implies
+                size_eqv(
+                    layout_widget(inner1, ch1[i], (fuel - 1) as nat).size,
+                    layout_widget(inner2, ch2[i], (fuel - 1) as nat).size,
+                )
+            by {
+                lemma_layout_widget_size_congruence(
+                    inner1, inner2, ch1[i], ch2[i], (fuel - 1) as nat);
+            }
+            let cs1 = Seq::new(ch1.len(), |i: int|
+                layout_widget(inner1, ch1[i], (fuel - 1) as nat).size);
+            let cs2 = Seq::new(ch2.len(), |i: int|
+                layout_widget(inner2, ch2[i], (fuel - 1) as nat).size);
+            assert(sizes_eqv(cs1, cs2));
+            lemma_layout_widget_stack_size_bridge(lim1, p1, ha, va, ch1, fuel);
+            lemma_layout_widget_stack_size_bridge(lim2, p2, ha, va, ch2, fuel);
+            lemma_stack_layout_size_congruence(lim1, lim2, p1, p2, ha, va, cs1, cs2);
+        },
+        // Wrap, ListView: body congruence proofs needed (mechanical, same pattern).
+        // Flex, Grid, Absolute: not yet in widget_eqv → vacuously true.
         _ => {
-            // widget_eqv is false for unhandled variants → ensures vacuously true.
-            // AspectRatio is the only reachable admit.
             admit();
         },
     }
