@@ -314,13 +314,8 @@ fn build_changed_vec(
         decreases n - i,
     {
         if depth > 0 && widgets_deep_equal_exec(&old_children[i], &new_children[i], depth) {
-            // Deep equal: all parameters match (eqv) and children are recursively equal.
-            // Bridge semantic equality (eqv) to structural model equality (===).
-            // model_normalized ensures all Rational fields are in canonical form.
-            // By Rational::lemma_normalized_eqv_implies_equal, eqv + normalized → ==.
-            // Fully closing this assume requires adding ensures to widgets_deep_equal_exec
-            // that expose per-field eqv results, then invoking the lemma on each field.
-            assume(old_children@[i as int].model() === new_children@[i as int].model());
+            // Deep equal + model_normalized on both sides → model() === model()
+            // via widgets_deep_equal_exec ensures.
             changed.push(false);
         } else {
             changed.push(true);

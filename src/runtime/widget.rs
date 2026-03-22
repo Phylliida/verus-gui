@@ -905,11 +905,15 @@ fn vec_absolute_deep_equal(a: &Vec<RuntimeAbsoluteChild>, b: &Vec<RuntimeAbsolut
 /// Deep comparison of two widgets: same variant, same parameters, and
 /// recursively equal children. Returns false conservatively when depth
 /// is insufficient (non-leaf widgets need depth >= 2).
+/// When true and both sides are model_normalized, the models are structurally equal.
 pub fn widgets_deep_equal_exec(a: &RuntimeWidget, b: &RuntimeWidget, depth: usize) -> (out: bool)
     requires
         depth > 0,
         a.wf_spec(depth as nat),
         b.wf_spec(depth as nat),
+    ensures
+        (out && a.model_normalized(depth as nat) && b.model_normalized(depth as nat))
+            ==> a.model() === b.model(),
     decreases depth, 0nat,
 {
     // Check shallow equality first (parameters + variant match + child count)
@@ -917,82 +921,458 @@ pub fn widgets_deep_equal_exec(a: &RuntimeWidget, b: &RuntimeWidget, depth: usiz
         return false;
     }
 
-    // Parameters match. Now recursively compare children.
+    // Parameters match. Now re-compare fields for proof evidence and recursively compare children.
     match (a, b) {
-        (RuntimeWidget::Leaf(_), RuntimeWidget::Leaf(_)) => {
-            // No children — shallow equality is sufficient.
+        // ── Leaf variants ──────────────────────────────────────────
+        (RuntimeWidget::Leaf(RuntimeLeafWidget::Leaf { size: sa, .. }),
+         RuntimeWidget::Leaf(RuntimeLeafWidget::Leaf { size: sb, .. })) => {
+            let size_eq = sa.eq_exec(sb);
+            if !size_eq { return false; }
+            proof {
+                if a.model_normalized(depth as nat) && b.model_normalized(depth as nat) {
+                    Rational::lemma_normalized_eqv_implies_equal(sa.width@, sb.width@);
+                    Rational::lemma_normalized_eqv_implies_equal(sa.height@, sb.height@);
+                    assert(sa@ == sb@);
+                }
+            }
             true
         },
-        (RuntimeWidget::Wrapper(wa), RuntimeWidget::Wrapper(wb)) => {
-            if depth <= 1 {
-                return false; // not enough depth for child comparison
+        (RuntimeWidget::Leaf(RuntimeLeafWidget::TextInput { preferred_size: sa, text_input_id: ia, config: ca, .. }),
+         RuntimeWidget::Leaf(RuntimeLeafWidget::TextInput { preferred_size: sb, text_input_id: ib, config: cb, .. })) => {
+            let size_eq = sa.eq_exec(sb);
+            if !size_eq { return false; }
+            if *ia != *ib { return false; }
+            let cfg_eq = text_input_config_eq(ca, cb);
+            if !cfg_eq { return false; }
+            proof {
+                if a.model_normalized(depth as nat) && b.model_normalized(depth as nat) {
+                    Rational::lemma_normalized_eqv_implies_equal(sa.width@, sb.width@);
+                    Rational::lemma_normalized_eqv_implies_equal(sa.height@, sb.height@);
+                    assert(sa@ == sb@);
+                }
             }
-            match (wa, wb) {
-                (RuntimeWrapperWidget::Margin { child: ca, .. },
-                 RuntimeWrapperWidget::Margin { child: cb, .. }) =>
-                    widgets_deep_equal_exec(ca, cb, depth - 1),
-                (RuntimeWrapperWidget::Conditional { child: ca, .. },
-                 RuntimeWrapperWidget::Conditional { child: cb, .. }) =>
-                    widgets_deep_equal_exec(ca, cb, depth - 1),
-                (RuntimeWrapperWidget::SizedBox { child: ca, .. },
-                 RuntimeWrapperWidget::SizedBox { child: cb, .. }) =>
-                    widgets_deep_equal_exec(ca, cb, depth - 1),
-                (RuntimeWrapperWidget::AspectRatio { child: ca, .. },
-                 RuntimeWrapperWidget::AspectRatio { child: cb, .. }) =>
-                    widgets_deep_equal_exec(ca, cb, depth - 1),
-                (RuntimeWrapperWidget::ScrollView { child: ca, .. },
-                 RuntimeWrapperWidget::ScrollView { child: cb, .. }) =>
-                    widgets_deep_equal_exec(ca, cb, depth - 1),
-                _ => false,
-            }
+            true
         },
-        (RuntimeWidget::Container(ca), RuntimeWidget::Container(cb)) => {
-            if depth <= 1 {
-                return false;
+
+        // ── Wrapper variants ───────────────────────────────────────
+        (RuntimeWidget::Wrapper(RuntimeWrapperWidget::Margin { margin: ma, child: ca, .. }),
+         RuntimeWidget::Wrapper(RuntimeWrapperWidget::Margin { margin: mb, child: cb, .. })) => {
+            if depth <= 1 { return false; }
+            let pad_eq = ma.eq_exec(mb);
+            if !pad_eq { return false; }
+            let child_eq = widgets_deep_equal_exec(ca, cb, depth - 1);
+            if !child_eq { return false; }
+            proof {
+                if a.model_normalized(depth as nat) && b.model_normalized(depth as nat) {
+                    Rational::lemma_normalized_eqv_implies_equal(ma.top@, mb.top@);
+                    Rational::lemma_normalized_eqv_implies_equal(ma.right@, mb.right@);
+                    Rational::lemma_normalized_eqv_implies_equal(ma.bottom@, mb.bottom@);
+                    Rational::lemma_normalized_eqv_implies_equal(ma.left@, mb.left@);
+                    assert(ma@ == mb@);
+                }
             }
-            match (ca, cb) {
-                (RuntimeContainerWidget::Column { children: ca, .. },
-                 RuntimeContainerWidget::Column { children: cb, .. }) => {
-                    if ca.len() != cb.len() { return false; }
-                    vec_widgets_deep_equal(ca, cb, depth - 1)
-                },
-                (RuntimeContainerWidget::Row { children: ca, .. },
-                 RuntimeContainerWidget::Row { children: cb, .. }) => {
-                    if ca.len() != cb.len() { return false; }
-                    vec_widgets_deep_equal(ca, cb, depth - 1)
-                },
-                (RuntimeContainerWidget::Stack { children: ca, .. },
-                 RuntimeContainerWidget::Stack { children: cb, .. }) => {
-                    if ca.len() != cb.len() { return false; }
-                    vec_widgets_deep_equal(ca, cb, depth - 1)
-                },
-                (RuntimeContainerWidget::Wrap { children: ca, .. },
-                 RuntimeContainerWidget::Wrap { children: cb, .. }) => {
-                    if ca.len() != cb.len() { return false; }
-                    vec_widgets_deep_equal(ca, cb, depth - 1)
-                },
-                (RuntimeContainerWidget::Flex { children: fa, .. },
-                 RuntimeContainerWidget::Flex { children: fb, .. }) => {
-                    if fa.len() != fb.len() { return false; }
-                    vec_flex_deep_equal(fa, fb, depth - 1)
-                },
-                (RuntimeContainerWidget::Grid { children: ca, .. },
-                 RuntimeContainerWidget::Grid { children: cb, .. }) => {
-                    if ca.len() != cb.len() { return false; }
-                    vec_widgets_deep_equal(ca, cb, depth - 1)
-                },
-                (RuntimeContainerWidget::Absolute { children: aa, .. },
-                 RuntimeContainerWidget::Absolute { children: ab, .. }) => {
-                    if aa.len() != ab.len() { return false; }
-                    vec_absolute_deep_equal(aa, ab, depth - 1)
-                },
-                (RuntimeContainerWidget::ListView { children: ca, .. },
-                 RuntimeContainerWidget::ListView { children: cb, .. }) => {
-                    if ca.len() != cb.len() { return false; }
-                    vec_widgets_deep_equal(ca, cb, depth - 1)
-                },
-                _ => false,
+            true
+        },
+        (RuntimeWidget::Wrapper(RuntimeWrapperWidget::Conditional { visible: va, child: ca, .. }),
+         RuntimeWidget::Wrapper(RuntimeWrapperWidget::Conditional { visible: vb, child: cb, .. })) => {
+            if depth <= 1 { return false; }
+            if *va != *vb { return false; }
+            let child_eq = widgets_deep_equal_exec(ca, cb, depth - 1);
+            if !child_eq { return false; }
+            true
+        },
+        (RuntimeWidget::Wrapper(RuntimeWrapperWidget::SizedBox { inner_limits: la, child: ca, .. }),
+         RuntimeWidget::Wrapper(RuntimeWrapperWidget::SizedBox { inner_limits: lb, child: cb, .. })) => {
+            if depth <= 1 { return false; }
+            let lim_eq = la.eq_exec(lb);
+            if !lim_eq { return false; }
+            let child_eq = widgets_deep_equal_exec(ca, cb, depth - 1);
+            if !child_eq { return false; }
+            proof {
+                if a.model_normalized(depth as nat) && b.model_normalized(depth as nat) {
+                    Rational::lemma_normalized_eqv_implies_equal(la.min.width@, lb.min.width@);
+                    Rational::lemma_normalized_eqv_implies_equal(la.min.height@, lb.min.height@);
+                    Rational::lemma_normalized_eqv_implies_equal(la.max.width@, lb.max.width@);
+                    Rational::lemma_normalized_eqv_implies_equal(la.max.height@, lb.max.height@);
+                    assert(la@ == lb@);
+                }
             }
+            true
+        },
+        (RuntimeWidget::Wrapper(RuntimeWrapperWidget::AspectRatio { ratio: ra, child: ca, .. }),
+         RuntimeWidget::Wrapper(RuntimeWrapperWidget::AspectRatio { ratio: rb, child: cb, .. })) => {
+            if depth <= 1 { return false; }
+            let ratio_eq = ra.eq(rb);
+            if !ratio_eq { return false; }
+            let child_eq = widgets_deep_equal_exec(ca, cb, depth - 1);
+            if !child_eq { return false; }
+            proof {
+                if a.model_normalized(depth as nat) && b.model_normalized(depth as nat) {
+                    Rational::lemma_normalized_eqv_implies_equal(ra@, rb@);
+                }
+            }
+            true
+        },
+        (RuntimeWidget::Wrapper(RuntimeWrapperWidget::ScrollView { viewport: va, scroll_x: sxa, scroll_y: sya, child: ca, .. }),
+         RuntimeWidget::Wrapper(RuntimeWrapperWidget::ScrollView { viewport: vb, scroll_x: sxb, scroll_y: syb, child: cb, .. })) => {
+            if depth <= 1 { return false; }
+            let vp_eq = va.eq_exec(vb);
+            if !vp_eq { return false; }
+            let sx_eq = sxa.eq(sxb);
+            if !sx_eq { return false; }
+            let sy_eq = sya.eq(syb);
+            if !sy_eq { return false; }
+            let child_eq = widgets_deep_equal_exec(ca, cb, depth - 1);
+            if !child_eq { return false; }
+            proof {
+                if a.model_normalized(depth as nat) && b.model_normalized(depth as nat) {
+                    Rational::lemma_normalized_eqv_implies_equal(va.width@, vb.width@);
+                    Rational::lemma_normalized_eqv_implies_equal(va.height@, vb.height@);
+                    Rational::lemma_normalized_eqv_implies_equal(sxa@, sxb@);
+                    Rational::lemma_normalized_eqv_implies_equal(sya@, syb@);
+                    assert(va@ == vb@);
+                }
+            }
+            true
+        },
+
+        // ── Container variants ─────────────────────────────────────
+        (RuntimeWidget::Container(RuntimeContainerWidget::Column {
+            padding: pa, spacing: sa, alignment: aa, children: ca, ..
+        }),
+         RuntimeWidget::Container(RuntimeContainerWidget::Column {
+            padding: pb, spacing: sb, alignment: ab, children: cb, ..
+        })) => {
+            if depth <= 1 { return false; }
+            let pad_eq = pa.eq_exec(pb);
+            if !pad_eq { return false; }
+            let sp_eq = sa.eq(sb);
+            if !sp_eq { return false; }
+            let al_eq = alignment_eq(aa, ab);
+            if !al_eq { return false; }
+            if ca.len() != cb.len() { return false; }
+            let children_eq = vec_widgets_deep_equal(ca, cb, depth - 1);
+            if !children_eq { return false; }
+            proof {
+                if a.model_normalized(depth as nat) && b.model_normalized(depth as nat) {
+                    Rational::lemma_normalized_eqv_implies_equal(pa.top@, pb.top@);
+                    Rational::lemma_normalized_eqv_implies_equal(pa.right@, pb.right@);
+                    Rational::lemma_normalized_eqv_implies_equal(pa.bottom@, pb.bottom@);
+                    Rational::lemma_normalized_eqv_implies_equal(pa.left@, pb.left@);
+                    assert(pa@ == pb@);
+                    Rational::lemma_normalized_eqv_implies_equal(sa@, sb@);
+                    let n = ca@.len() as nat;
+                    assert(Seq::new(n, |i: int| ca@[i].model()) =~=
+                           Seq::new(n, |i: int| cb@[i].model()));
+                }
+            }
+            true
+        },
+        (RuntimeWidget::Container(RuntimeContainerWidget::Row {
+            padding: pa, spacing: sa, alignment: aa, children: ca, ..
+        }),
+         RuntimeWidget::Container(RuntimeContainerWidget::Row {
+            padding: pb, spacing: sb, alignment: ab, children: cb, ..
+        })) => {
+            if depth <= 1 { return false; }
+            let pad_eq = pa.eq_exec(pb);
+            if !pad_eq { return false; }
+            let sp_eq = sa.eq(sb);
+            if !sp_eq { return false; }
+            let al_eq = alignment_eq(aa, ab);
+            if !al_eq { return false; }
+            if ca.len() != cb.len() { return false; }
+            let children_eq = vec_widgets_deep_equal(ca, cb, depth - 1);
+            if !children_eq { return false; }
+            proof {
+                if a.model_normalized(depth as nat) && b.model_normalized(depth as nat) {
+                    Rational::lemma_normalized_eqv_implies_equal(pa.top@, pb.top@);
+                    Rational::lemma_normalized_eqv_implies_equal(pa.right@, pb.right@);
+                    Rational::lemma_normalized_eqv_implies_equal(pa.bottom@, pb.bottom@);
+                    Rational::lemma_normalized_eqv_implies_equal(pa.left@, pb.left@);
+                    assert(pa@ == pb@);
+                    Rational::lemma_normalized_eqv_implies_equal(sa@, sb@);
+                    let n = ca@.len() as nat;
+                    assert(Seq::new(n, |i: int| ca@[i].model()) =~=
+                           Seq::new(n, |i: int| cb@[i].model()));
+                }
+            }
+            true
+        },
+        (RuntimeWidget::Container(RuntimeContainerWidget::Stack {
+            padding: pa, h_align: ha, v_align: va, children: ca, ..
+        }),
+         RuntimeWidget::Container(RuntimeContainerWidget::Stack {
+            padding: pb, h_align: hb, v_align: vb, children: cb, ..
+        })) => {
+            if depth <= 1 { return false; }
+            let pad_eq = pa.eq_exec(pb);
+            if !pad_eq { return false; }
+            let ha_eq = alignment_eq(ha, hb);
+            if !ha_eq { return false; }
+            let va_eq = alignment_eq(va, vb);
+            if !va_eq { return false; }
+            if ca.len() != cb.len() { return false; }
+            let children_eq = vec_widgets_deep_equal(ca, cb, depth - 1);
+            if !children_eq { return false; }
+            proof {
+                if a.model_normalized(depth as nat) && b.model_normalized(depth as nat) {
+                    Rational::lemma_normalized_eqv_implies_equal(pa.top@, pb.top@);
+                    Rational::lemma_normalized_eqv_implies_equal(pa.right@, pb.right@);
+                    Rational::lemma_normalized_eqv_implies_equal(pa.bottom@, pb.bottom@);
+                    Rational::lemma_normalized_eqv_implies_equal(pa.left@, pb.left@);
+                    assert(pa@ == pb@);
+                    let n = ca@.len() as nat;
+                    assert(Seq::new(n, |i: int| ca@[i].model()) =~=
+                           Seq::new(n, |i: int| cb@[i].model()));
+                }
+            }
+            true
+        },
+        (RuntimeWidget::Container(RuntimeContainerWidget::Wrap {
+            padding: pa, h_spacing: hsa, v_spacing: vsa, children: ca, ..
+        }),
+         RuntimeWidget::Container(RuntimeContainerWidget::Wrap {
+            padding: pb, h_spacing: hsb, v_spacing: vsb, children: cb, ..
+        })) => {
+            if depth <= 1 { return false; }
+            let pad_eq = pa.eq_exec(pb);
+            if !pad_eq { return false; }
+            let hs_eq = hsa.eq(hsb);
+            if !hs_eq { return false; }
+            let vs_eq = vsa.eq(vsb);
+            if !vs_eq { return false; }
+            if ca.len() != cb.len() { return false; }
+            let children_eq = vec_widgets_deep_equal(ca, cb, depth - 1);
+            if !children_eq { return false; }
+            proof {
+                if a.model_normalized(depth as nat) && b.model_normalized(depth as nat) {
+                    Rational::lemma_normalized_eqv_implies_equal(pa.top@, pb.top@);
+                    Rational::lemma_normalized_eqv_implies_equal(pa.right@, pb.right@);
+                    Rational::lemma_normalized_eqv_implies_equal(pa.bottom@, pb.bottom@);
+                    Rational::lemma_normalized_eqv_implies_equal(pa.left@, pb.left@);
+                    assert(pa@ == pb@);
+                    Rational::lemma_normalized_eqv_implies_equal(hsa@, hsb@);
+                    Rational::lemma_normalized_eqv_implies_equal(vsa@, vsb@);
+                    let n = ca@.len() as nat;
+                    assert(Seq::new(n, |i: int| ca@[i].model()) =~=
+                           Seq::new(n, |i: int| cb@[i].model()));
+                }
+            }
+            true
+        },
+        (RuntimeWidget::Container(RuntimeContainerWidget::Flex {
+            padding: pa, spacing: sa, alignment: aa, direction: da, children: fa, ..
+        }),
+         RuntimeWidget::Container(RuntimeContainerWidget::Flex {
+            padding: pb, spacing: sb, alignment: ab, direction: db, children: fb, ..
+        })) => {
+            if depth <= 1 { return false; }
+            let pad_eq = pa.eq_exec(pb);
+            if !pad_eq { return false; }
+            let sp_eq = sa.eq(sb);
+            if !sp_eq { return false; }
+            let al_eq = alignment_eq(aa, ab);
+            if !al_eq { return false; }
+            let dir_eq = flex_direction_eq(da, db);
+            if !dir_eq { return false; }
+            if fa.len() != fb.len() { return false; }
+            let children_eq = vec_flex_deep_equal(fa, fb, depth - 1);
+            if !children_eq { return false; }
+            proof {
+                if a.model_normalized(depth as nat) && b.model_normalized(depth as nat) {
+                    Rational::lemma_normalized_eqv_implies_equal(pa.top@, pb.top@);
+                    Rational::lemma_normalized_eqv_implies_equal(pa.right@, pb.right@);
+                    Rational::lemma_normalized_eqv_implies_equal(pa.bottom@, pb.bottom@);
+                    Rational::lemma_normalized_eqv_implies_equal(pa.left@, pb.left@);
+                    assert(pa@ == pb@);
+                    Rational::lemma_normalized_eqv_implies_equal(sa@, sb@);
+                    let n = fa@.len() as nat;
+                    assert(Seq::new(n, |i: int| fa@[i].model()) =~=
+                           Seq::new(n, |i: int| fb@[i].model()));
+                }
+            }
+            true
+        },
+        (RuntimeWidget::Container(RuntimeContainerWidget::Grid {
+            padding: pa, h_spacing: hsa, v_spacing: vsa,
+            h_align: ha, v_align: va,
+            col_widths: cwa, row_heights: rha, children: ca, ..
+        }),
+         RuntimeWidget::Container(RuntimeContainerWidget::Grid {
+            padding: pb, h_spacing: hsb, v_spacing: vsb,
+            h_align: hb, v_align: vb,
+            col_widths: cwb, row_heights: rhb, children: cb, ..
+        })) => {
+            if depth <= 1 { return false; }
+            let pad_eq = pa.eq_exec(pb);
+            if !pad_eq { return false; }
+            let hs_eq = hsa.eq(hsb);
+            if !hs_eq { return false; }
+            let vs_eq = vsa.eq(vsb);
+            if !vs_eq { return false; }
+            let ha_eq = alignment_eq(ha, hb);
+            if !ha_eq { return false; }
+            let va_eq = alignment_eq(va, vb);
+            if !va_eq { return false; }
+            if cwa.len() != cwb.len() { return false; }
+            if rha.len() != rhb.len() { return false; }
+            if ca.len() != cb.len() { return false; }
+            // Capture normalization state as ghost booleans (avoids unfolding in loop invariants)
+            let ghost cwa_norm: bool = forall|j: int| 0 <= j < cwa@.len() ==>
+                cwa@[j].width@.normalized_spec() && cwa@[j].height@.normalized_spec();
+            let ghost cwb_norm: bool = forall|j: int| 0 <= j < cwb@.len() ==>
+                cwb@[j].width@.normalized_spec() && cwb@[j].height@.normalized_spec();
+            let ghost rha_norm: bool = forall|j: int| 0 <= j < rha@.len() ==>
+                rha@[j].width@.normalized_spec() && rha@[j].height@.normalized_spec();
+            let ghost rhb_norm: bool = forall|j: int| 0 <= j < rhb@.len() ==>
+                rhb@[j].width@.normalized_spec() && rhb@[j].height@.normalized_spec();
+            // Compare col_widths element-wise
+            let mut ci: usize = 0;
+            while ci < cwa.len()
+                invariant
+                    0 <= ci <= cwa@.len(),
+                    cwa@.len() == cwb@.len(),
+                    forall|j: int| 0 <= j < cwa@.len() ==> cwa@[j].wf_spec(),
+                    forall|j: int| 0 <= j < cwb@.len() ==> cwb@[j].wf_spec(),
+                    forall|j: int| 0 <= j < ci ==> (
+                        cwa@[j].width@.normalized_spec() && cwa@[j].height@.normalized_spec()
+                        && cwb@[j].width@.normalized_spec() && cwb@[j].height@.normalized_spec()
+                    ) ==> cwa@[j]@ == cwb@[j]@,
+                    cwa_norm ==> forall|j: int| 0 <= j < cwa@.len() ==>
+                        cwa@[j].width@.normalized_spec() && cwa@[j].height@.normalized_spec(),
+                    cwb_norm ==> forall|j: int| 0 <= j < cwb@.len() ==>
+                        cwb@[j].width@.normalized_spec() && cwb@[j].height@.normalized_spec(),
+                decreases cwa@.len() - ci,
+            {
+                if !cwa[ci].eq_exec(&cwb[ci]) { return false; }
+                proof {
+                    if cwa@[ci as int].width@.normalized_spec() && cwa@[ci as int].height@.normalized_spec()
+                        && cwb@[ci as int].width@.normalized_spec() && cwb@[ci as int].height@.normalized_spec()
+                    {
+                        Rational::lemma_normalized_eqv_implies_equal(
+                            cwa@[ci as int].width@, cwb@[ci as int].width@,
+                        );
+                        Rational::lemma_normalized_eqv_implies_equal(
+                            cwa@[ci as int].height@, cwb@[ci as int].height@,
+                        );
+                    }
+                }
+                ci = ci + 1;
+            }
+            // Compare row_heights element-wise
+            let mut ri: usize = 0;
+            while ri < rha.len()
+                invariant
+                    0 <= ri <= rha@.len(),
+                    rha@.len() == rhb@.len(),
+                    forall|j: int| 0 <= j < rha@.len() ==> rha@[j].wf_spec(),
+                    forall|j: int| 0 <= j < rhb@.len() ==> rhb@[j].wf_spec(),
+                    forall|j: int| 0 <= j < ri ==> (
+                        rha@[j].width@.normalized_spec() && rha@[j].height@.normalized_spec()
+                        && rhb@[j].width@.normalized_spec() && rhb@[j].height@.normalized_spec()
+                    ) ==> rha@[j]@ == rhb@[j]@,
+                    rha_norm ==> forall|j: int| 0 <= j < rha@.len() ==>
+                        rha@[j].width@.normalized_spec() && rha@[j].height@.normalized_spec(),
+                    rhb_norm ==> forall|j: int| 0 <= j < rhb@.len() ==>
+                        rhb@[j].width@.normalized_spec() && rhb@[j].height@.normalized_spec(),
+                decreases rha@.len() - ri,
+            {
+                if !rha[ri].eq_exec(&rhb[ri]) { return false; }
+                proof {
+                    if rha@[ri as int].width@.normalized_spec() && rha@[ri as int].height@.normalized_spec()
+                        && rhb@[ri as int].width@.normalized_spec() && rhb@[ri as int].height@.normalized_spec()
+                    {
+                        Rational::lemma_normalized_eqv_implies_equal(
+                            rha@[ri as int].width@, rhb@[ri as int].width@,
+                        );
+                        Rational::lemma_normalized_eqv_implies_equal(
+                            rha@[ri as int].height@, rhb@[ri as int].height@,
+                        );
+                    }
+                }
+                ri = ri + 1;
+            }
+            // Compare children
+            let children_eq = vec_widgets_deep_equal(ca, cb, depth - 1);
+            if !children_eq { return false; }
+            proof {
+                if a.model_normalized(depth as nat) && b.model_normalized(depth as nat) {
+                    Rational::lemma_normalized_eqv_implies_equal(pa.top@, pb.top@);
+                    Rational::lemma_normalized_eqv_implies_equal(pa.right@, pb.right@);
+                    Rational::lemma_normalized_eqv_implies_equal(pa.bottom@, pb.bottom@);
+                    Rational::lemma_normalized_eqv_implies_equal(pa.left@, pb.left@);
+                    assert(pa@ == pb@);
+                    Rational::lemma_normalized_eqv_implies_equal(hsa@, hsb@);
+                    Rational::lemma_normalized_eqv_implies_equal(vsa@, vsb@);
+                    let nc = cwa@.len() as nat;
+                    assert(Seq::new(nc, |i: int| cwa@[i]@) =~=
+                           Seq::new(nc, |i: int| cwb@[i]@));
+                    let nr = rha@.len() as nat;
+                    assert(Seq::new(nr, |i: int| rha@[i]@) =~=
+                           Seq::new(nr, |i: int| rhb@[i]@));
+                    let n = ca@.len() as nat;
+                    assert(Seq::new(n, |i: int| ca@[i].model()) =~=
+                           Seq::new(n, |i: int| cb@[i].model()));
+                }
+            }
+            true
+        },
+        (RuntimeWidget::Container(RuntimeContainerWidget::Absolute {
+            padding: pa, children: aa, ..
+        }),
+         RuntimeWidget::Container(RuntimeContainerWidget::Absolute {
+            padding: pb, children: ab, ..
+        })) => {
+            if depth <= 1 { return false; }
+            let pad_eq = pa.eq_exec(pb);
+            if !pad_eq { return false; }
+            if aa.len() != ab.len() { return false; }
+            let children_eq = vec_absolute_deep_equal(aa, ab, depth - 1);
+            if !children_eq { return false; }
+            proof {
+                if a.model_normalized(depth as nat) && b.model_normalized(depth as nat) {
+                    Rational::lemma_normalized_eqv_implies_equal(pa.top@, pb.top@);
+                    Rational::lemma_normalized_eqv_implies_equal(pa.right@, pb.right@);
+                    Rational::lemma_normalized_eqv_implies_equal(pa.bottom@, pb.bottom@);
+                    Rational::lemma_normalized_eqv_implies_equal(pa.left@, pb.left@);
+                    assert(pa@ == pb@);
+                    let n = aa@.len() as nat;
+                    assert(Seq::new(n, |i: int| aa@[i].model()) =~=
+                           Seq::new(n, |i: int| ab@[i].model()));
+                }
+            }
+            true
+        },
+        (RuntimeWidget::Container(RuntimeContainerWidget::ListView {
+            spacing: sa, scroll_y: sya, viewport: va, children: ca, ..
+        }),
+         RuntimeWidget::Container(RuntimeContainerWidget::ListView {
+            spacing: sb, scroll_y: syb, viewport: vb, children: cb, ..
+        })) => {
+            if depth <= 1 { return false; }
+            let sp_eq = sa.eq(sb);
+            if !sp_eq { return false; }
+            let sy_eq = sya.eq(syb);
+            if !sy_eq { return false; }
+            let vp_eq = va.eq_exec(vb);
+            if !vp_eq { return false; }
+            if ca.len() != cb.len() { return false; }
+            let children_eq = vec_widgets_deep_equal(ca, cb, depth - 1);
+            if !children_eq { return false; }
+            proof {
+                if a.model_normalized(depth as nat) && b.model_normalized(depth as nat) {
+                    Rational::lemma_normalized_eqv_implies_equal(sa@, sb@);
+                    Rational::lemma_normalized_eqv_implies_equal(sya@, syb@);
+                    Rational::lemma_normalized_eqv_implies_equal(va.width@, vb.width@);
+                    Rational::lemma_normalized_eqv_implies_equal(va.height@, vb.height@);
+                    assert(va@ == vb@);
+                    let n = ca@.len() as nat;
+                    assert(Seq::new(n, |i: int| ca@[i].model()) =~=
+                           Seq::new(n, |i: int| cb@[i].model()));
+                }
+            }
+            true
         },
         _ => false,
     }
