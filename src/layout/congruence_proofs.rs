@@ -603,7 +603,8 @@ pub open spec fn widget_eqv<T: OrderedField>(
                     limits_eqv(l1, l2) && widget_eqv(*c1, *c2, (fuel - 1) as nat),
                 (WrapperWidget::AspectRatio { ratio: r1, child: c1 },
                  WrapperWidget::AspectRatio { ratio: r2, child: c2 }) =>
-                    r1.eqv(r2) && widget_eqv(*c1, *c2, (fuel - 1) as nat),
+                    r1.eqv(r2) && !r1.eqv(T::zero())
+                    && widget_eqv(*c1, *c2, (fuel - 1) as nat),
                 (WrapperWidget::ScrollView { viewport: v1, scroll_x: sx1, scroll_y: sy1, child: c1 },
                  WrapperWidget::ScrollView { viewport: v2, scroll_x: sx2, scroll_y: sy2, child: c2 }) =>
                     size_eqv(v1, v2) && sx1.eqv(sx2) && sy1.eqv(sy2)
@@ -1051,14 +1052,51 @@ pub proof fn lemma_layout_widget_size_congruence<T: OrderedField>(
         },
         (Widget::Wrapper(WrapperWidget::AspectRatio { ratio: r1, child: c1 }),
          Widget::Wrapper(WrapperWidget::AspectRatio { ratio: r2, child: c2 })) => {
-            // h1 = max.width / ratio. h1 eqv h2 (div congruence)
-            let w_1 = lim1.max.width;
-            let w_2 = lim2.max.width;
-            verus_algebra::convex::lemma_two_nonzero::<T>(); // ensures two != 0 (needed later maybe)
-            // r1 eqv r2, and neither is zero (AspectRatio should have nonzero ratio)
-            // For div congruence we need !r1.eqv(T::zero())
-            // This is a precondition we should add to widget_eqv... for now admit this case.
-            admit();
+            // h1 = max.width / ratio, h2 = max.width / ratio (eqv)
+            // widget_eqv guarantees r1.eqv(r2) && !r1.eqv(T::zero())
+            verus_algebra::quadratic::lemma_div_congruence::<T>(
+                lim1.max.width, lim2.max.width, r1, r2);
+            let h1 = lim1.max.width.div(r1);
+            let h2 = lim2.max.width.div(r2);
+            // h1 eqv h2. Branch on h1.le(max.height):
+            // le_congruence: h1 eqv h2 && max.height1 eqv max.height2 && h1.le(mh1) → h2.le(mh2)
+            T::axiom_le_total(h1, lim1.max.height);
+            if h1.le(lim1.max.height) {
+                // h2 ≤ max.height2 by le_congruence
+                T::axiom_le_congruence(h1, h2, lim1.max.height, lim2.max.height);
+                // Effective limits: { min, max: (w, h1/h2) }
+                let eff1 = Limits { min: lim1.min, max: Size::new(lim1.max.width, h1) };
+                let eff2 = Limits { min: lim2.min, max: Size::new(lim2.max.width, h2) };
+                assert(limits_eqv(eff1, eff2));
+                lemma_layout_widget_size_congruence(eff1, eff2, *c1, *c2, (fuel - 1) as nat);
+                lemma_resolve_congruence(lim1, lim2,
+                    layout_widget(eff1, *c1, (fuel - 1) as nat).size,
+                    layout_widget(eff2, *c2, (fuel - 1) as nat).size);
+            } else {
+                // ¬(h1 ≤ max.height1). Need ¬(h2 ≤ max.height2) for same branch.
+                // If h2.le(max.height2) were true, then le_congruence(h2,h1,mh2,mh1) → h1.le(mh1), contradiction.
+                T::axiom_eqv_symmetric(h1, h2);
+                T::axiom_eqv_symmetric(lim1.max.height, lim2.max.height);
+                if h2.le(lim2.max.height) {
+                    T::axiom_le_congruence(h2, h1, lim2.max.height, lim1.max.height);
+                    // h1 ≤ mh1 — contradicts ¬(h1 ≤ mh1)
+                    assert(false);
+                }
+                // w2 = max.height * ratio
+                verus_algebra::lemmas::ring_lemmas::lemma_mul_congruence_right::<T>(
+                    lim1.max.height, r1, r2);
+                T::axiom_mul_congruence_left(lim1.max.height, lim2.max.height, r2);
+                T::axiom_eqv_transitive(
+                    lim1.max.height.mul(r1), lim1.max.height.mul(r2),
+                    lim2.max.height.mul(r2));
+                let eff1 = Limits { min: lim1.min, max: Size::new(lim1.max.height.mul(r1), lim1.max.height) };
+                let eff2 = Limits { min: lim2.min, max: Size::new(lim2.max.height.mul(r2), lim2.max.height) };
+                assert(limits_eqv(eff1, eff2));
+                lemma_layout_widget_size_congruence(eff1, eff2, *c1, *c2, (fuel - 1) as nat);
+                lemma_resolve_congruence(lim1, lim2,
+                    layout_widget(eff1, *c1, (fuel - 1) as nat).size,
+                    layout_widget(eff2, *c2, (fuel - 1) as nat).size);
+            }
         },
         // ── Containers ──
         (Widget::Container(ContainerWidget::Column { padding: p1, spacing: sp1, alignment: al, children: ch1 }),
