@@ -370,6 +370,17 @@ pub fn flex_row_layout_exec(
     let mut main_sum = RuntimeRational::from_int(0);
     let mut k: usize = 0;
 
+    // Establish initial invariant: flex_row_child_x(pt, ..., 0) == pt
+    proof {
+        if n > 0 {
+            use verus_rational::rational::Rational;
+            Rational::lemma_add_zero_identity(padding@.left);
+            let zero = RationalModel::from_int_spec(0);
+            assert(padding@.left.add_spec(zero) == padding@.left);
+            assert(padding@.left.add_spec(zero).add_spec(zero) == padding@.left);
+        }
+    }
+
     while k < n
         invariant
             0 <= k <= n,
