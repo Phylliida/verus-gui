@@ -617,7 +617,31 @@ pub open spec fn widget_eqv<T: OrderedField>(
                     && ch1.len() == ch2.len()
                     && forall|i: int| 0 <= i < ch1.len() ==>
                         widget_eqv(ch1[i], ch2[i], (fuel - 1) as nat),
-                _ => false, // other container variants: TODO for completeness
+                (ContainerWidget::Row { padding: p1, spacing: s1, alignment: a1, children: ch1 },
+                 ContainerWidget::Row { padding: p2, spacing: s2, alignment: a2, children: ch2 }) =>
+                    padding_eqv(p1, p2) && s1.eqv(s2) && a1 == a2
+                    && ch1.len() == ch2.len()
+                    && forall|i: int| 0 <= i < ch1.len() ==>
+                        widget_eqv(ch1[i], ch2[i], (fuel - 1) as nat),
+                (ContainerWidget::Stack { padding: p1, h_align: ha1, v_align: va1, children: ch1 },
+                 ContainerWidget::Stack { padding: p2, h_align: ha2, v_align: va2, children: ch2 }) =>
+                    padding_eqv(p1, p2) && ha1 == ha2 && va1 == va2
+                    && ch1.len() == ch2.len()
+                    && forall|i: int| 0 <= i < ch1.len() ==>
+                        widget_eqv(ch1[i], ch2[i], (fuel - 1) as nat),
+                (ContainerWidget::Wrap { padding: p1, h_spacing: hs1, v_spacing: vs1, children: ch1 },
+                 ContainerWidget::Wrap { padding: p2, h_spacing: hs2, v_spacing: vs2, children: ch2 }) =>
+                    padding_eqv(p1, p2) && hs1.eqv(hs2) && vs1.eqv(vs2)
+                    && ch1.len() == ch2.len()
+                    && forall|i: int| 0 <= i < ch1.len() ==>
+                        widget_eqv(ch1[i], ch2[i], (fuel - 1) as nat),
+                (ContainerWidget::ListView { spacing: s1, scroll_y: sy1, viewport: v1, children: ch1 },
+                 ContainerWidget::ListView { spacing: s2, scroll_y: sy2, viewport: v2, children: ch2 }) =>
+                    s1.eqv(s2) && sy1.eqv(sy2) && size_eqv(v1, v2)
+                    && ch1.len() == ch2.len()
+                    && forall|i: int| 0 <= i < ch1.len() ==>
+                        widget_eqv(ch1[i], ch2[i], (fuel - 1) as nat),
+                _ => false,
             },
             _ => false,
         }
@@ -703,6 +727,101 @@ proof fn lemma_layout_widget_column_size_bridge<T: OrderedField>(
 
     // 6. linear_layout == column_layout (bridge lemma)
     lemma_column_layout_is_linear(lim, pad, sp, al, cs);
+}
+
+/// row_layout produces an eqv-sized node (symmetric to column).
+pub proof fn lemma_row_layout_size_congruence<T: OrderedField>(
+    lim1: Limits<T>, lim2: Limits<T>,
+    pad1: Padding<T>, pad2: Padding<T>,
+    sp1: T, sp2: T,
+    alignment: Alignment,
+    s1: Seq<Size<T>>, s2: Seq<Size<T>>,
+)
+    requires
+        limits_eqv(lim1, lim2),
+        padding_eqv(pad1, pad2),
+        sp1.eqv(sp2),
+        sizes_eqv(s1, s2),
+    ensures
+        size_eqv(
+            row_layout(lim1, pad1, sp1, alignment, s1).size,
+            row_layout(lim2, pad2, sp2, alignment, s2).size,
+        ),
+{
+    reveal(row_layout);
+    // row_layout: parent_size = limits.resolve(Size::new(pad.horizontal() + content_width, limits.max.height))
+    // content_width = row_content_width(child_sizes, spacing)
+    //              = sum_widths(child_sizes, n) + repeated_add(spacing, n-1)  [for n > 0]
+    // sum_widths congruence follows from sum_main congruence with Horizontal axis
+    lemma_sum_main_congruence(s1, s2, Axis::Horizontal, s1.len() as nat);
+    lemma_repeated_add_congruence(sp1, sp2,
+        if s1.len() > 0 { (s1.len() - 1) as nat } else { 0 });
+    // row_content_width eqv
+    if s1.len() == 0 {
+        T::axiom_eqv_reflexive(T::zero());
+    } else {
+        T::axiom_add_congruence_left(
+            sum_widths(s1, s1.len() as nat),
+            sum_widths(s2, s2.len() as nat),
+            repeated_add(sp1, (s1.len() - 1) as nat));
+        verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(
+            sum_widths(s2, s2.len() as nat),
+            repeated_add(sp1, (s1.len() - 1) as nat),
+            repeated_add(sp2, (s2.len() - 1) as nat));
+        T::axiom_eqv_transitive(
+            row_content_width(s1, sp1),
+            sum_widths(s2, s2.len() as nat).add(repeated_add(sp1, (s1.len() - 1) as nat)),
+            row_content_width(s2, sp2));
+    }
+    lemma_padding_horizontal_congruence(pad1, pad2);
+    T::axiom_add_congruence_left(
+        pad1.horizontal(), pad2.horizontal(), row_content_width(s1, sp1));
+    verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(
+        pad2.horizontal(), row_content_width(s1, sp1), row_content_width(s2, sp2));
+    T::axiom_eqv_transitive(
+        pad1.horizontal().add(row_content_width(s1, sp1)),
+        pad2.horizontal().add(row_content_width(s1, sp1)),
+        pad2.horizontal().add(row_content_width(s2, sp2)));
+    lemma_resolve_congruence(lim1, lim2,
+        Size::new(pad1.horizontal().add(row_content_width(s1, sp1)), lim1.max.height),
+        Size::new(pad2.horizontal().add(row_content_width(s2, sp2)), lim2.max.height));
+}
+
+/// Bridge: layout_widget for Row produces size == row_layout size.
+proof fn lemma_layout_widget_row_size_bridge<T: OrderedField>(
+    lim: Limits<T>, pad: Padding<T>, sp: T, al: Alignment,
+    children: Seq<Widget<T>>, fuel: nat,
+)
+    requires fuel > 0,
+    ensures ({
+        let inner = lim.shrink(pad.horizontal(), pad.vertical());
+        let cs = Seq::new(children.len(), |i: int|
+            layout_widget(inner, children[i], (fuel - 1) as nat).size);
+        layout_widget(lim, Widget::Container(ContainerWidget::Row {
+            padding: pad, spacing: sp, alignment: al, children,
+        }), fuel).size == row_layout(lim, pad, sp, al, cs).size
+    }),
+{
+    reveal(linear_layout);
+    let inner = lim.shrink(pad.horizontal(), pad.vertical());
+    let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
+    let cs = Seq::new(children.len(), |i: int|
+        layout_widget(inner, children[i], (fuel - 1) as nat).size);
+
+    let row = ContainerWidget::Row {
+        padding: pad, spacing: sp, alignment: al, children,
+    };
+    let w = Widget::Container(row);
+    assert(layout_widget(lim, w, fuel)
+        == layout_container(lim, row, fuel));
+    assert(layout_container(lim, row, fuel)
+        == layout_linear_body(lim, pad, sp, al, cn, Axis::Horizontal));
+    let child_sizes = Seq::new(cn.len(), |i: int| cn[i].size);
+    assert(layout_linear_body(lim, pad, sp, al, cn, Axis::Horizontal)
+        == merge_layout(
+            linear_layout(lim, pad, sp, al, child_sizes, Axis::Horizontal), cn));
+    assert(child_sizes =~= cs);
+    lemma_row_layout_is_linear(lim, pad, sp, al, cs);
 }
 
 /// If two widgets are eqv, layout_widget produces nodes with eqv sizes.
