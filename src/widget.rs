@@ -1322,19 +1322,40 @@ pub proof fn lemma_layout_deterministic<T: OrderedField>(
         widget_converged(widget, fuel2),
     ensures
         layout_widget(limits, widget, fuel1) == layout_widget(limits, widget, fuel2),
-    decreases if fuel1 <= fuel2 { fuel2 - fuel1 } else { fuel1 - fuel2 },
 {
-    if fuel1 == fuel2 {
+    // WLOG fuel1 <= fuel2 — prove both directions by induction on the smaller.
+    // Step up from min(fuel1,fuel2) to max(fuel1,fuel2) one step at a time.
+    let lo = if fuel1 <= fuel2 { fuel1 } else { fuel2 };
+    let hi = if fuel1 <= fuel2 { fuel2 } else { fuel1 };
+    // Both converged at lo (since converged at both fuel1 and fuel2, and lo is one of them)
+    lemma_layout_deterministic_helper(limits, widget, lo, hi);
+    // layout(lo) == layout(hi)
+    // Since lo and hi are fuel1/fuel2 in some order, result follows.
+}
+
+/// Helper: proves layout(lo) == layout(hi) when lo <= hi and widget converged at lo.
+proof fn lemma_layout_deterministic_helper<T: OrderedField>(
+    limits: Limits<T>,
+    widget: Widget<T>,
+    lo: nat,
+    hi: nat,
+)
+    requires
+        lo <= hi,
+        widget_converged(widget, lo),
+    ensures
+        layout_widget(limits, widget, lo) == layout_widget(limits, widget, hi),
+    decreases hi - lo,
+{
+    if lo == hi {
         // trivial
-    } else if fuel1 < fuel2 {
-        // Induct: fuel1 -> fuel1+1 -> ... -> fuel2
-        lemma_layout_widget_fuel_monotone(limits, widget, fuel1);
-        // widget_converged is monotone (existing lemma at line ~1160)
-        lemma_widget_converged_monotone(widget, fuel1, fuel1 + 1);
-        lemma_layout_deterministic(limits, widget, fuel1 + 1, fuel2);
     } else {
-        // fuel2 < fuel1: symmetric
-        lemma_layout_deterministic(limits, widget, fuel2, fuel1);
+        lemma_layout_widget_fuel_monotone(limits, widget, lo);
+        // layout(lo) == layout(lo+1)
+        lemma_widget_converged_monotone(widget, lo, lo + 1);
+        // converged at lo+1
+        lemma_layout_deterministic_helper(limits, widget, lo + 1, hi);
+        // layout(lo+1) == layout(hi), chain: layout(lo) == layout(hi)
     }
 }
 

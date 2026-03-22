@@ -128,6 +128,19 @@ pub fn flex_column_layout_exec(
     let mut main_sum = RuntimeRational::from_int(0);
     let mut k: usize = 0;
 
+    // Establish initial invariant: flex_column_child_y(pt, ..., 0) == pt
+    proof {
+        if n > 0 {
+            // flex_main_sum(..., 0) == zero and repeated_add(sp, 0) == zero
+            // flex_column_child_y(pt, ..., 0) = pt.add(zero).add(zero) = pt
+            use verus_rational::rational::Rational;
+            Rational::lemma_add_zero_identity(padding@.top);
+            let zero = RationalModel::from_int_spec(0);
+            assert(padding@.top.add_spec(zero) == padding@.top);
+            assert(padding@.top.add_spec(zero).add_spec(zero) == padding@.top);
+        }
+    }
+
     while k < n
         invariant
             0 <= k <= n,

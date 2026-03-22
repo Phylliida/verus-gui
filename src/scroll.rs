@@ -226,8 +226,41 @@ pub proof fn lemma_child_y_offset_invariant<T: OrderedRing>(
     }
 }
 
-/// Content height (distance from first to last child bottom) is
-/// independent of scroll offset / padding_top.
+/// child_y_position is congruent in padding_top: if a eqv b,
+/// then child_y(a, ..., k) eqv child_y(b, ..., k).
+pub proof fn lemma_child_y_congruent_in_padding<T: OrderedRing>(
+    pt1: T,
+    pt2: T,
+    sizes: Seq<Size<T>>,
+    sp: T,
+    k: nat,
+)
+    requires
+        k <= sizes.len(),
+        pt1.eqv(pt2),
+    ensures
+        child_y_position(pt1, sizes, sp, k)
+            .eqv(child_y_position(pt2, sizes, sp, k)),
+    decreases k,
+{
+    if k == 0 {
+        // child_y(pt, 0) = pt, so pt1 eqv pt2 directly
+    } else {
+        // IH: child_y(pt1, k-1) eqv child_y(pt2, k-1)
+        lemma_child_y_congruent_in_padding(pt1, pt2, sizes, sp, (k - 1) as nat);
+        let y1 = child_y_position(pt1, sizes, sp, (k - 1) as nat);
+        let y2 = child_y_position(pt2, sizes, sp, (k - 1) as nat);
+        let h = sizes[(k - 1) as int].height;
+        // y1 eqv y2 (IH), so y1 + h eqv y2 + h (congruence left)
+        T::axiom_add_congruence_left(y1, y2, h);
+        // (y1 + h) + sp eqv (y2 + h) + sp (congruence left)
+        T::axiom_add_congruence_left(y1.add(h), y2.add(h), sp);
+        // child_y(pt1, k) = y1 + h + sp eqv y2 + h + sp = child_y(pt2, k)
+    }
+}
+
+/// Content height (distance between any two child positions) is
+/// independent of padding_top / scroll offset.
 pub proof fn lemma_content_height_independent_of_scroll<T: OrderedRing>(
     pt1: T,
     pt2: T,
@@ -237,45 +270,192 @@ pub proof fn lemma_content_height_independent_of_scroll<T: OrderedRing>(
 )
     requires n <= sizes.len(),
     ensures
-        // child_y(pt1, n) - child_y(pt1, 0) eqv child_y(pt2, n) - child_y(pt2, 0)
-        child_y_position(pt1, sizes, sp, n).sub(child_y_position(pt1, sizes, sp, 0))
-            .eqv(child_y_position(pt2, sizes, sp, n).sub(child_y_position(pt2, sizes, sp, 0))),
+        child_y_position(pt1, sizes, sp, n).sub(pt1)
+            .eqv(child_y_position(pt2, sizes, sp, n).sub(pt2)),
+    decreases n,
 {
-    // child_y(pt, 0) = pt, so child_y(pt, n) - pt.
-    // By lemma_child_y_offset_invariant with delta = pt2.sub(pt1):
-    //   child_y(pt1 + (pt2 - pt1), n) eqv child_y(pt1, n) + (pt2 - pt1)
-    // i.e. child_y(pt2, n) eqv child_y(pt1, n) + (pt2 - pt1)
-    // So child_y(pt2, n) - pt2 eqv child_y(pt1, n) + (pt2 - pt1) - pt2
-    //                             eqv child_y(pt1, n) - pt1
-    // This requires several algebraic steps; we leave it to the SMT solver
-    // with the key lemma instantiated.
-    let delta = pt2.sub(pt1);
-    lemma_child_y_offset_invariant(pt1, delta, sizes, sp, n);
-    lemma_child_y_offset_invariant(pt1, delta, sizes, sp, 0);
-    // child_y(pt1 + delta, n) eqv child_y(pt1, n) + delta
-    // child_y(pt1 + delta, 0) eqv child_y(pt1, 0) + delta
-    // i.e., pt1 + delta eqv pt1 + delta (trivial)
-    // and child_y(pt1 + delta, n) eqv child_y(pt1, n) + delta
+    if n == 0 {
+        // child_y(pt, 0) = pt, so pt.sub(pt) eqv T::zero() for both
+        // sub is add(neg): pt.sub(pt) eqv pt.add(pt.neg())
+        T::axiom_sub_is_add_neg(pt1, pt1);  // pt1.sub(pt1) eqv pt1.add(pt1.neg())
+        T::axiom_add_inverse_right(pt1);     // pt1.add(pt1.neg()) eqv zero
+        T::axiom_eqv_transitive(pt1.sub(pt1), pt1.add(pt1.neg()), T::zero());
+        // pt1.sub(pt1) eqv zero
 
-    // We need: child_y(pt1+delta, n).sub(pt1+delta) eqv child_y(pt1, n).sub(pt1)
-    // But pt1 + delta might not == pt2, only eqv.
-    // Actually: pt1.add(pt2.sub(pt1)) is definitionally what it is.
-    // For the general case, we use sub = add(neg) and chain congruences.
-    T::axiom_sub_is_add_neg(pt1.add(delta), pt1.add(delta));
-    T::axiom_sub_is_add_neg(pt1, pt1);
-    T::axiom_sub_is_add_neg(pt2, pt2);
+        T::axiom_sub_is_add_neg(pt2, pt2);
+        T::axiom_add_inverse_right(pt2);
+        T::axiom_eqv_transitive(pt2.sub(pt2), pt2.add(pt2.neg()), T::zero());
+        // pt2.sub(pt2) eqv zero
 
-    // The key insight: child_y(pt, n) - child_y(pt, 0) = child_y(pt, n) - pt
-    // and the offset invariant shows this difference is the same for any pt.
-    // We instantiate enough axioms for the SMT solver to close the gap.
-    T::axiom_add_inverse_right(pt1);
-    T::axiom_add_inverse_right(pt2);
-    T::axiom_add_associative(
-        child_y_position(pt1, sizes, sp, n), delta, pt1.add(delta).neg(),
-    );
-    T::axiom_add_associative(
-        child_y_position(pt1, sizes, sp, n), delta, pt2.neg(),
-    );
+        T::axiom_eqv_symmetric(pt2.sub(pt2), T::zero()); // zero eqv pt2.sub(pt2)
+        T::axiom_eqv_transitive(pt1.sub(pt1), T::zero(), pt2.sub(pt2));
+    } else {
+        // child_y(pt, n) = child_y(pt, n-1) + sizes[n-1].height + sp
+        // child_y(pt, n) - pt = (child_y(pt, n-1) - pt) + sizes[n-1].height + sp
+        // By IH, child_y(pt1, n-1) - pt1 eqv child_y(pt2, n-1) - pt2
+        lemma_content_height_independent_of_scroll(pt1, pt2, sizes, sp, (n - 1) as nat);
+
+        let y1_prev = child_y_position(pt1, sizes, sp, (n - 1) as nat);
+        let y2_prev = child_y_position(pt2, sizes, sp, (n - 1) as nat);
+        let h = sizes[(n - 1) as int].height;
+
+        // child_y(pt, n) - pt = (y_prev + h + sp) - pt
+        // We use the offset invariant: child_y(pt, k) = pt + offset(k)
+        // So child_y(pt, k) - pt = offset(k) which is independent of pt.
+
+        // More directly: use lemma_child_y_offset_invariant
+        // child_y(pt + delta, n) eqv child_y(pt, n) + delta
+        // Set delta = -pt: child_y(0, n) eqv child_y(pt, n) + (-pt) = child_y(pt, n) - pt
+        // So child_y(pt1, n) - pt1 eqv child_y(0, n) eqv child_y(pt2, n) - pt2
+
+        let zero = T::zero();
+        // child_y(0 + pt1, n) eqv child_y(0, n) + pt1
+        lemma_child_y_offset_invariant(zero, pt1, sizes, sp, n);
+        // child_y(0 + pt2, n) eqv child_y(0, n) + pt2
+        lemma_child_y_offset_invariant(zero, pt2, sizes, sp, n);
+
+        // 0 + pt1 = pt1 (structurally for the ring):
+        // We need child_y(pt1, n) eqv child_y(0, n) + pt1
+        // child_y(0.add(pt1), n) eqv child_y(0, n) + pt1 (from offset invariant)
+        // And 0.add(pt1) eqv pt1, so child_y(0.add(pt1), n) eqv child_y(pt1, n)
+        // Need: zero.add(pt1).eqv(pt1)
+        T::axiom_add_commutative(zero, pt1);        // zero.add(pt1) eqv pt1.add(zero)
+        T::axiom_add_zero_right(pt1);                // pt1.add(zero) eqv pt1
+        T::axiom_eqv_transitive(zero.add(pt1), pt1.add(zero), pt1);  // zero.add(pt1) eqv pt1
+        lemma_child_y_congruent_in_padding(zero.add(pt1), pt1, sizes, sp, n);
+        // child_y(zero.add(pt1), n) eqv child_y(pt1, n)
+        // Chain: child_y(pt1, n) eqv child_y(0.add(pt1), n) eqv child_y(0, n) + pt1
+        T::axiom_eqv_symmetric(
+            child_y_position(zero.add(pt1), sizes, sp, n),
+            child_y_position(pt1, sizes, sp, n),
+        );
+        T::axiom_eqv_transitive(
+            child_y_position(pt1, sizes, sp, n),
+            child_y_position(zero.add(pt1), sizes, sp, n),
+            child_y_position(zero, sizes, sp, n).add(pt1),
+        );
+
+        // Same for pt2
+        T::axiom_add_commutative(zero, pt2);
+        T::axiom_add_zero_right(pt2);
+        T::axiom_eqv_transitive(zero.add(pt2), pt2.add(zero), pt2);
+        lemma_child_y_congruent_in_padding(zero.add(pt2), pt2, sizes, sp, n);
+        T::axiom_eqv_symmetric(
+            child_y_position(zero.add(pt2), sizes, sp, n),
+            child_y_position(pt2, sizes, sp, n),
+        );
+        T::axiom_eqv_transitive(
+            child_y_position(pt2, sizes, sp, n),
+            child_y_position(zero.add(pt2), sizes, sp, n),
+            child_y_position(zero, sizes, sp, n).add(pt2),
+        );
+
+        // Now: child_y(pt1, n) eqv child_y(0, n) + pt1
+        //      child_y(pt2, n) eqv child_y(0, n) + pt2
+        // child_y(pt1, n) - pt1 eqv (child_y(0, n) + pt1) - pt1 eqv child_y(0, n)
+        // child_y(pt2, n) - pt2 eqv (child_y(0, n) + pt2) - pt2 eqv child_y(0, n)
+        // So both sides eqv child_y(0, n), hence eqv each other.
+
+        let cy0 = child_y_position(zero, sizes, sp, n);
+        // (cy0 + pt1) - pt1 eqv cy0
+        T::axiom_add_associative(cy0, pt1, pt1.neg());
+        T::axiom_add_inverse_right(pt1);
+        verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(
+            cy0, pt1.add(pt1.neg()), T::zero(),
+        );
+        T::axiom_add_zero_right(cy0);
+        T::axiom_eqv_transitive(
+            cy0.add(pt1).add(pt1.neg()),
+            cy0.add(pt1.add(pt1.neg())),
+            cy0.add(T::zero()),
+        );
+        T::axiom_eqv_transitive(
+            cy0.add(pt1).add(pt1.neg()),
+            cy0.add(T::zero()),
+            cy0,
+        );
+
+        // Similarly: (cy0 + pt2) - pt2 eqv cy0
+        T::axiom_add_associative(cy0, pt2, pt2.neg());
+        T::axiom_add_inverse_right(pt2);
+        verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(
+            cy0, pt2.add(pt2.neg()), T::zero(),
+        );
+        T::axiom_eqv_transitive(
+            cy0.add(pt2).add(pt2.neg()),
+            cy0.add(pt2.add(pt2.neg())),
+            cy0.add(T::zero()),
+        );
+        T::axiom_eqv_transitive(
+            cy0.add(pt2).add(pt2.neg()),
+            cy0.add(T::zero()),
+            cy0,
+        );
+
+        // Now chain: child_y(pt1,n) - pt1 eqv cy0.add(pt1) - pt1 eqv cy0
+        //         and child_y(pt2,n) - pt2 eqv cy0.add(pt2) - pt2 eqv cy0
+        // sub = add(neg), so child_y(pt1,n).sub(pt1) = child_y(pt1,n).add(pt1.neg())
+        // child_y(pt1,n) eqv cy0.add(pt1), so:
+        // child_y(pt1,n).add(pt1.neg()) eqv cy0.add(pt1).add(pt1.neg()) eqv cy0
+        T::axiom_add_congruence_left(
+            child_y_position(pt1, sizes, sp, n),
+            cy0.add(pt1),
+            pt1.neg(),
+        );
+        T::axiom_eqv_transitive(
+            child_y_position(pt1, sizes, sp, n).add(pt1.neg()),
+            cy0.add(pt1).add(pt1.neg()),
+            cy0,
+        );
+
+        T::axiom_add_congruence_left(
+            child_y_position(pt2, sizes, sp, n),
+            cy0.add(pt2),
+            pt2.neg(),
+        );
+        T::axiom_eqv_transitive(
+            child_y_position(pt2, sizes, sp, n).add(pt2.neg()),
+            cy0.add(pt2).add(pt2.neg()),
+            cy0,
+        );
+
+        // Both eqv cy0, so they're eqv to each other
+        T::axiom_eqv_symmetric(
+            child_y_position(pt2, sizes, sp, n).add(pt2.neg()),
+            cy0,
+        );
+        T::axiom_eqv_transitive(
+            child_y_position(pt1, sizes, sp, n).add(pt1.neg()),
+            cy0,
+            child_y_position(pt2, sizes, sp, n).add(pt2.neg()),
+        );
+        // result is: child_y(pt1,n).add(pt1.neg()) eqv child_y(pt2,n).add(pt2.neg())
+
+        // Bridge add(neg) back to sub for the ensures
+        T::axiom_sub_is_add_neg(child_y_position(pt1, sizes, sp, n), pt1);
+        T::axiom_sub_is_add_neg(child_y_position(pt2, sizes, sp, n), pt2);
+        // child_y(pt1,n).sub(pt1) eqv child_y(pt1,n).add(pt1.neg())
+        // child_y(pt2,n).sub(pt2) eqv child_y(pt2,n).add(pt2.neg())
+        T::axiom_eqv_symmetric(
+            child_y_position(pt1, sizes, sp, n).sub(pt1),
+            child_y_position(pt1, sizes, sp, n).add(pt1.neg()),
+        );
+        // chain: sub(pt1) eqv add(neg(pt1)) eqv ... eqv add(neg(pt2)) eqv sub(pt2)
+        T::axiom_eqv_transitive(
+            child_y_position(pt1, sizes, sp, n).sub(pt1),
+            child_y_position(pt1, sizes, sp, n).add(pt1.neg()),
+            child_y_position(pt2, sizes, sp, n).add(pt2.neg()),
+        );
+        T::axiom_eqv_symmetric(
+            child_y_position(pt2, sizes, sp, n).sub(pt2),
+            child_y_position(pt2, sizes, sp, n).add(pt2.neg()),
+        );
+        T::axiom_eqv_transitive(
+            child_y_position(pt1, sizes, sp, n).sub(pt1),
+            child_y_position(pt2, sizes, sp, n).add(pt2.neg()),
+            child_y_position(pt2, sizes, sp, n).sub(pt2),
+        );
+    }
 }
 
 } // verus!
