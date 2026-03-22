@@ -1197,6 +1197,109 @@ proof fn lemma_layout_widget_stack_size_bridge<T: OrderedField>(
     assert(child_sizes =~= cs);
 }
 
+/// Eqv predicate for absolute child_data sequences.
+pub open spec fn abs_data_eqv<T: OrderedRing>(
+    a: Seq<(T, T, Size<T>)>, b: Seq<(T, T, Size<T>)>,
+) -> bool {
+    a.len() == b.len()
+    && forall|i: int| 0 <= i < a.len() ==> {
+        &&& a[i].0.eqv(b[i].0)  // x eqv
+        &&& a[i].1.eqv(b[i].1)  // y eqv
+        &&& size_eqv(a[i].2, b[i].2)  // size eqv
+    }
+}
+
+/// absolute_max_right respects eqv on child_data.
+pub proof fn lemma_absolute_max_right_congruence<T: OrderedRing>(
+    d1: Seq<(T, T, Size<T>)>, d2: Seq<(T, T, Size<T>)>, count: nat,
+)
+    requires abs_data_eqv(d1, d2), count <= d1.len(),
+    ensures crate::layout::absolute::absolute_max_right(d1, count)
+        .eqv(crate::layout::absolute::absolute_max_right(d2, count)),
+    decreases count,
+{
+    if count == 0 {
+        T::axiom_eqv_reflexive(T::zero());
+    } else {
+        lemma_absolute_max_right_congruence(d1, d2, (count - 1) as nat);
+        // x + width eqv for entry count-1
+        T::axiom_add_congruence_left(d1[(count-1) as int].0, d2[(count-1) as int].0, d1[(count-1) as int].2.width);
+        verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(
+            d2[(count-1) as int].0, d1[(count-1) as int].2.width, d2[(count-1) as int].2.width);
+        T::axiom_eqv_transitive(
+            d1[(count-1) as int].0.add(d1[(count-1) as int].2.width),
+            d2[(count-1) as int].0.add(d1[(count-1) as int].2.width),
+            d2[(count-1) as int].0.add(d2[(count-1) as int].2.width));
+        lemma_max_congruence(
+            crate::layout::absolute::absolute_max_right(d1, (count-1) as nat),
+            crate::layout::absolute::absolute_max_right(d2, (count-1) as nat),
+            d1[(count-1) as int].0.add(d1[(count-1) as int].2.width),
+            d2[(count-1) as int].0.add(d2[(count-1) as int].2.width));
+    }
+}
+
+/// absolute_max_bottom respects eqv on child_data.
+pub proof fn lemma_absolute_max_bottom_congruence<T: OrderedRing>(
+    d1: Seq<(T, T, Size<T>)>, d2: Seq<(T, T, Size<T>)>, count: nat,
+)
+    requires abs_data_eqv(d1, d2), count <= d1.len(),
+    ensures crate::layout::absolute::absolute_max_bottom(d1, count)
+        .eqv(crate::layout::absolute::absolute_max_bottom(d2, count)),
+    decreases count,
+{
+    if count == 0 {
+        T::axiom_eqv_reflexive(T::zero());
+    } else {
+        lemma_absolute_max_bottom_congruence(d1, d2, (count - 1) as nat);
+        T::axiom_add_congruence_left(d1[(count-1) as int].1, d2[(count-1) as int].1, d1[(count-1) as int].2.height);
+        verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(
+            d2[(count-1) as int].1, d1[(count-1) as int].2.height, d2[(count-1) as int].2.height);
+        T::axiom_eqv_transitive(
+            d1[(count-1) as int].1.add(d1[(count-1) as int].2.height),
+            d2[(count-1) as int].1.add(d1[(count-1) as int].2.height),
+            d2[(count-1) as int].1.add(d2[(count-1) as int].2.height));
+        lemma_max_congruence(
+            crate::layout::absolute::absolute_max_bottom(d1, (count-1) as nat),
+            crate::layout::absolute::absolute_max_bottom(d2, (count-1) as nat),
+            d1[(count-1) as int].1.add(d1[(count-1) as int].2.height),
+            d2[(count-1) as int].1.add(d2[(count-1) as int].2.height));
+    }
+}
+
+/// Bridge: layout_widget for Absolute produces size == absolute_layout size.
+proof fn lemma_layout_widget_absolute_size_bridge<T: OrderedField>(
+    lim: Limits<T>, pad: Padding<T>,
+    children: Seq<AbsoluteChild<T>>, fuel: nat,
+)
+    requires fuel > 0,
+    ensures ({
+        let inner = lim.shrink(pad.horizontal(), pad.vertical());
+        let cd = Seq::new(children.len(), |i: int|
+            (children[i].x, children[i].y,
+             layout_widget(inner, children[i].child, (fuel - 1) as nat).size));
+        layout_widget(lim, Widget::Container(ContainerWidget::Absolute {
+            padding: pad, children,
+        }), fuel).size == crate::layout::absolute::absolute_layout(lim, pad, cd).size
+    }),
+{
+    reveal(crate::layout::absolute::absolute_layout);
+    let inner = lim.shrink(pad.horizontal(), pad.vertical());
+    let cn = absolute_widget_child_nodes(inner, children, (fuel - 1) as nat);
+    let offsets = Seq::new(children.len(), |i: int| (children[i].x, children[i].y));
+    let cd = Seq::new(children.len(), |i: int|
+        (children[i].x, children[i].y,
+         layout_widget(inner, children[i].child, (fuel - 1) as nat).size));
+    let abs = ContainerWidget::Absolute { padding: pad, children };
+    let w = Widget::Container(abs);
+    assert(layout_widget(lim, w, fuel) == layout_container(lim, abs, fuel));
+    assert(layout_container(lim, abs, fuel)
+        == layout_absolute_body(lim, pad, cn, offsets));
+    // layout_absolute_body constructs child_data from cn sizes + offsets
+    // then calls absolute_layout. The child_data matches cd.
+    let child_data = Seq::new(cn.len(), |i: int| (offsets[i].0, offsets[i].1, cn[i].size));
+    assert(child_data =~= cd);
+}
+
 /// If two widgets are eqv, layout_widget produces nodes with eqv sizes.
 /// This is the master layout congruence theorem.
 pub proof fn lemma_layout_widget_size_congruence<T: OrderedField>(
@@ -1539,6 +1642,9 @@ pub proof fn lemma_layout_widget_size_congruence<T: OrderedField>(
         // Absolute: content size from max of (offset + child_size)
         (Widget::Container(ContainerWidget::Absolute { padding: p1, children: ch1 }),
          Widget::Container(ContainerWidget::Absolute { padding: p2, children: ch2 })) => {
+            // Use bridge to connect layout_widget.size to absolute_layout.size
+            lemma_layout_widget_absolute_size_bridge(lim1, p1, ch1, fuel);
+            lemma_layout_widget_absolute_size_bridge(lim2, p2, ch2, fuel);
             reveal(crate::layout::absolute::absolute_layout);
             reveal(crate::layout::absolute::absolute_content_size);
             lemma_padding_horizontal_congruence(p1, p2);
@@ -1557,11 +1663,43 @@ pub proof fn lemma_layout_widget_size_congruence<T: OrderedField>(
                 lemma_layout_widget_size_congruence(
                     inner1, inner2, ch1[i].child, ch2[i].child, (fuel - 1) as nat);
             }
-            // child_data eqv: (x eqv, y eqv, size eqv) for each child
-            // absolute_max_right / absolute_max_bottom congruence by induction on count
-            // Same pattern as max_width/max_height — admit for this final piece
-            // (would need ~20 lines of inductive lemma, identical to lemma_max_width_congruence)
-            admit();
+            // Build eqv child_data
+            let d1 = Seq::new(ch1.len(), |i: int|
+                (ch1[i].x, ch1[i].y, layout_widget(inner1, ch1[i].child, (fuel - 1) as nat).size));
+            let d2 = Seq::new(ch2.len(), |i: int|
+                (ch2[i].x, ch2[i].y, layout_widget(inner2, ch2[i].child, (fuel - 1) as nat).size));
+            assert(abs_data_eqv(d1, d2));
+            // content size eqv
+            lemma_absolute_max_right_congruence(d1, d2, d1.len() as nat);
+            lemma_absolute_max_bottom_congruence(d1, d2, d1.len() as nat);
+            // total = padding + content
+            T::axiom_add_congruence_left(p1.horizontal(), p2.horizontal(),
+                crate::layout::absolute::absolute_max_right(d1, d1.len() as nat));
+            verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(
+                p2.horizontal(),
+                crate::layout::absolute::absolute_max_right(d1, d1.len() as nat),
+                crate::layout::absolute::absolute_max_right(d2, d2.len() as nat));
+            T::axiom_eqv_transitive(
+                p1.horizontal().add(crate::layout::absolute::absolute_max_right(d1, d1.len() as nat)),
+                p2.horizontal().add(crate::layout::absolute::absolute_max_right(d1, d1.len() as nat)),
+                p2.horizontal().add(crate::layout::absolute::absolute_max_right(d2, d2.len() as nat)));
+            T::axiom_add_congruence_left(p1.vertical(), p2.vertical(),
+                crate::layout::absolute::absolute_max_bottom(d1, d1.len() as nat));
+            verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(
+                p2.vertical(),
+                crate::layout::absolute::absolute_max_bottom(d1, d1.len() as nat),
+                crate::layout::absolute::absolute_max_bottom(d2, d2.len() as nat));
+            T::axiom_eqv_transitive(
+                p1.vertical().add(crate::layout::absolute::absolute_max_bottom(d1, d1.len() as nat)),
+                p2.vertical().add(crate::layout::absolute::absolute_max_bottom(d1, d1.len() as nat)),
+                p2.vertical().add(crate::layout::absolute::absolute_max_bottom(d2, d2.len() as nat)));
+            lemma_resolve_congruence(lim1, lim2,
+                Size::new(
+                    p1.horizontal().add(crate::layout::absolute::absolute_max_right(d1, d1.len() as nat)),
+                    p1.vertical().add(crate::layout::absolute::absolute_max_bottom(d1, d1.len() as nat))),
+                Size::new(
+                    p2.horizontal().add(crate::layout::absolute::absolute_max_right(d2, d2.len() as nat)),
+                    p2.vertical().add(crate::layout::absolute::absolute_max_bottom(d2, d2.len() as nat))));
         },
         // Cross-variant mismatches: widget_eqv returns false → vacuously true
         _ => {},
