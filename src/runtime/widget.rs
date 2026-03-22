@@ -1298,6 +1298,24 @@ pub fn widgets_deep_equal_exec(a: &RuntimeWidget, b: &RuntimeWidget, depth: usiz
             if !children_eq { return false; }
             proof {
                 if a.model_normalized(depth as nat) && b.model_normalized(depth as nat) {
+                    // Unfold model_normalized for Grid: establishes normalization for all fields
+                    // a.model_normalized(depth) for Grid gives us:
+                    //   pa normalized, hsa/vsa normalized, col_widths normalized, row_heights normalized,
+                    //   children model_normalized at depth-1
+                    // Similarly for b.
+                    assert(forall|j: int| 0 <= j < cwa@.len() ==>
+                        cwa@[j].width@.normalized_spec() && cwa@[j].height@.normalized_spec());
+                    assert(forall|j: int| 0 <= j < cwb@.len() ==>
+                        cwb@[j].width@.normalized_spec() && cwb@[j].height@.normalized_spec());
+                    assert(forall|j: int| 0 <= j < rha@.len() ==>
+                        rha@[j].width@.normalized_spec() && rha@[j].height@.normalized_spec());
+                    assert(forall|j: int| 0 <= j < rhb@.len() ==>
+                        rhb@[j].width@.normalized_spec() && rhb@[j].height@.normalized_spec());
+                    assert(forall|j: int| 0 <= j < ca@.len() ==>
+                        (#[trigger] ca@[j]).model_normalized((depth - 1) as nat));
+                    assert(forall|j: int| 0 <= j < cb@.len() ==>
+                        (#[trigger] cb@[j]).model_normalized((depth - 1) as nat));
+
                     Rational::lemma_normalized_eqv_implies_equal(pa.top@, pb.top@);
                     Rational::lemma_normalized_eqv_implies_equal(pa.right@, pb.right@);
                     Rational::lemma_normalized_eqv_implies_equal(pa.bottom@, pb.bottom@);
@@ -1305,12 +1323,33 @@ pub fn widgets_deep_equal_exec(a: &RuntimeWidget, b: &RuntimeWidget, depth: usiz
                     assert(pa@ == pb@);
                     Rational::lemma_normalized_eqv_implies_equal(hsa@, hsb@);
                     Rational::lemma_normalized_eqv_implies_equal(vsa@, vsb@);
+                    // col_widths extensional equality
+                    assert forall|j: int| 0 <= j < cwa@.len() implies
+                        cwa@[j]@ == cwb@[j]@
+                    by {
+                        assert(cwa@[j].width@.normalized_spec() && cwa@[j].height@.normalized_spec());
+                        assert(cwb@[j].width@.normalized_spec() && cwb@[j].height@.normalized_spec());
+                    }
                     let nc = cwa@.len() as nat;
                     assert(Seq::new(nc, |i: int| cwa@[i]@) =~=
                            Seq::new(nc, |i: int| cwb@[i]@));
+                    // row_heights extensional equality
+                    assert forall|j: int| 0 <= j < rha@.len() implies
+                        rha@[j]@ == rhb@[j]@
+                    by {
+                        assert(rha@[j].width@.normalized_spec() && rha@[j].height@.normalized_spec());
+                        assert(rhb@[j].width@.normalized_spec() && rhb@[j].height@.normalized_spec());
+                    }
                     let nr = rha@.len() as nat;
                     assert(Seq::new(nr, |i: int| rha@[i]@) =~=
                            Seq::new(nr, |i: int| rhb@[i]@));
+                    // children extensional equality
+                    assert forall|j: int| 0 <= j < ca@.len() implies
+                        ca@[j].model() === cb@[j].model()
+                    by {
+                        assert(ca@[j].model_normalized((depth - 1) as nat));
+                        assert(cb@[j].model_normalized((depth - 1) as nat));
+                    }
                     let n = ca@.len() as nat;
                     assert(Seq::new(n, |i: int| ca@[i].model()) =~=
                            Seq::new(n, |i: int| cb@[i].model()));
