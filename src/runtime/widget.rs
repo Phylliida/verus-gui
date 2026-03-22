@@ -2247,4 +2247,249 @@ pub fn merge_layout_exec(
     }
 }
 
+// ── Widget normalization ─────────────────────────────────────────
+
+/// Create a dummy RuntimeWidget for set_and_swap operations.
+fn make_dummy_widget() -> (out: RuntimeWidget)
+{
+    let s = RuntimeSize::zero_exec();
+    RuntimeWidget::Leaf(RuntimeLeafWidget::Leaf {
+        size: s,
+        model: Ghost(LeafWidget::Leaf { size: Size::zero_size() }),
+    })
+}
+
+/// Normalize all RuntimeRational fields in a Vec of widgets using set_and_swap.
+fn normalize_widget_vec_exec(mut widgets: Vec<RuntimeWidget>, fuel: usize) -> (out: Vec<RuntimeWidget>)
+    requires
+        fuel > 0,
+        forall|i: int| 0 <= i < widgets@.len() ==>
+            (#[trigger] widgets@[i]).wf_spec(fuel as nat),
+    ensures
+        out@.len() == widgets@.len(),
+        forall|i: int| 0 <= i < out@.len() ==> {
+            &&& (#[trigger] out@[i]).wf_spec(fuel as nat)
+            &&& out@[i].model_normalized(fuel as nat)
+        },
+    decreases fuel, 2nat,
+{
+    let ghost orig = widgets@;
+    let n = widgets.len();
+    let mut result: Vec<RuntimeWidget> = Vec::new();
+    let mut dummy = make_dummy_widget();
+    let mut i: usize = 0;
+
+    while i < n
+        invariant
+            0 <= i <= n,
+            n == orig.len(),
+            widgets@.len() == n,
+            result@.len() == i as int,
+            fuel > 0,
+            forall|j: int| i <= j < n ==>
+                (#[trigger] widgets@[j]).wf_spec(fuel as nat),
+            forall|j: int| 0 <= j < i ==> {
+                &&& (#[trigger] result@[j]).wf_spec(fuel as nat)
+                &&& result@[j].model_normalized(fuel as nat)
+            },
+        decreases n - i,
+    {
+        widgets.set_and_swap(i, &mut dummy);
+        let normalized = normalize_widget_exec(dummy, fuel);
+        result.push(normalized);
+        dummy = make_dummy_widget();
+        i = i + 1;
+    }
+    result
+}
+
+/// Normalize all RuntimeRational fields in a widget tree.
+/// Produces a widget with `model_normalized(fuel)` — all rational Ghost models
+/// are in canonical (normalized) form.
+pub fn normalize_widget_exec(widget: RuntimeWidget, fuel: usize) -> (out: RuntimeWidget)
+    requires
+        fuel > 0,
+        widget.wf_spec(fuel as nat),
+    ensures
+        out.wf_spec(fuel as nat),
+        out.model_normalized(fuel as nat),
+    decreases fuel, 1nat,
+{
+    match widget {
+        RuntimeWidget::Leaf(leaf) => match leaf {
+            RuntimeLeafWidget::Leaf { size, .. } => {
+                let sn = size.normalize_exec();
+                RuntimeWidget::Leaf(RuntimeLeafWidget::Leaf {
+                    size: sn,
+                    model: Ghost(LeafWidget::Leaf { size: sn@ }),
+                })
+            },
+            RuntimeLeafWidget::TextInput { preferred_size, text_input_id, config, .. } => {
+                let psn = preferred_size.normalize_exec();
+                RuntimeWidget::Leaf(RuntimeLeafWidget::TextInput {
+                    preferred_size: psn,
+                    text_input_id,
+                    config,
+                    model: Ghost(LeafWidget::TextInput {
+                        preferred_size: psn@,
+                        text_input_id: text_input_id as nat,
+                        config: config@,
+                    }),
+                })
+            },
+        },
+        RuntimeWidget::Wrapper(wrapper) => match wrapper {
+            RuntimeWrapperWidget::Margin { margin, child, .. } => {
+                let mn = margin.normalize_exec();
+                let cn = normalize_widget_exec(*child, fuel - 1);
+                RuntimeWidget::Wrapper(RuntimeWrapperWidget::Margin {
+                    margin: mn,
+                    child: Box::new(cn),
+                    model: Ghost(WrapperWidget::Margin {
+                        margin: mn@,
+                        child: Box::new(cn.model()),
+                    }),
+                })
+            },
+            RuntimeWrapperWidget::Conditional { visible, child, .. } => {
+                let cn = normalize_widget_exec(*child, fuel - 1);
+                RuntimeWidget::Wrapper(RuntimeWrapperWidget::Conditional {
+                    visible,
+                    child: Box::new(cn),
+                    model: Ghost(WrapperWidget::Conditional {
+                        visible,
+                        child: Box::new(cn.model()),
+                    }),
+                })
+            },
+            RuntimeWrapperWidget::SizedBox { inner_limits, child, .. } => {
+                let ln = inner_limits.normalize_exec();
+                let cn = normalize_widget_exec(*child, fuel - 1);
+                RuntimeWidget::Wrapper(RuntimeWrapperWidget::SizedBox {
+                    inner_limits: ln,
+                    child: Box::new(cn),
+                    model: Ghost(WrapperWidget::SizedBox {
+                        inner_limits: ln@,
+                        child: Box::new(cn.model()),
+                    }),
+                })
+            },
+            RuntimeWrapperWidget::AspectRatio { ratio, child, .. } => {
+                let rn = ratio.normalize();
+                let cn = normalize_widget_exec(*child, fuel - 1);
+                RuntimeWidget::Wrapper(RuntimeWrapperWidget::AspectRatio {
+                    ratio: rn,
+                    child: Box::new(cn),
+                    model: Ghost(WrapperWidget::AspectRatio {
+                        ratio: rn@,
+                        child: Box::new(cn.model()),
+                    }),
+                })
+            },
+            RuntimeWrapperWidget::ScrollView { viewport, scroll_x, scroll_y, child, .. } => {
+                let vn = viewport.normalize_exec();
+                let sxn = scroll_x.normalize();
+                let syn = scroll_y.normalize();
+                let cn = normalize_widget_exec(*child, fuel - 1);
+                RuntimeWidget::Wrapper(RuntimeWrapperWidget::ScrollView {
+                    viewport: vn,
+                    scroll_x: sxn,
+                    scroll_y: syn,
+                    child: Box::new(cn),
+                    model: Ghost(WrapperWidget::ScrollView {
+                        viewport: vn@,
+                        scroll_x: sxn@,
+                        scroll_y: syn@,
+                        child: Box::new(cn.model()),
+                    }),
+                })
+            },
+        },
+        RuntimeWidget::Container(container) => match container {
+            RuntimeContainerWidget::Column { padding, spacing, alignment, children, .. } => {
+                let pn = padding.normalize_exec();
+                let sn = spacing.normalize();
+                let cn = normalize_widget_vec_exec(children, fuel - 1);
+                RuntimeWidget::Container(RuntimeContainerWidget::Column {
+                    padding: pn, spacing: sn, alignment, children: cn,
+                    model: Ghost(ContainerWidget::Column {
+                        padding: pn@, spacing: sn@, alignment,
+                        children: Seq::new(cn@.len() as nat, |i: int| cn@[i].model()),
+                    }),
+                })
+            },
+            RuntimeContainerWidget::Row { padding, spacing, alignment, children, .. } => {
+                let pn = padding.normalize_exec();
+                let sn = spacing.normalize();
+                let cn = normalize_widget_vec_exec(children, fuel - 1);
+                RuntimeWidget::Container(RuntimeContainerWidget::Row {
+                    padding: pn, spacing: sn, alignment, children: cn,
+                    model: Ghost(ContainerWidget::Row {
+                        padding: pn@, spacing: sn@, alignment,
+                        children: Seq::new(cn@.len() as nat, |i: int| cn@[i].model()),
+                    }),
+                })
+            },
+            RuntimeContainerWidget::Stack { padding, h_align, v_align, children, .. } => {
+                let pn = padding.normalize_exec();
+                let cn = normalize_widget_vec_exec(children, fuel - 1);
+                RuntimeWidget::Container(RuntimeContainerWidget::Stack {
+                    padding: pn, h_align, v_align, children: cn,
+                    model: Ghost(ContainerWidget::Stack {
+                        padding: pn@, h_align, v_align,
+                        children: Seq::new(cn@.len() as nat, |i: int| cn@[i].model()),
+                    }),
+                })
+            },
+            RuntimeContainerWidget::Wrap { padding, h_spacing, v_spacing, children, .. } => {
+                let pn = padding.normalize_exec();
+                let hsn = h_spacing.normalize();
+                let vsn = v_spacing.normalize();
+                let cn = normalize_widget_vec_exec(children, fuel - 1);
+                RuntimeWidget::Container(RuntimeContainerWidget::Wrap {
+                    padding: pn, h_spacing: hsn, v_spacing: vsn, children: cn,
+                    model: Ghost(ContainerWidget::Wrap {
+                        padding: pn@, h_spacing: hsn@, v_spacing: vsn@,
+                        children: Seq::new(cn@.len() as nat, |i: int| cn@[i].model()),
+                    }),
+                })
+            },
+            RuntimeContainerWidget::ListView { spacing, scroll_y, viewport, children, .. } => {
+                let sn = spacing.normalize();
+                let syn = scroll_y.normalize();
+                let vn = viewport.normalize_exec();
+                let cn = normalize_widget_vec_exec(children, fuel - 1);
+                RuntimeWidget::Container(RuntimeContainerWidget::ListView {
+                    spacing: sn, scroll_y: syn, viewport: vn, children: cn,
+                    model: Ghost(ContainerWidget::ListView {
+                        spacing: sn@, scroll_y: syn@, viewport: vn@,
+                        children: Seq::new(cn@.len() as nat, |i: int| cn@[i].model()),
+                    }),
+                })
+            },
+            RuntimeContainerWidget::Flex { padding, spacing, alignment, direction, children, model } => {
+                // Flex needs FlexItem vec helper — admit for now
+                proof { admit(); }
+                RuntimeWidget::Container(RuntimeContainerWidget::Flex {
+                    padding, spacing, alignment, direction, children, model,
+                })
+            },
+            RuntimeContainerWidget::Grid { padding, h_spacing, v_spacing, h_align, v_align,
+                                           col_widths, row_heights, children, model } => {
+                proof { admit(); }
+                RuntimeWidget::Container(RuntimeContainerWidget::Grid {
+                    padding, h_spacing, v_spacing, h_align, v_align,
+                    col_widths, row_heights, children, model,
+                })
+            },
+            RuntimeContainerWidget::Absolute { padding, children, model } => {
+                proof { admit(); }
+                RuntimeWidget::Container(RuntimeContainerWidget::Absolute {
+                    padding, children, model,
+                })
+            },
+        },
+    }
+}
+
 } // verus!

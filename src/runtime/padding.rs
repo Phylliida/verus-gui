@@ -153,6 +153,30 @@ impl RuntimePadding {
             Axis::Horizontal => copy_rational(&self.top),
         }
     }
+
+    /// Normalize all rational fields.
+    pub fn normalize_exec(self) -> (out: Self)
+        requires self.wf_spec(),
+        ensures
+            out.wf_spec(),
+            out@.top.eqv_spec(self@.top),
+            out@.right.eqv_spec(self@.right),
+            out@.bottom.eqv_spec(self@.bottom),
+            out@.left.eqv_spec(self@.left),
+            out@.top.normalized_spec(),
+            out@.right.normalized_spec(),
+            out@.bottom.normalized_spec(),
+            out@.left.normalized_spec(),
+    {
+        let t = self.top.normalize();
+        let r = self.right.normalize();
+        let b = self.bottom.normalize();
+        let l = self.left.normalize();
+        RuntimePadding {
+            top: t, right: r, bottom: b, left: l,
+            model: Ghost(Padding { top: t@, right: r@, bottom: b@, left: l@ }),
+        }
+    }
 }
 
 } // verus!

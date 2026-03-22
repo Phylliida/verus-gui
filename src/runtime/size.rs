@@ -124,6 +124,20 @@ impl RuntimeSize {
             Axis::Horizontal => RuntimeSize::new(main, cross),
         }
     }
+    /// Normalize all rational fields, producing a size with normalized_spec models.
+    pub fn normalize_exec(self) -> (out: Self)
+        requires self.wf_spec(),
+        ensures
+            out.wf_spec(),
+            out@.width.eqv_spec(self@.width),
+            out@.height.eqv_spec(self@.height),
+            out@.width.normalized_spec(),
+            out@.height.normalized_spec(),
+    {
+        let w = self.width.normalize();
+        let h = self.height.normalize();
+        RuntimeSize::new(w, h)
+    }
 }
 
 } // verus!

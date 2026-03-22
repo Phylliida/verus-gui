@@ -109,6 +109,26 @@ impl RuntimeLimits {
         let new_max = RuntimeSize::new(new_max_w, new_max_h);
         RuntimeLimits::new(new_min, new_max)
     }
+
+    /// Normalize all rational fields.
+    pub fn normalize_exec(self) -> (out: Self)
+        requires self.wf_spec(),
+        ensures
+            out.wf_spec(),
+            out@.min.width.eqv_spec(self@.min.width),
+            out@.min.height.eqv_spec(self@.min.height),
+            out@.max.width.eqv_spec(self@.max.width),
+            out@.max.height.eqv_spec(self@.max.height),
+            out@.min.width.normalized_spec(),
+            out@.min.height.normalized_spec(),
+            out@.max.width.normalized_spec(),
+            out@.max.height.normalized_spec(),
+    {
+        RuntimeLimits::new(
+            self.min.normalize_exec(),
+            self.max.normalize_exec(),
+        )
+    }
 }
 
 } // verus!

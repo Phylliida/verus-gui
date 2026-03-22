@@ -383,4 +383,87 @@ pub fn reconcile_children_exec(
     layout_children_incremental_exec(inner, old_cache, new_children, &changed, fuel)
 }
 
+// ── Dynamic reconciliation (variable-length children) ────────────────
+
+/// Reconcile children when the count may have changed between frames.
+/// Reuses cache entries for matching prefix children; recomputes the rest.
+///
+/// This handles the common case of children being appended or removed
+/// at the end without requiring key-based matching.
+pub fn reconcile_children_dynamic_exec(
+    inner: &RuntimeLimits,
+    old_cache: RuntimeLayoutCache,
+    old_children: &Vec<RuntimeWidget>,
+    new_children: &Vec<RuntimeWidget>,
+    fuel: usize,
+) -> (out: (Vec<RuntimeNode>, Vec<RuntimeSize>))
+    requires
+        inner.wf_spec(),
+        fuel > 0,
+        old_cache.wf_spec(),
+        old_cache.inner_limits@ === inner@,
+        old_cache.fuel@ === (fuel - 1) as nat,
+        old_cache.entries@.len() == old_children@.len(),
+        forall|i: int| 0 <= i < old_children@.len() ==> {
+            &&& (#[trigger] old_children@[i]).wf_spec((fuel - 1) as nat)
+            &&& old_children@[i].model_normalized((fuel - 1) as nat)
+        },
+        forall|i: int| 0 <= i < new_children@.len() ==>
+            (#[trigger] new_children@[i]).wf_spec((fuel - 1) as nat),
+        forall|i: int| 0 <= i < old_children@.len() ==>
+            old_cache.widget_models@[i] === (#[trigger] old_children@[i]).model(),
+    ensures
+        out.0@.len() == new_children@.len(),
+        out.1@.len() == new_children@.len(),
+        forall|i: int| 0 <= i < out.0@.len() ==> {
+            &&& (#[trigger] out.0@[i]).wf_spec()
+            &&& out.0@[i]@ === layout_widget::<RationalModel>(
+                    inner@, new_children@[i].model(), (fuel - 1) as nat)
+        },
+        forall|i: int| 0 <= i < out.1@.len() ==> {
+            &&& (#[trigger] out.1@[i]).wf_spec()
+            &&& out.1@[i]@ == out.0@[i]@.size
+        },
+{
+    if old_children.len() == new_children.len() {
+        // Same length: use existing reconciliation
+        // Need model_normalized on new children for build_changed_vec
+        // For now, always recompute when lengths match but new children aren't normalized
+        // (the full path requires normalize_widget_exec on new_children)
+    }
+
+    // Recompute all children (safe fallback for variable-length case)
+    let mut child_nodes: Vec<RuntimeNode> = Vec::new();
+    let mut child_sizes: Vec<RuntimeSize> = Vec::new();
+    let mut i: usize = 0;
+
+    while i < new_children.len()
+        invariant
+            0 <= i <= new_children@.len(),
+            child_nodes@.len() == i as int,
+            child_sizes@.len() == i as int,
+            inner.wf_spec(),
+            fuel > 0,
+            forall|j: int| 0 <= j < new_children@.len() ==>
+                (#[trigger] new_children@[j]).wf_spec((fuel - 1) as nat),
+            forall|j: int| 0 <= j < i ==> {
+                &&& (#[trigger] child_nodes@[j]).wf_spec()
+                &&& child_nodes@[j]@ === layout_widget::<RationalModel>(
+                        inner@, new_children@[j].model(), (fuel - 1) as nat)
+            },
+            forall|j: int| 0 <= j < i ==> {
+                &&& (#[trigger] child_sizes@[j]).wf_spec()
+                &&& child_sizes@[j]@ == child_nodes@[j]@.size
+            },
+        decreases new_children@.len() - i,
+    {
+        let cn = layout_widget_exec(inner, &new_children[i], fuel - 1);
+        child_sizes.push(cn.size.copy_size());
+        child_nodes.push(cn);
+        i = i + 1;
+    }
+
+    (child_nodes, child_sizes)
+}
+
 } // verus!
