@@ -2385,6 +2385,19 @@ fn normalize_size_vec_exec(mut sizes: Vec<RuntimeSize>) -> (out: Vec<RuntimeSize
     result
 }
 
+/// Helper: wf_spec(fuel) for non-leaf widgets implies fuel >= 2.
+proof fn lemma_nonleaf_wf_needs_fuel2(widget: &RuntimeWidget, fuel: nat)
+    requires
+        !widget.is_Leaf(),
+        widget.wf_spec(fuel),
+    ensures fuel >= 2,
+{
+    // wf_spec(fuel) with fuel <= 1:
+    // fuel == 0 → false
+    // fuel == 1 → wf_shallow && children.wf_spec(0) → children.wf_spec(0) = false → false
+    // So fuel must be >= 2.
+}
+
 /// Create a dummy RuntimeWidget for set_and_swap operations.
 fn make_dummy_widget() -> (out: RuntimeWidget)
 {
@@ -2474,16 +2487,7 @@ pub fn normalize_widget_exec(widget: RuntimeWidget, fuel: usize) -> (out: Runtim
                 })
             },
         },
-        RuntimeWidget::Wrapper(wrapper) => {
-            // wf_spec(fuel) for wrappers requires child.wf_spec(fuel-1).
-            // Unfolding: wf_spec(fuel) = fuel > 0 && wf_shallow && child.wf_spec(fuel-1)
-            // child.wf_spec(fuel-1) is false when fuel-1 == 0 (i.e. fuel == 1)
-            // So fuel must be >= 2 for wrappers.
-            proof { assert(fuel >= 2) by {
-                // wf_spec(1) for wrapper = wf_shallow && child.wf_spec(0)
-                // child.wf_spec(0) = false → wf_spec(1) = false → contradicts requires
-            }; }
-            match wrapper {
+        RuntimeWidget::Wrapper(wrapper) => { match wrapper {
             RuntimeWrapperWidget::Margin { margin, child, .. } => {
                 let mn = margin.normalize_exec();
                 let cn = normalize_widget_exec(*child, fuel - 1);
@@ -2551,7 +2555,6 @@ pub fn normalize_widget_exec(widget: RuntimeWidget, fuel: usize) -> (out: Runtim
             },
         }},
         RuntimeWidget::Container(container) => {
-            proof { assert(fuel >= 2) by {}; }
             match container {
             RuntimeContainerWidget::Column { padding, spacing, alignment, children, .. } => {
                 let pn = padding.normalize_exec();
