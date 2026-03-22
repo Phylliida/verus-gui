@@ -584,21 +584,47 @@ fn text_input_config_eq(a: &RuntimeTextInputConfig, b: &RuntimeTextInputConfig) 
     ensures out ==> a@ == b@,
 {
     let line_eq = match (&a.line_width, &b.line_width) {
-        (Some(la), Some(lb)) => *la == *lb,
-        (None, None) => true,
+        (Some(la), Some(lb)) => {
+            let eq = *la == *lb;
+            proof {
+                if eq {
+                    assert(a@.line_width == Some(*la as nat));
+                    assert(b@.line_width == Some(*lb as nat));
+                }
+            }
+            eq
+        },
+        (None, None) => {
+            proof {
+                assert(a@.line_width is None);
+                assert(b@.line_width is None);
+            }
+            true
+        },
         _ => false,
     };
     let max_eq = match (&a.max_lines, &b.max_lines) {
-        (Some(ma), Some(mb)) => *ma == *mb,
-        (None, None) => true,
+        (Some(ma), Some(mb)) => {
+            let eq = *ma == *mb;
+            proof {
+                if eq {
+                    assert(a@.max_lines == Some(*ma as nat));
+                    assert(b@.max_lines == Some(*mb as nat));
+                }
+            }
+            eq
+        },
+        (None, None) => {
+            proof {
+                assert(a@.max_lines is None);
+                assert(b@.max_lines is None);
+            }
+            true
+        },
         _ => false,
     };
     let edit_eq = a.editable == b.editable;
-    let result = line_eq && max_eq && edit_eq;
-    if result {
-        assume(a@ == b@); // Trust: Option<usize>/bool comparison implies spec equality
-    }
-    result
+    line_eq && max_eq && edit_eq
 }
 
 /// Shallow comparison of two widgets: same variant, same parameters, same child count.
