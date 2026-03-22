@@ -2249,6 +2249,142 @@ pub fn merge_layout_exec(
 
 // ── Widget normalization ─────────────────────────────────────────
 
+/// Normalize a Vec<RuntimeFlexItem> using set_and_swap.
+fn normalize_flex_vec_exec(mut items: Vec<RuntimeFlexItem>, fuel: usize) -> (out: Vec<RuntimeFlexItem>)
+    requires
+        fuel > 0,
+        forall|i: int| 0 <= i < items@.len() ==> (#[trigger] items@[i]).weight.wf_spec(),
+        forall|i: int| 0 <= i < items@.len() ==> (#[trigger] items@[i]).child.wf_spec(fuel as nat),
+    ensures
+        out@.len() == items@.len(),
+        forall|i: int| 0 <= i < out@.len() ==> (#[trigger] out@[i]).weight.wf_spec(),
+        forall|i: int| 0 <= i < out@.len() ==> (#[trigger] out@[i]).weight@.normalized_spec(),
+        forall|i: int| 0 <= i < out@.len() ==> (#[trigger] out@[i]).child.wf_spec(fuel as nat),
+        forall|i: int| 0 <= i < out@.len() ==> (#[trigger] out@[i]).child.model_normalized(fuel as nat),
+    decreases fuel, 2nat,
+{
+    let n = items.len();
+    let mut result: Vec<RuntimeFlexItem> = Vec::new();
+    let ds = RuntimeSize::zero_exec();
+    let dw = RuntimeRational::from_int(0);
+    let mut dummy = RuntimeFlexItem {
+        weight: dw,
+        child: make_dummy_widget(),
+    };
+    let mut i: usize = 0;
+    while i < n
+        invariant
+            0 <= i <= n, n == items@.len(), result@.len() == i as int, fuel > 0,
+            forall|j: int| i <= j < n ==> (#[trigger] items@[j]).weight.wf_spec(),
+            forall|j: int| i <= j < n ==> (#[trigger] items@[j]).child.wf_spec(fuel as nat),
+            forall|j: int| 0 <= j < i ==> (#[trigger] result@[j]).weight.wf_spec(),
+            forall|j: int| 0 <= j < i ==> (#[trigger] result@[j]).weight@.normalized_spec(),
+            forall|j: int| 0 <= j < i ==> (#[trigger] result@[j]).child.wf_spec(fuel as nat),
+            forall|j: int| 0 <= j < i ==> (#[trigger] result@[j]).child.model_normalized(fuel as nat),
+            items@.len() == n,
+        decreases n - i,
+    {
+        items.set_and_swap(i, &mut dummy);
+        let wn = dummy.weight.normalize();
+        let cn = normalize_widget_exec(dummy.child, fuel);
+        result.push(RuntimeFlexItem { weight: wn, child: cn });
+        dummy = RuntimeFlexItem { weight: RuntimeRational::from_int(0), child: make_dummy_widget() };
+        i = i + 1;
+    }
+    result
+}
+
+/// Normalize a Vec<RuntimeAbsoluteChild> using set_and_swap.
+fn normalize_absolute_vec_exec(mut items: Vec<RuntimeAbsoluteChild>, fuel: usize) -> (out: Vec<RuntimeAbsoluteChild>)
+    requires
+        fuel > 0,
+        forall|i: int| 0 <= i < items@.len() ==> (#[trigger] items@[i]).x.wf_spec(),
+        forall|i: int| 0 <= i < items@.len() ==> (#[trigger] items@[i]).y.wf_spec(),
+        forall|i: int| 0 <= i < items@.len() ==> (#[trigger] items@[i]).child.wf_spec(fuel as nat),
+    ensures
+        out@.len() == items@.len(),
+        forall|i: int| 0 <= i < out@.len() ==> (#[trigger] out@[i]).x.wf_spec(),
+        forall|i: int| 0 <= i < out@.len() ==> (#[trigger] out@[i]).x@.normalized_spec(),
+        forall|i: int| 0 <= i < out@.len() ==> (#[trigger] out@[i]).y.wf_spec(),
+        forall|i: int| 0 <= i < out@.len() ==> (#[trigger] out@[i]).y@.normalized_spec(),
+        forall|i: int| 0 <= i < out@.len() ==> (#[trigger] out@[i]).child.wf_spec(fuel as nat),
+        forall|i: int| 0 <= i < out@.len() ==> (#[trigger] out@[i]).child.model_normalized(fuel as nat),
+    decreases fuel, 2nat,
+{
+    let n = items.len();
+    let mut result: Vec<RuntimeAbsoluteChild> = Vec::new();
+    let mut dummy = RuntimeAbsoluteChild {
+        x: RuntimeRational::from_int(0),
+        y: RuntimeRational::from_int(0),
+        child: make_dummy_widget(),
+    };
+    let mut i: usize = 0;
+    while i < n
+        invariant
+            0 <= i <= n, n == items@.len(), result@.len() == i as int, fuel > 0,
+            forall|j: int| i <= j < n ==> (#[trigger] items@[j]).x.wf_spec(),
+            forall|j: int| i <= j < n ==> (#[trigger] items@[j]).y.wf_spec(),
+            forall|j: int| i <= j < n ==> (#[trigger] items@[j]).child.wf_spec(fuel as nat),
+            forall|j: int| 0 <= j < i ==> (#[trigger] result@[j]).x.wf_spec(),
+            forall|j: int| 0 <= j < i ==> (#[trigger] result@[j]).x@.normalized_spec(),
+            forall|j: int| 0 <= j < i ==> (#[trigger] result@[j]).y.wf_spec(),
+            forall|j: int| 0 <= j < i ==> (#[trigger] result@[j]).y@.normalized_spec(),
+            forall|j: int| 0 <= j < i ==> (#[trigger] result@[j]).child.wf_spec(fuel as nat),
+            forall|j: int| 0 <= j < i ==> (#[trigger] result@[j]).child.model_normalized(fuel as nat),
+            items@.len() == n,
+        decreases n - i,
+    {
+        items.set_and_swap(i, &mut dummy);
+        let xn = dummy.x.normalize();
+        let yn = dummy.y.normalize();
+        let cn = normalize_widget_exec(dummy.child, fuel);
+        result.push(RuntimeAbsoluteChild { x: xn, y: yn, child: cn });
+        dummy = RuntimeAbsoluteChild {
+            x: RuntimeRational::from_int(0), y: RuntimeRational::from_int(0),
+            child: make_dummy_widget(),
+        };
+        i = i + 1;
+    }
+    result
+}
+
+/// Normalize a Vec<RuntimeSize> (for Grid col_widths/row_heights).
+fn normalize_size_vec_exec(mut sizes: Vec<RuntimeSize>) -> (out: Vec<RuntimeSize>)
+    requires
+        forall|i: int| 0 <= i < sizes@.len() ==> (#[trigger] sizes@[i]).wf_spec(),
+    ensures
+        out@.len() == sizes@.len(),
+        forall|i: int| 0 <= i < out@.len() ==> (#[trigger] out@[i]).wf_spec(),
+        forall|i: int| 0 <= i < out@.len() ==> {
+            (#[trigger] out@[i]).width@.normalized_spec()
+            && out@[i].height@.normalized_spec()
+        },
+{
+    let n = sizes.len();
+    let mut result: Vec<RuntimeSize> = Vec::new();
+    let mut dummy = RuntimeSize::zero_exec();
+    let mut i: usize = 0;
+    while i < n
+        invariant
+            0 <= i <= n, n == sizes@.len(), result@.len() == i as int,
+            forall|j: int| i <= j < n ==> (#[trigger] sizes@[j]).wf_spec(),
+            forall|j: int| 0 <= j < i ==> (#[trigger] result@[j]).wf_spec(),
+            forall|j: int| 0 <= j < i ==> {
+                (#[trigger] result@[j]).width@.normalized_spec()
+                && result@[j].height@.normalized_spec()
+            },
+            sizes@.len() == n,
+        decreases n - i,
+    {
+        sizes.set_and_swap(i, &mut dummy);
+        let sn = dummy.normalize_exec();
+        result.push(sn);
+        dummy = RuntimeSize::zero_exec();
+        i = i + 1;
+    }
+    result
+}
+
 /// Create a dummy RuntimeWidget for set_and_swap operations.
 fn make_dummy_widget() -> (out: RuntimeWidget)
 {
@@ -2338,7 +2474,16 @@ pub fn normalize_widget_exec(widget: RuntimeWidget, fuel: usize) -> (out: Runtim
                 })
             },
         },
-        RuntimeWidget::Wrapper(wrapper) => match wrapper {
+        RuntimeWidget::Wrapper(wrapper) => {
+            // wf_spec(fuel) for wrappers requires child.wf_spec(fuel-1).
+            // Unfolding: wf_spec(fuel) = fuel > 0 && wf_shallow && child.wf_spec(fuel-1)
+            // child.wf_spec(fuel-1) is false when fuel-1 == 0 (i.e. fuel == 1)
+            // So fuel must be >= 2 for wrappers.
+            proof { assert(fuel >= 2) by {
+                // wf_spec(1) for wrapper = wf_shallow && child.wf_spec(0)
+                // child.wf_spec(0) = false → wf_spec(1) = false → contradicts requires
+            }; }
+            match wrapper {
             RuntimeWrapperWidget::Margin { margin, child, .. } => {
                 let mn = margin.normalize_exec();
                 let cn = normalize_widget_exec(*child, fuel - 1);
@@ -2404,8 +2549,10 @@ pub fn normalize_widget_exec(widget: RuntimeWidget, fuel: usize) -> (out: Runtim
                     }),
                 })
             },
-        },
-        RuntimeWidget::Container(container) => match container {
+        }},
+        RuntimeWidget::Container(container) => {
+            proof { assert(fuel >= 2) by {}; }
+            match container {
             RuntimeContainerWidget::Column { padding, spacing, alignment, children, .. } => {
                 let pn = padding.normalize_exec();
                 let sn = spacing.normalize();
@@ -2467,28 +2614,49 @@ pub fn normalize_widget_exec(widget: RuntimeWidget, fuel: usize) -> (out: Runtim
                     }),
                 })
             },
-            RuntimeContainerWidget::Flex { padding, spacing, alignment, direction, children, model } => {
-                // Flex needs FlexItem vec helper — admit for now
-                proof { admit(); }
+            RuntimeContainerWidget::Flex { padding, spacing, alignment, direction, children, .. } => {
+                let pn = padding.normalize_exec();
+                let sn = spacing.normalize();
+                let cn = normalize_flex_vec_exec(children, fuel - 1);
                 RuntimeWidget::Container(RuntimeContainerWidget::Flex {
-                    padding, spacing, alignment, direction, children, model,
+                    padding: pn, spacing: sn, alignment, direction, children: cn,
+                    model: Ghost(ContainerWidget::Flex {
+                        padding: pn@, spacing: sn@, alignment, direction,
+                        children: Seq::new(cn@.len() as nat, |i: int| cn@[i].model()),
+                    }),
                 })
             },
             RuntimeContainerWidget::Grid { padding, h_spacing, v_spacing, h_align, v_align,
-                                           col_widths, row_heights, children, model } => {
-                proof { admit(); }
+                                           col_widths, row_heights, children, .. } => {
+                let pn = padding.normalize_exec();
+                let hsn = h_spacing.normalize();
+                let vsn = v_spacing.normalize();
+                let cwn = normalize_size_vec_exec(col_widths);
+                let rhn = normalize_size_vec_exec(row_heights);
+                let cn = normalize_widget_vec_exec(children, fuel - 1);
                 RuntimeWidget::Container(RuntimeContainerWidget::Grid {
-                    padding, h_spacing, v_spacing, h_align, v_align,
-                    col_widths, row_heights, children, model,
+                    padding: pn, h_spacing: hsn, v_spacing: vsn, h_align, v_align,
+                    col_widths: cwn, row_heights: rhn, children: cn,
+                    model: Ghost(ContainerWidget::Grid {
+                        padding: pn@, h_spacing: hsn@, v_spacing: vsn@, h_align, v_align,
+                        col_widths: Seq::new(cwn@.len() as nat, |i: int| cwn@[i]@),
+                        row_heights: Seq::new(rhn@.len() as nat, |i: int| rhn@[i]@),
+                        children: Seq::new(cn@.len() as nat, |i: int| cn@[i].model()),
+                    }),
                 })
             },
-            RuntimeContainerWidget::Absolute { padding, children, model } => {
-                proof { admit(); }
+            RuntimeContainerWidget::Absolute { padding, children, .. } => {
+                let pn = padding.normalize_exec();
+                let cn = normalize_absolute_vec_exec(children, fuel - 1);
                 RuntimeWidget::Container(RuntimeContainerWidget::Absolute {
-                    padding, children, model,
+                    padding: pn, children: cn,
+                    model: Ghost(ContainerWidget::Absolute {
+                        padding: pn@,
+                        children: Seq::new(cn@.len() as nat, |i: int| cn@[i].model()),
+                    }),
                 })
             },
-        },
+        }},
     }
 }
 
