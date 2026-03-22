@@ -524,16 +524,17 @@ impl RuntimeWidget {
                             &&& (#[trigger] children@[i]).weight@.normalized_spec()
                             &&& children@[i].child.model_normalized((fuel - 1) as nat)
                         },
-                    RuntimeContainerWidget::Grid { padding, h_spacing, v_spacing, col_widths, row_heights, children, .. } =>
-                        padding.top@.normalized_spec() && padding.right@.normalized_spec()
-                        && padding.bottom@.normalized_spec() && padding.left@.normalized_spec()
-                        && h_spacing@.normalized_spec() && v_spacing@.normalized_spec()
-                        && forall|i: int| 0 <= i < col_widths@.len() ==>
+                    RuntimeContainerWidget::Grid { padding, h_spacing, v_spacing, col_widths, row_heights, children, .. } => {
+                        &&& padding.top@.normalized_spec() && padding.right@.normalized_spec()
+                            && padding.bottom@.normalized_spec() && padding.left@.normalized_spec()
+                        &&& h_spacing@.normalized_spec() && v_spacing@.normalized_spec()
+                        &&& forall|i: int| 0 <= i < col_widths@.len() ==>
                             col_widths@[i].width@.normalized_spec() && col_widths@[i].height@.normalized_spec()
-                        && forall|i: int| 0 <= i < row_heights@.len() ==>
+                        &&& forall|i: int| 0 <= i < row_heights@.len() ==>
                             row_heights@[i].width@.normalized_spec() && row_heights@[i].height@.normalized_spec()
-                        && forall|i: int| 0 <= i < children@.len() ==>
-                            (#[trigger] children@[i]).model_normalized((fuel - 1) as nat),
+                        &&& forall|i: int| 0 <= i < children@.len() ==>
+                            (#[trigger] children@[i]).model_normalized((fuel - 1) as nat)
+                    },
                     RuntimeContainerWidget::Absolute { padding, children, .. } =>
                         padding.top@.normalized_spec() && padding.right@.normalized_spec()
                         && padding.bottom@.normalized_spec() && padding.left@.normalized_spec()
