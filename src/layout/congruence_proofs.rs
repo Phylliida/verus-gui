@@ -1902,13 +1902,9 @@ pub proof fn lemma_listview_first_visible_congruence<T: OrderedRing>(
             listview_child_bottom(s1, sp1, from),
             listview_child_y(s2, sp2, from).add(s1[from as int].height),
             listview_child_bottom(s2, sp2, from));
-        // scroll_y.lt(bottom) is the same for eqv scroll_y and eqv bottom
-        lemma_le_congruence_iff(sy1, sy2,
+        // scroll_y.lt(bottom) is the same for eqv inputs
+        lemma_lt_congruence_iff(sy1, sy2,
             listview_child_bottom(s1, sp1, from), listview_child_bottom(s2, sp2, from));
-        // lt(a, b) = !b.le(a), so le_congruence_iff on (bottom, scroll_y) gives lt congruence
-        lemma_le_congruence_iff(
-            listview_child_bottom(s1, sp1, from), listview_child_bottom(s2, sp2, from),
-            sy1, sy2);
         if sy1.lt(listview_child_bottom(s1, sp1, from)) {
             // Both return `from`
         } else {
