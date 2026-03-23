@@ -7,6 +7,7 @@ use crate::text_model::undo_proofs::*;
 use crate::text_model::session::*;
 use crate::text_model::paragraph_proofs::*;
 use crate::text_model::find::*;
+use crate::text_model::find_proofs::*;
 use crate::event::*;
 use crate::runtime::text_model::*;
 use crate::runtime::event::*;
@@ -621,7 +622,8 @@ pub fn find_next_exec(
 
     // If from > text_len or text too short for pattern, no match
     if from > text_len || text_len < pat_len {
-        assume(find_next(text@, pattern@, from as nat).is_none());
+        // find_next_scan with from + pat_len > text_len → None
+        proof { lemma_find_next_scan_none_out_of_range(text@, pattern@, from as nat); }
         return None;
     }
 
@@ -631,12 +633,15 @@ pub fn find_next_exec(
 
     while i <= last_start
         invariant
-            from <= i || i == from,
+            from <= i,
             pat_len == pattern@.len(),
             pat_len > 0,
             last_start == text_len - pat_len,
             text_len == text@.len(),
             i <= text_len,
+            // Key invariant: no match exists in [from, i)
+            forall|p: nat| from as nat <= p && p < i as nat ==>
+                !seq_matches_at(text@, pattern@, p),
         decreases last_start - i + 1,
     {
         // Check if pattern matches at i
@@ -661,7 +666,14 @@ pub fn find_next_exec(
         }
 
         if matches {
-            assume(find_next(text@, pattern@, from as nat) == Some(i as nat));
+            // Pattern matches at i. By invariant, no match in [from, i).
+            // So i is the first match = find_next_scan result.
+            proof {
+                // matches ==> seq_matches_at(text@, pattern@, i as nat)
+                assert(seq_matches_at(text@, pattern@, i as nat));
+                lemma_find_next_scan_matches_first(
+                    text@, pattern@, from as nat, i as nat, text@.len());
+            }
             return Some(i);
         }
 
@@ -671,7 +683,12 @@ pub fn find_next_exec(
         i = i + 1;
     }
 
-    assume(find_next(text@, pattern@, from as nat).is_none());
+    // Exhausted scan: no match in [from, last_start].
+    // Any position > last_start would have pos + pat_len > text_len, so no match.
+    proof {
+        lemma_find_next_scan_exhausted(
+            text@, pattern@, from as nat, text@.len());
+    }
     None
 }
 
@@ -688,7 +705,7 @@ pub fn find_prev_exec(
         },
 {
     if pattern.len() == 0 || from == 0 {
-        assume(find_prev(text@, pattern@, from as nat).is_none());
+        // find_prev with empty pattern or from==0 returns None
         return None;
     }
     let pat_len = pattern.len();
@@ -701,6 +718,9 @@ pub fn find_prev_exec(
             pat_len == pattern@.len(),
             pat_len > 0,
             text_len == text@.len(),
+            // Key invariant: no match in [pos, from)
+            forall|p: nat| pos as nat <= p && p < from as nat ==>
+                !seq_matches_at(text@, pattern@, p),
         decreases pos,
     {
         pos = pos - 1;
@@ -727,13 +747,24 @@ pub fn find_prev_exec(
             }
 
             if matches {
-                assume(find_prev(text@, pattern@, from as nat) == Some(pos as nat));
+                // Pattern matches at pos. No match in (pos, from). So pos is the last match.
+                proof {
+                    assert(seq_matches_at(text@, pattern@, pos as nat));
+                    lemma_find_prev_scan_matches_last(
+                        text@, pattern@, from as nat, pos as nat, from as nat);
+                }
                 return Some(pos);
             }
+        } else {
+            // pos + pat_len > text_len, so !seq_matches_at trivially
         }
     }
 
-    assume(find_prev(text@, pattern@, from as nat).is_none());
+    // Exhausted: no match in [0, from)
+    proof {
+        lemma_find_prev_scan_exhausted(
+            text@, pattern@, from as nat, from as nat);
+    }
     None
 }
 
