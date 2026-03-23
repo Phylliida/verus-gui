@@ -100,7 +100,12 @@ fn session_handle_non_text_edit_exec(
         },
         _ => {
             proof { assert(false); }
-            dead_session(undo_stack, clipboard, history, style_history)
+            // Unreachable — construct dummy to consume moved values
+            RuntimeTextEditSession {
+                model: RuntimeTextModel::dummy(),
+                undo_stack, last_was_insert: false,
+                clipboard, history, style_history,
+            }
         },
     }
 }
@@ -199,7 +204,12 @@ fn session_handle_text_edit_exec(
         },
         _ => {
             proof { assert(false); }
-            dead_session(undo_stack, clipboard, history, style_history)
+            // Unreachable — construct dummy to consume moved values
+            RuntimeTextEditSession {
+                model: RuntimeTextModel::dummy(),
+                undo_stack, last_was_insert: false,
+                clipboard, history, style_history,
+            }
         },
     }
 }
