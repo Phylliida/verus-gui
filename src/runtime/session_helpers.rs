@@ -677,15 +677,31 @@ pub fn find_next_exec(
             return Some(i);
         }
 
+        // !matches at position i — no match here
+        // The invariant for next iteration will include this position
+
         if i == last_start {
-            break;
+            // Checked all positions [from, last_start]. None matched.
+            // For p > last_start: p + pat_len > text_len, so no valid match.
+            proof {
+                // Invariant gives: no match in [from, i). Plus !matches gives: no match at i.
+                // So no match in [from, i] = [from, last_start].
+                // Any p with p + pat_len <= text_len has p <= last_start.
+                // Combined: no match for any valid p >= from.
+                assert(forall|p: nat| from as nat <= p && p + pattern@.len() <= text@.len()
+                    ==> !seq_matches_at(text@, pattern@, p));
+                lemma_find_next_scan_exhausted(
+                    text@, pattern@, from as nat, text@.len());
+            }
+            return None;
         }
         i = i + 1;
     }
 
-    // Exhausted scan: no match in [from, last_start].
-    // Any position > last_start would have pos + pat_len > text_len, so no match.
+    // Loop condition i > last_start without break — same exhaustion
     proof {
+        assert(forall|p: nat| from as nat <= p && p + pattern@.len() <= text@.len()
+            ==> !seq_matches_at(text@, pattern@, p));
         lemma_find_next_scan_exhausted(
             text@, pattern@, from as nat, text@.len());
     }

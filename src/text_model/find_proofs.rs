@@ -235,7 +235,7 @@ pub proof fn lemma_find_next_scan_exhausted(
 )
     requires
         pattern.len() > 0,
-        fuel >= text.len(),
+        from + fuel >= text.len(),
         forall|p: nat| from <= p && p + pattern.len() <= text.len()
             ==> !seq_matches_at(text, pattern, p),
     ensures
@@ -243,12 +243,10 @@ pub proof fn lemma_find_next_scan_exhausted(
     decreases fuel,
 {
     if fuel == 0 {
+        // from + 0 >= text.len() → from >= text.len() → from + pattern.len() > text.len() → base case
     } else if from + pattern.len() > text.len() {
-        // Base case: out of range
     } else {
-        // from + pattern.len() <= text.len(), so from is a valid position
-        // but !seq_matches_at by precondition
-        // Recurse with from+1
+        // (from+1) + (fuel-1) = from + fuel >= text.len()
         lemma_find_next_scan_exhausted(text, pattern, from + 1, (fuel - 1) as nat);
     }
 }
