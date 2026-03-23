@@ -674,9 +674,12 @@ pub open spec fn widget_eqv<T: OrderedField>(
                     && ch1.len() == ch2.len()
                     && forall|i: int| 0 <= i < ch1.len() ==>
                         widget_eqv(ch1[i], ch2[i], (fuel - 1) as nat),
-                // ListView excluded: children.len() depends on visible range
-                // (listview_first/end_visible), which requires proving these
-                // respect eqv. Deferred to a dedicated ListView congruence proof.
+                (ContainerWidget::ListView { spacing: s1, scroll_y: sy1, viewport: v1, children: ch1 },
+                 ContainerWidget::ListView { spacing: s2, scroll_y: sy2, viewport: v2, children: ch2 }) =>
+                    s1.eqv(s2) && sy1.eqv(sy2) && size_eqv(v1, v2)
+                    && ch1.len() == ch2.len()
+                    && forall|i: int| 0 <= i < ch1.len() ==>
+                        widget_eqv(ch1[i], ch2[i], (fuel - 1) as nat),
                 (ContainerWidget::Flex { padding: p1, spacing: s1, alignment: a1, direction: d1, children: ch1 },
                  ContainerWidget::Flex { padding: p2, spacing: s2, alignment: a2, direction: d2, children: ch2 }) =>
                     padding_eqv(p1, p2) && s1.eqv(s2) && a1 == a2 && d1 == d2
@@ -1810,6 +1813,120 @@ pub open spec fn widget_children_count<T: OrderedField>(w: Widget<T>) -> nat {
             ContainerWidget::Absolute { children, .. } => children.len(),
             ContainerWidget::ListView { children, .. } => children.len(),
         },
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// ListView visible range congruence
+// ══════════════════════════════════════════════════════════════════════
+
+/// listview_child_y respects eqv on sizes and spacing.
+pub proof fn lemma_listview_child_y_congruence<T: OrderedRing>(
+    s1: Seq<Size<T>>, s2: Seq<Size<T>>,
+    sp1: T, sp2: T, i: nat,
+)
+    requires sizes_eqv(s1, s2), sp1.eqv(sp2), i <= s1.len(),
+    ensures
+        crate::layout::listview::listview_child_y(s1, sp1, i)
+            .eqv(crate::layout::listview::listview_child_y(s2, sp2, i)),
+    decreases i,
+{
+    use crate::layout::listview::listview_child_y;
+    if i == 0 {
+        T::axiom_eqv_reflexive(T::zero());
+    } else {
+        lemma_listview_child_y_congruence(s1, s2, sp1, sp2, (i - 1) as nat);
+        let y1 = listview_child_y(s1, sp1, (i - 1) as nat);
+        let y2 = listview_child_y(s2, sp2, (i - 1) as nat);
+        T::axiom_add_congruence_left(y1, y2, s1[(i-1) as int].height);
+        verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(
+            y2, s1[(i-1) as int].height, s2[(i-1) as int].height);
+        T::axiom_eqv_transitive(y1.add(s1[(i-1) as int].height), y2.add(s1[(i-1) as int].height),
+            y2.add(s2[(i-1) as int].height));
+        T::axiom_add_congruence_left(y1.add(s1[(i-1) as int].height), y2.add(s2[(i-1) as int].height), sp1);
+        verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(
+            y2.add(s2[(i-1) as int].height), sp1, sp2);
+        T::axiom_eqv_transitive(
+            y1.add(s1[(i-1) as int].height).add(sp1),
+            y2.add(s2[(i-1) as int].height).add(sp1),
+            y2.add(s2[(i-1) as int].height).add(sp2));
+    }
+}
+
+/// listview_first_visible_from produces the same index for eqv inputs.
+pub proof fn lemma_listview_first_visible_congruence<T: OrderedRing>(
+    s1: Seq<Size<T>>, s2: Seq<Size<T>>,
+    sp1: T, sp2: T,
+    sy1: T, sy2: T,
+    from: nat,
+)
+    requires sizes_eqv(s1, s2), sp1.eqv(sp2), sy1.eqv(sy2),
+    ensures
+        crate::layout::listview::listview_first_visible_from(s1, sp1, sy1, from)
+            == crate::layout::listview::listview_first_visible_from(s2, sp2, sy2, from),
+    decreases s1.len() - from,
+{
+    use crate::layout::listview::{listview_first_visible_from, listview_child_bottom, listview_child_y};
+    if from >= s1.len() {
+    } else {
+        // listview_child_bottom(s, sp, from) = child_y(s, sp, from) + s[from].height
+        lemma_listview_child_y_congruence(s1, s2, sp1, sp2, from);
+        T::axiom_add_congruence_left(
+            listview_child_y(s1, sp1, from), listview_child_y(s2, sp2, from),
+            s1[from as int].height);
+        verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(
+            listview_child_y(s2, sp2, from), s1[from as int].height, s2[from as int].height);
+        T::axiom_eqv_transitive(
+            listview_child_bottom(s1, sp1, from),
+            listview_child_y(s2, sp2, from).add(s1[from as int].height),
+            listview_child_bottom(s2, sp2, from));
+        // scroll_y.lt(bottom) is the same for eqv scroll_y and eqv bottom
+        lemma_le_congruence_iff(sy1, sy2,
+            listview_child_bottom(s1, sp1, from), listview_child_bottom(s2, sp2, from));
+        // lt(a, b) = !b.le(a), so le_congruence_iff on (bottom, scroll_y) gives lt congruence
+        lemma_le_congruence_iff(
+            listview_child_bottom(s1, sp1, from), listview_child_bottom(s2, sp2, from),
+            sy1, sy2);
+        if sy1.lt(listview_child_bottom(s1, sp1, from)) {
+            // Both return `from`
+        } else {
+            // Both recurse
+            lemma_listview_first_visible_congruence(s1, s2, sp1, sp2, sy1, sy2, from + 1);
+        }
+    }
+}
+
+/// listview_end_visible_from produces the same index for eqv inputs.
+pub proof fn lemma_listview_end_visible_congruence<T: OrderedRing>(
+    s1: Seq<Size<T>>, s2: Seq<Size<T>>,
+    sp1: T, sp2: T,
+    sy1: T, sy2: T,
+    vh1: T, vh2: T,
+    from: nat,
+)
+    requires sizes_eqv(s1, s2), sp1.eqv(sp2), sy1.eqv(sy2), vh1.eqv(vh2),
+    ensures
+        crate::layout::listview::listview_end_visible_from(s1, sp1, sy1, vh1, from)
+            == crate::layout::listview::listview_end_visible_from(s2, sp2, sy2, vh2, from),
+    decreases s1.len() - from,
+{
+    use crate::layout::listview::{listview_end_visible_from, listview_child_y};
+    if from >= s1.len() {
+    } else {
+        // scroll_bottom = scroll_y + viewport_h
+        T::axiom_add_congruence_left(sy1, sy2, vh1);
+        verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(sy2, vh1, vh2);
+        T::axiom_eqv_transitive(sy1.add(vh1), sy2.add(vh1), sy2.add(vh2));
+        lemma_listview_child_y_congruence(s1, s2, sp1, sp2, from);
+        // le_congruence_iff on scroll_bottom vs child_y
+        lemma_le_congruence_iff(
+            sy1.add(vh1), sy2.add(vh2),
+            listview_child_y(s1, sp1, from), listview_child_y(s2, sp2, from));
+        if sy1.add(vh1).le(listview_child_y(s1, sp1, from)) {
+            // Both return `from`
+        } else {
+            lemma_listview_end_visible_congruence(s1, s2, sp1, sp2, sy1, sy2, vh1, vh2, from + 1);
+        }
     }
 }
 
