@@ -259,6 +259,62 @@ pub proof fn lemma_child_y_congruent_in_padding<T: OrderedRing>(
     }
 }
 
+// ── Reusable eqv helpers ─────────────────────────────────────────
+
+/// a.sub(a) eqv T::zero() for any a.
+proof fn lemma_sub_self_eqv_zero<T: OrderedRing>(a: T)
+    ensures a.sub(a).eqv(T::zero()),
+{
+    T::axiom_sub_is_add_neg(a, a);
+    T::axiom_add_inverse_right(a);
+    T::axiom_eqv_transitive(a.sub(a), a.add(a.neg()), T::zero());
+}
+
+/// (x + a).sub(a) eqv x — cancel right addend.
+proof fn lemma_add_sub_cancel_right<T: OrderedRing>(x: T, a: T)
+    ensures x.add(a).sub(a).eqv(x),
+{
+    T::axiom_sub_is_add_neg(x.add(a), a);
+    T::axiom_add_associative(x, a, a.neg());
+    T::axiom_add_inverse_right(a);
+    verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(
+        x, a.add(a.neg()), T::zero());
+    T::axiom_add_zero_right(x);
+    T::axiom_eqv_transitive(
+        x.add(a).add(a.neg()), x.add(a.add(a.neg())), x.add(T::zero()));
+    T::axiom_eqv_transitive(x.add(a).add(a.neg()), x.add(T::zero()), x);
+    // x.add(a).add(a.neg()) eqv x, and sub eqv add(neg):
+    T::axiom_eqv_symmetric(x.add(a).sub(a), x.add(a).add(a.neg()));
+    T::axiom_eqv_transitive(x.add(a).sub(a), x.add(a).add(a.neg()), x);
+}
+
+/// child_y(pt, n) eqv child_y(0, n) + pt.
+proof fn lemma_child_y_eqv_cy0_add_pt<T: OrderedRing>(
+    pt: T, sizes: Seq<Size<T>>, sp: T, n: nat,
+)
+    requires n <= sizes.len(),
+    ensures
+        child_y_position(pt, sizes, sp, n)
+            .eqv(child_y_position(T::zero(), sizes, sp, n).add(pt)),
+{
+    let zero = T::zero();
+    lemma_child_y_offset_invariant(zero, pt, sizes, sp, n);
+    // child_y(zero + pt, n) eqv child_y(zero, n) + pt
+    // zero + pt eqv pt:
+    T::axiom_add_commutative(zero, pt);
+    T::axiom_add_zero_right(pt);
+    T::axiom_eqv_transitive(zero.add(pt), pt.add(zero), pt);
+    lemma_child_y_congruent_in_padding(zero.add(pt), pt, sizes, sp, n);
+    // child_y(zero+pt, n) eqv child_y(pt, n), chain:
+    T::axiom_eqv_symmetric(
+        child_y_position(zero.add(pt), sizes, sp, n),
+        child_y_position(pt, sizes, sp, n));
+    T::axiom_eqv_transitive(
+        child_y_position(pt, sizes, sp, n),
+        child_y_position(zero.add(pt), sizes, sp, n),
+        child_y_position(zero, sizes, sp, n).add(pt));
+}
+
 /// Content height (distance between any two child positions) is
 /// independent of padding_top / scroll offset.
 pub proof fn lemma_content_height_independent_of_scroll<T: OrderedRing>(
@@ -275,186 +331,68 @@ pub proof fn lemma_content_height_independent_of_scroll<T: OrderedRing>(
     decreases n,
 {
     if n == 0 {
-        // child_y(pt, 0) = pt, so pt.sub(pt) eqv T::zero() for both
-        // sub is add(neg): pt.sub(pt) eqv pt.add(pt.neg())
-        T::axiom_sub_is_add_neg(pt1, pt1);  // pt1.sub(pt1) eqv pt1.add(pt1.neg())
-        T::axiom_add_inverse_right(pt1);     // pt1.add(pt1.neg()) eqv zero
-        T::axiom_eqv_transitive(pt1.sub(pt1), pt1.add(pt1.neg()), T::zero());
-        // pt1.sub(pt1) eqv zero
-
-        T::axiom_sub_is_add_neg(pt2, pt2);
-        T::axiom_add_inverse_right(pt2);
-        T::axiom_eqv_transitive(pt2.sub(pt2), pt2.add(pt2.neg()), T::zero());
-        // pt2.sub(pt2) eqv zero
-
-        T::axiom_eqv_symmetric(pt2.sub(pt2), T::zero()); // zero eqv pt2.sub(pt2)
+        // child_y(pt, 0) = pt, so pt.sub(pt) eqv 0 eqv pt2.sub(pt2)
+        lemma_sub_self_eqv_zero(pt1);
+        lemma_sub_self_eqv_zero(pt2);
+        T::axiom_eqv_symmetric(pt2.sub(pt2), T::zero());
         T::axiom_eqv_transitive(pt1.sub(pt1), T::zero(), pt2.sub(pt2));
     } else {
-        // child_y(pt, n) = child_y(pt, n-1) + sizes[n-1].height + sp
-        // child_y(pt, n) - pt = (child_y(pt, n-1) - pt) + sizes[n-1].height + sp
-        // By IH, child_y(pt1, n-1) - pt1 eqv child_y(pt2, n-1) - pt2
-        lemma_content_height_independent_of_scroll(pt1, pt2, sizes, sp, (n - 1) as nat);
-
-        let y1_prev = child_y_position(pt1, sizes, sp, (n - 1) as nat);
-        let y2_prev = child_y_position(pt2, sizes, sp, (n - 1) as nat);
-        let h = sizes[(n - 1) as int].height;
-
-        // child_y(pt, n) - pt = (y_prev + h + sp) - pt
-        // We use the offset invariant: child_y(pt, k) = pt + offset(k)
-        // So child_y(pt, k) - pt = offset(k) which is independent of pt.
-
-        // More directly: use lemma_child_y_offset_invariant
-        // child_y(pt + delta, n) eqv child_y(pt, n) + delta
-        // Set delta = -pt: child_y(0, n) eqv child_y(pt, n) + (-pt) = child_y(pt, n) - pt
-        // So child_y(pt1, n) - pt1 eqv child_y(0, n) eqv child_y(pt2, n) - pt2
-
-        let zero = T::zero();
-        // child_y(0 + pt1, n) eqv child_y(0, n) + pt1
-        lemma_child_y_offset_invariant(zero, pt1, sizes, sp, n);
-        // child_y(0 + pt2, n) eqv child_y(0, n) + pt2
-        lemma_child_y_offset_invariant(zero, pt2, sizes, sp, n);
-
-        // 0 + pt1 = pt1 (structurally for the ring):
-        // We need child_y(pt1, n) eqv child_y(0, n) + pt1
-        // child_y(0.add(pt1), n) eqv child_y(0, n) + pt1 (from offset invariant)
-        // And 0.add(pt1) eqv pt1, so child_y(0.add(pt1), n) eqv child_y(pt1, n)
-        // Need: zero.add(pt1).eqv(pt1)
-        T::axiom_add_commutative(zero, pt1);        // zero.add(pt1) eqv pt1.add(zero)
-        T::axiom_add_zero_right(pt1);                // pt1.add(zero) eqv pt1
-        T::axiom_eqv_transitive(zero.add(pt1), pt1.add(zero), pt1);  // zero.add(pt1) eqv pt1
-        lemma_child_y_congruent_in_padding(zero.add(pt1), pt1, sizes, sp, n);
-        // child_y(zero.add(pt1), n) eqv child_y(pt1, n)
-        // Chain: child_y(pt1, n) eqv child_y(0.add(pt1), n) eqv child_y(0, n) + pt1
-        T::axiom_eqv_symmetric(
-            child_y_position(zero.add(pt1), sizes, sp, n),
-            child_y_position(pt1, sizes, sp, n),
-        );
-        T::axiom_eqv_transitive(
-            child_y_position(pt1, sizes, sp, n),
-            child_y_position(zero.add(pt1), sizes, sp, n),
-            child_y_position(zero, sizes, sp, n).add(pt1),
-        );
-
-        // Same for pt2
-        T::axiom_add_commutative(zero, pt2);
-        T::axiom_add_zero_right(pt2);
-        T::axiom_eqv_transitive(zero.add(pt2), pt2.add(zero), pt2);
-        lemma_child_y_congruent_in_padding(zero.add(pt2), pt2, sizes, sp, n);
-        T::axiom_eqv_symmetric(
-            child_y_position(zero.add(pt2), sizes, sp, n),
-            child_y_position(pt2, sizes, sp, n),
-        );
-        T::axiom_eqv_transitive(
-            child_y_position(pt2, sizes, sp, n),
-            child_y_position(zero.add(pt2), sizes, sp, n),
-            child_y_position(zero, sizes, sp, n).add(pt2),
-        );
-
-        // Now: child_y(pt1, n) eqv child_y(0, n) + pt1
-        //      child_y(pt2, n) eqv child_y(0, n) + pt2
-        // child_y(pt1, n) - pt1 eqv (child_y(0, n) + pt1) - pt1 eqv child_y(0, n)
-        // child_y(pt2, n) - pt2 eqv (child_y(0, n) + pt2) - pt2 eqv child_y(0, n)
-        // So both sides eqv child_y(0, n), hence eqv each other.
-
-        let cy0 = child_y_position(zero, sizes, sp, n);
-        // (cy0 + pt1) - pt1 eqv cy0
-        T::axiom_add_associative(cy0, pt1, pt1.neg());
-        T::axiom_add_inverse_right(pt1);
-        verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(
-            cy0, pt1.add(pt1.neg()), T::zero(),
-        );
-        T::axiom_add_zero_right(cy0);
-        T::axiom_eqv_transitive(
-            cy0.add(pt1).add(pt1.neg()),
-            cy0.add(pt1.add(pt1.neg())),
-            cy0.add(T::zero()),
-        );
-        T::axiom_eqv_transitive(
-            cy0.add(pt1).add(pt1.neg()),
-            cy0.add(T::zero()),
-            cy0,
-        );
-
-        // Similarly: (cy0 + pt2) - pt2 eqv cy0
-        T::axiom_add_associative(cy0, pt2, pt2.neg());
-        T::axiom_add_inverse_right(pt2);
-        verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(
-            cy0, pt2.add(pt2.neg()), T::zero(),
-        );
-        T::axiom_eqv_transitive(
-            cy0.add(pt2).add(pt2.neg()),
-            cy0.add(pt2.add(pt2.neg())),
-            cy0.add(T::zero()),
-        );
-        T::axiom_eqv_transitive(
-            cy0.add(pt2).add(pt2.neg()),
-            cy0.add(T::zero()),
-            cy0,
-        );
-
-        // Now chain: child_y(pt1,n) - pt1 eqv cy0.add(pt1) - pt1 eqv cy0
-        //         and child_y(pt2,n) - pt2 eqv cy0.add(pt2) - pt2 eqv cy0
-        // sub = add(neg), so child_y(pt1,n).sub(pt1) = child_y(pt1,n).add(pt1.neg())
-        // child_y(pt1,n) eqv cy0.add(pt1), so:
-        // child_y(pt1,n).add(pt1.neg()) eqv cy0.add(pt1).add(pt1.neg()) eqv cy0
-        T::axiom_add_congruence_left(
-            child_y_position(pt1, sizes, sp, n),
-            cy0.add(pt1),
-            pt1.neg(),
-        );
-        T::axiom_eqv_transitive(
-            child_y_position(pt1, sizes, sp, n).add(pt1.neg()),
-            cy0.add(pt1).add(pt1.neg()),
-            cy0,
-        );
-
-        T::axiom_add_congruence_left(
-            child_y_position(pt2, sizes, sp, n),
-            cy0.add(pt2),
-            pt2.neg(),
-        );
-        T::axiom_eqv_transitive(
-            child_y_position(pt2, sizes, sp, n).add(pt2.neg()),
-            cy0.add(pt2).add(pt2.neg()),
-            cy0,
-        );
-
-        // Both eqv cy0, so they're eqv to each other
-        T::axiom_eqv_symmetric(
-            child_y_position(pt2, sizes, sp, n).add(pt2.neg()),
-            cy0,
-        );
-        T::axiom_eqv_transitive(
-            child_y_position(pt1, sizes, sp, n).add(pt1.neg()),
-            cy0,
-            child_y_position(pt2, sizes, sp, n).add(pt2.neg()),
-        );
-        // result is: child_y(pt1,n).add(pt1.neg()) eqv child_y(pt2,n).add(pt2.neg())
-
-        // Bridge add(neg) back to sub for the ensures
+        // Strategy: child_y(pt, n) eqv cy0 + pt (by helper)
+        // So child_y(pt, n).sub(pt) eqv (cy0 + pt).sub(pt) eqv cy0 (cancel)
+        // Both sides eqv cy0, hence eqv to each other.
+        let cy0 = child_y_position(T::zero(), sizes, sp, n);
+        lemma_child_y_eqv_cy0_add_pt(pt1, sizes, sp, n);
+        lemma_child_y_eqv_cy0_add_pt(pt2, sizes, sp, n);
+        // child_y(pt1, n) eqv cy0 + pt1 → sub congruence:
         T::axiom_sub_is_add_neg(child_y_position(pt1, sizes, sp, n), pt1);
+        T::axiom_sub_is_add_neg(cy0.add(pt1), pt1);
+        T::axiom_add_congruence_left(
+            child_y_position(pt1, sizes, sp, n), cy0.add(pt1), pt1.neg());
+        // child_y(pt1,n)+(-pt1) eqv (cy0+pt1)+(-pt1)
+        // Bridge sub:
+        T::axiom_eqv_symmetric(
+            child_y_position(pt1, sizes, sp, n).sub(pt1),
+            child_y_position(pt1, sizes, sp, n).add(pt1.neg()));
+        T::axiom_eqv_transitive(
+            child_y_position(pt1, sizes, sp, n).sub(pt1),
+            child_y_position(pt1, sizes, sp, n).add(pt1.neg()),
+            cy0.add(pt1).add(pt1.neg()));
+        T::axiom_eqv_symmetric(cy0.add(pt1).sub(pt1), cy0.add(pt1).add(pt1.neg()));
+        T::axiom_eqv_transitive(
+            child_y_position(pt1, sizes, sp, n).sub(pt1),
+            cy0.add(pt1).add(pt1.neg()),
+            cy0.add(pt1).sub(pt1));
+        lemma_add_sub_cancel_right(cy0, pt1);
+        T::axiom_eqv_transitive(
+            child_y_position(pt1, sizes, sp, n).sub(pt1),
+            cy0.add(pt1).sub(pt1), cy0);
+        // Same for pt2:
         T::axiom_sub_is_add_neg(child_y_position(pt2, sizes, sp, n), pt2);
-        // child_y(pt1,n).sub(pt1) eqv child_y(pt1,n).add(pt1.neg())
-        // child_y(pt2,n).sub(pt2) eqv child_y(pt2,n).add(pt2.neg())
-        T::axiom_eqv_symmetric(
-            child_y_position(pt1, sizes, sp, n).sub(pt1),
-            child_y_position(pt1, sizes, sp, n).add(pt1.neg()),
-        );
-        // chain: sub(pt1) eqv add(neg(pt1)) eqv ... eqv add(neg(pt2)) eqv sub(pt2)
-        T::axiom_eqv_transitive(
-            child_y_position(pt1, sizes, sp, n).sub(pt1),
-            child_y_position(pt1, sizes, sp, n).add(pt1.neg()),
-            child_y_position(pt2, sizes, sp, n).add(pt2.neg()),
-        );
+        T::axiom_sub_is_add_neg(cy0.add(pt2), pt2);
+        T::axiom_add_congruence_left(
+            child_y_position(pt2, sizes, sp, n), cy0.add(pt2), pt2.neg());
         T::axiom_eqv_symmetric(
             child_y_position(pt2, sizes, sp, n).sub(pt2),
-            child_y_position(pt2, sizes, sp, n).add(pt2.neg()),
-        );
+            child_y_position(pt2, sizes, sp, n).add(pt2.neg()));
         T::axiom_eqv_transitive(
-            child_y_position(pt1, sizes, sp, n).sub(pt1),
-            child_y_position(pt2, sizes, sp, n).add(pt2.neg()),
             child_y_position(pt2, sizes, sp, n).sub(pt2),
-        );
+            child_y_position(pt2, sizes, sp, n).add(pt2.neg()),
+            cy0.add(pt2).add(pt2.neg()));
+        T::axiom_eqv_symmetric(cy0.add(pt2).sub(pt2), cy0.add(pt2).add(pt2.neg()));
+        T::axiom_eqv_transitive(
+            child_y_position(pt2, sizes, sp, n).sub(pt2),
+            cy0.add(pt2).add(pt2.neg()),
+            cy0.add(pt2).sub(pt2));
+        lemma_add_sub_cancel_right(cy0, pt2);
+        T::axiom_eqv_transitive(
+            child_y_position(pt2, sizes, sp, n).sub(pt2),
+            cy0.add(pt2).sub(pt2), cy0);
+        // Both eqv cy0 → eqv to each other
+        T::axiom_eqv_symmetric(
+            child_y_position(pt2, sizes, sp, n).sub(pt2), cy0);
+        T::axiom_eqv_transitive(
+            child_y_position(pt1, sizes, sp, n).sub(pt1), cy0,
+            child_y_position(pt2, sizes, sp, n).sub(pt2));
     }
 }
 
