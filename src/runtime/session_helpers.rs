@@ -161,10 +161,46 @@ pub fn session_apply_redo_exec(
 
 /// Helper for unreachable branches — requires false so can never be called
 /// in valid execution. Used to satisfy Rust's type checker.
-#[verifier::external_body]
+/// Not external_body: the body constructs a dummy value that is never executed.
 pub fn dead_session(undo_stack: RuntimeUndoStack, clipboard: Vec<char>, history: Ghost<Seq<Seq<char>>>, style_history: Ghost<Seq<Seq<StyleSet>>>) -> (out: RuntimeTextEditSession)
     requires false,
-{ unreachable!() }
+{
+    // requires false → body never executes → any construction is fine
+    let dummy_style = RuntimeStyleSet {
+        bold: None, italic: None, underline: None, strikethrough: None,
+        font_size: None, font_family: None, color: None, bg_color: None,
+    };
+    let dummy_style2 = RuntimeStyleSet {
+        bold: None, italic: None, underline: None, strikethrough: None,
+        font_size: None, font_family: None, color: None, bg_color: None,
+    };
+    let model = RuntimeTextModel {
+        text: Vec::new(), styles: Vec::new(),
+        anchor: 0, focus: 0, focus_affinity: Affinity::Downstream,
+        preferred_column: None,
+        typing_style: dummy_style,
+        default_style: dummy_style2,
+        composition: None, paragraph_styles: Vec::new(),
+        model: Ghost(TextModel {
+            text: Seq::empty(), styles: Seq::empty(),
+            anchor: 0, focus: 0, focus_affinity: Affinity::Downstream,
+            preferred_column: None,
+            typing_style: StyleSet {
+                bold: None, italic: None, underline: None, strikethrough: None,
+                font_size: None, font_family: None, color: None, bg_color: None,
+            },
+            default_style: StyleSet {
+                bold: None, italic: None, underline: None, strikethrough: None,
+                font_size: None, font_family: None, color: None, bg_color: None,
+            },
+            composition: None, paragraph_styles: Seq::empty(),
+        }),
+    };
+    RuntimeTextEditSession {
+        model, undo_stack, last_was_insert: false,
+        clipboard, history, style_history,
+    }
+}
 
 // ── Cut helper ──────────────────────────────────────────────────────
 
