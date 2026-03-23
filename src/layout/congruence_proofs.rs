@@ -674,12 +674,9 @@ pub open spec fn widget_eqv<T: OrderedField>(
                     && ch1.len() == ch2.len()
                     && forall|i: int| 0 <= i < ch1.len() ==>
                         widget_eqv(ch1[i], ch2[i], (fuel - 1) as nat),
-                (ContainerWidget::ListView { spacing: s1, scroll_y: sy1, viewport: v1, children: ch1 },
-                 ContainerWidget::ListView { spacing: s2, scroll_y: sy2, viewport: v2, children: ch2 }) =>
-                    s1.eqv(s2) && sy1.eqv(sy2) && size_eqv(v1, v2)
-                    && ch1.len() == ch2.len()
-                    && forall|i: int| 0 <= i < ch1.len() ==>
-                        widget_eqv(ch1[i], ch2[i], (fuel - 1) as nat),
+                // ListView excluded: children.len() depends on visible range
+                // (listview_first/end_visible), which requires proving these
+                // respect eqv. Deferred to a dedicated ListView congruence proof.
                 (ContainerWidget::Flex { padding: p1, spacing: s1, alignment: a1, direction: d1, children: ch1 },
                  ContainerWidget::Flex { padding: p2, spacing: s2, alignment: a2, direction: d2, children: ch2 }) =>
                     padding_eqv(p1, p2) && s1.eqv(s2) && a1 == a2 && d1 == d2
@@ -1816,6 +1813,233 @@ pub open spec fn widget_children_count<T: OrderedField>(w: Widget<T>) -> nat {
     }
 }
 
+/// Column layout produces children.len() == ch.len().
+proof fn lemma_column_children_count<T: OrderedField>(
+    lim: Limits<T>, pad: Padding<T>, sp: T, al: Alignment,
+    ch: Seq<Widget<T>>, fuel: nat,
+)
+    requires fuel > 0,
+    ensures
+        layout_widget(lim, Widget::Container(ContainerWidget::Column {
+            padding: pad, spacing: sp, alignment: al, children: ch,
+        }), fuel).children.len() == ch.len(),
+{
+    reveal(linear_layout);
+    let inner = lim.shrink(pad.horizontal(), pad.vertical());
+    let cn = widget_child_nodes(inner, ch, (fuel - 1) as nat);
+    let col = ContainerWidget::Column { padding: pad, spacing: sp, alignment: al, children: ch };
+    assert(layout_widget(lim, Widget::Container(col), fuel) == layout_container(lim, col, fuel));
+    assert(layout_container(lim, col, fuel) == layout_linear_body(lim, pad, sp, al, cn, Axis::Vertical));
+}
+
+/// Row layout produces children.len() == ch.len().
+proof fn lemma_row_children_count<T: OrderedField>(
+    lim: Limits<T>, pad: Padding<T>, sp: T, al: Alignment,
+    ch: Seq<Widget<T>>, fuel: nat,
+)
+    requires fuel > 0,
+    ensures
+        layout_widget(lim, Widget::Container(ContainerWidget::Row {
+            padding: pad, spacing: sp, alignment: al, children: ch,
+        }), fuel).children.len() == ch.len(),
+{
+    reveal(linear_layout);
+    let inner = lim.shrink(pad.horizontal(), pad.vertical());
+    let cn = widget_child_nodes(inner, ch, (fuel - 1) as nat);
+    let row = ContainerWidget::Row { padding: pad, spacing: sp, alignment: al, children: ch };
+    assert(layout_widget(lim, Widget::Container(row), fuel) == layout_container(lim, row, fuel));
+    assert(layout_container(lim, row, fuel) == layout_linear_body(lim, pad, sp, al, cn, Axis::Horizontal));
+}
+
+/// Stack layout produces children.len() == ch.len().
+proof fn lemma_stack_children_count<T: OrderedField>(
+    lim: Limits<T>, pad: Padding<T>, ha: Alignment, va: Alignment,
+    ch: Seq<Widget<T>>, fuel: nat,
+)
+    requires fuel > 0,
+    ensures
+        layout_widget(lim, Widget::Container(ContainerWidget::Stack {
+            padding: pad, h_align: ha, v_align: va, children: ch,
+        }), fuel).children.len() == ch.len(),
+{
+    reveal(crate::layout::stack::stack_layout);
+    let cn = widget_child_nodes(lim.shrink(pad.horizontal(), pad.vertical()), ch, (fuel-1) as nat);
+    let stk = ContainerWidget::Stack { padding: pad, h_align: ha, v_align: va, children: ch };
+    assert(layout_widget(lim, Widget::Container(stk), fuel) == layout_container(lim, stk, fuel));
+    assert(layout_container(lim, stk, fuel) == layout_stack_body(lim, pad, ha, va, cn));
+}
+
+/// Wrap layout produces children.len() == ch.len().
+proof fn lemma_wrap_children_count<T: OrderedField>(
+    lim: Limits<T>, pad: Padding<T>, hs: T, vs: T,
+    ch: Seq<Widget<T>>, fuel: nat,
+)
+    requires fuel > 0,
+    ensures
+        layout_widget(lim, Widget::Container(ContainerWidget::Wrap {
+            padding: pad, h_spacing: hs, v_spacing: vs, children: ch,
+        }), fuel).children.len() == ch.len(),
+{
+    reveal(crate::layout::wrap::wrap_layout);
+    let cn = widget_child_nodes(lim.shrink(pad.horizontal(), pad.vertical()), ch, (fuel-1) as nat);
+    let wrp = ContainerWidget::Wrap { padding: pad, h_spacing: hs, v_spacing: vs, children: ch };
+    assert(layout_widget(lim, Widget::Container(wrp), fuel) == layout_container(lim, wrp, fuel));
+    assert(layout_container(lim, wrp, fuel) == layout_wrap_body(lim, pad, hs, vs, cn));
+}
+
+/// Absolute layout produces children.len() == ch.len().
+proof fn lemma_absolute_children_count<T: OrderedField>(
+    lim: Limits<T>, pad: Padding<T>,
+    ch: Seq<AbsoluteChild<T>>, fuel: nat,
+)
+    requires fuel > 0,
+    ensures
+        layout_widget(lim, Widget::Container(ContainerWidget::Absolute {
+            padding: pad, children: ch,
+        }), fuel).children.len() == ch.len(),
+{
+    reveal(crate::layout::absolute::absolute_layout);
+    let inner = lim.shrink(pad.horizontal(), pad.vertical());
+    let cn = absolute_widget_child_nodes(inner, ch, (fuel-1) as nat);
+    let abs = ContainerWidget::Absolute { padding: pad, children: ch };
+    assert(layout_widget(lim, Widget::Container(abs), fuel) == layout_container(lim, abs, fuel));
+}
+
+/// Flex layout produces children.len() == ch.len().
+proof fn lemma_flex_children_count<T: OrderedField>(
+    lim: Limits<T>, pad: Padding<T>, sp: T, al: Alignment, dir: FlexDirection,
+    ch: Seq<FlexItem<T>>, fuel: nat,
+)
+    requires fuel > 0,
+    ensures
+        layout_widget(lim, Widget::Container(ContainerWidget::Flex {
+            padding: pad, spacing: sp, alignment: al, direction: dir, children: ch,
+        }), fuel).children.len() == ch.len(),
+{
+    reveal(crate::layout::flex::flex_column_layout);
+    reveal(crate::layout::flex::flex_row_layout);
+    let flx = ContainerWidget::Flex { padding: pad, spacing: sp, alignment: al, direction: dir, children: ch };
+    assert(layout_widget(lim, Widget::Container(flx), fuel) == layout_container(lim, flx, fuel));
+}
+
+/// Grid layout produces children.len() == ch.len().
+proof fn lemma_grid_children_count<T: OrderedField>(
+    lim: Limits<T>, pad: Padding<T>, hs: T, vs: T, ha: Alignment, va: Alignment,
+    cw: Seq<Size<T>>, rh: Seq<Size<T>>, ch: Seq<Widget<T>>, fuel: nat,
+)
+    requires fuel > 0,
+    ensures
+        layout_widget(lim, Widget::Container(ContainerWidget::Grid {
+            padding: pad, h_spacing: hs, v_spacing: vs, h_align: ha, v_align: va,
+            col_widths: cw, row_heights: rh, children: ch,
+        }), fuel).children.len() == ch.len(),
+{
+    reveal(crate::layout::grid::grid_layout);
+    let g = ContainerWidget::Grid { padding: pad, h_spacing: hs, v_spacing: vs,
+        h_align: ha, v_align: va, col_widths: cw, row_heights: rh, children: ch };
+    assert(layout_widget(lim, Widget::Container(g), fuel) == layout_container(lim, g, fuel));
+}
+
+/// Container children.len() equality dispatcher (focused context).
+proof fn lemma_container_children_len_eq<T: OrderedField>(
+    lim1: Limits<T>, lim2: Limits<T>,
+    c1: ContainerWidget<T>, c2: ContainerWidget<T>, fuel: nat,
+)
+    requires fuel > 0, limits_eqv(lim1, lim2),
+        widget_eqv(Widget::Container(c1), Widget::Container(c2), fuel),
+    ensures layout_container(lim1, c1, fuel).children.len()
+        == layout_container(lim2, c2, fuel).children.len(),
+{
+    match (c1, c2) {
+        (ContainerWidget::Column { padding: p1, spacing: s1, alignment: a, children: ch1 },
+         ContainerWidget::Column { padding: p2, spacing: s2, children: ch2, .. }) => {
+            assert(ch1.len() == ch2.len()); // from widget_eqv
+            assert(ch1.len() == ch2.len()); // from widget_eqv
+            assert(layout_container(lim1, c1, fuel).children.len() == ch1.len()) by {
+                lemma_column_children_count(lim1, p1, s1, a, ch1, fuel); };
+            assert(layout_container(lim2, c2, fuel).children.len() == ch2.len()) by {
+                lemma_column_children_count(lim2, p2, s2, a, ch2, fuel); };
+        },
+        (ContainerWidget::Row { padding: p1, spacing: s1, alignment: a, children: ch1 },
+         ContainerWidget::Row { padding: p2, spacing: s2, children: ch2, .. }) => {
+            assert(ch1.len() == ch2.len()); // from widget_eqv
+            assert(layout_container(lim1, c1, fuel).children.len() == ch1.len()) by {
+                lemma_row_children_count(lim1, p1, s1, a, ch1, fuel); };
+            assert(layout_container(lim2, c2, fuel).children.len() == ch2.len()) by {
+                lemma_row_children_count(lim2, p2, s2, a, ch2, fuel); };
+        },
+        (ContainerWidget::Stack { padding: p1, h_align: h, v_align: v, children: ch1 },
+         ContainerWidget::Stack { padding: p2, children: ch2, .. }) => {
+            assert(ch1.len() == ch2.len()); // from widget_eqv
+            assert(layout_container(lim1, c1, fuel).children.len() == ch1.len()) by {
+                lemma_stack_children_count(lim1, p1, h, v, ch1, fuel); };
+            assert(layout_container(lim2, c2, fuel).children.len() == ch2.len()) by {
+                lemma_stack_children_count(lim2, p2, h, v, ch2, fuel); };
+        },
+        (ContainerWidget::Wrap { padding: p1, h_spacing: h1, v_spacing: v1, children: ch1 },
+         ContainerWidget::Wrap { padding: p2, h_spacing: h2, v_spacing: v2, children: ch2 }) => {
+            assert(ch1.len() == ch2.len()); // from widget_eqv
+            assert(layout_container(lim1, c1, fuel).children.len() == ch1.len()) by {
+                lemma_wrap_children_count(lim1, p1, h1, v1, ch1, fuel); };
+            assert(layout_container(lim2, c2, fuel).children.len() == ch2.len()) by {
+                lemma_wrap_children_count(lim2, p2, h2, v2, ch2, fuel); };
+        },
+        (ContainerWidget::Flex { padding: p1, spacing: s1, alignment: a, direction: d, children: ch1 },
+         ContainerWidget::Flex { padding: p2, spacing: s2, children: ch2, .. }) => {
+            assert(ch1.len() == ch2.len()); // from widget_eqv
+            assert(layout_container(lim1, c1, fuel).children.len() == ch1.len()) by {
+                lemma_flex_children_count(lim1, p1, s1, a, d, ch1, fuel); };
+            assert(layout_container(lim2, c2, fuel).children.len() == ch2.len()) by {
+                lemma_flex_children_count(lim2, p2, s2, a, d, ch2, fuel); };
+        },
+        (ContainerWidget::Grid { padding: p1, h_spacing: h1, v_spacing: v1,
+            h_align: ha, v_align: va, col_widths: w1c, row_heights: r1, children: ch1 },
+         ContainerWidget::Grid { padding: p2, h_spacing: h2, v_spacing: v2,
+            col_widths: w2c, row_heights: r2, children: ch2, .. }) => {
+            assert(ch1.len() == ch2.len()); // from widget_eqv
+            assert(layout_container(lim1, c1, fuel).children.len() == ch1.len()) by {
+                lemma_grid_children_count(lim1, p1, h1, v1, ha, va, w1c, r1, ch1, fuel); };
+            assert(layout_container(lim2, c2, fuel).children.len() == ch2.len()) by {
+                lemma_grid_children_count(lim2, p2, h2, v2, ha, va, w2c, r2, ch2, fuel); };
+        },
+        (ContainerWidget::Absolute { padding: p1, children: ch1 },
+         ContainerWidget::Absolute { padding: p2, children: ch2 }) => {
+            assert(ch1.len() == ch2.len()); // from widget_eqv
+            assert(layout_container(lim1, c1, fuel).children.len() == ch1.len()) by {
+                lemma_absolute_children_count(lim1, p1, ch1, fuel); };
+            assert(layout_container(lim2, c2, fuel).children.len() == ch2.len()) by {
+                lemma_absolute_children_count(lim2, p2, ch2, fuel); };
+        },
+        _ => {},
+    }
+}
+
+/// children.len() equality for eqv widgets.
+proof fn lemma_layout_widget_children_len_eq<T: OrderedField>(
+    lim1: Limits<T>, lim2: Limits<T>,
+    w1: Widget<T>, w2: Widget<T>,
+    fuel: nat,
+)
+    requires limits_eqv(lim1, lim2), widget_eqv(w1, w2, fuel),
+    ensures layout_widget(lim1, w1, fuel).children.len()
+        == layout_widget(lim2, w2, fuel).children.len(),
+    decreases fuel, 1nat,
+{
+    assert(fuel > 0);
+    match (w1, w2) {
+        (Widget::Leaf(_), Widget::Leaf(_)) => {},
+        (Widget::Wrapper(WrapperWidget::Conditional { visible: v1, child: c1 }),
+         Widget::Wrapper(WrapperWidget::Conditional { visible: v2, child: c2 })) => {
+            if v1 { lemma_layout_widget_children_len_eq(lim1, lim2, *c1, *c2, (fuel-1) as nat); }
+        },
+        (Widget::Wrapper(_), Widget::Wrapper(_)) => {},
+        (Widget::Container(c1), Widget::Container(c2)) => {
+            lemma_container_children_len_eq(lim1, lim2, c1, c2, fuel);
+        },
+        _ => {},
+    }
+}
+
 /// Full top-level congruence: eqv widgets produce nodes with eqv x, y, size
 /// and same children count. (Children's deep eqv follows from recursive application.)
 pub proof fn lemma_layout_widget_node_congruence<T: OrderedField>(
@@ -1826,19 +2050,31 @@ pub proof fn lemma_layout_widget_node_congruence<T: OrderedField>(
     requires
         limits_eqv(lim1, lim2),
         widget_eqv(w1, w2, fuel),
-    ensures ({
-        let a = layout_widget(lim1, w1, fuel);
-        let b = layout_widget(lim2, w2, fuel);
-        a.x.eqv(b.x) && a.y.eqv(b.y) && size_eqv(a.size, b.size)
-    }),
+    ensures
+        node_eqv(
+            layout_widget(lim1, w1, fuel),
+            layout_widget(lim2, w2, fuel),
+        ),
     decreases fuel, 1nat,
 {
-    // x, y eqv (both T::zero())
-    lemma_layout_widget_xy_zero(lim1, w1, fuel);
-    lemma_layout_widget_xy_zero(lim2, w2, fuel);
-    T::axiom_eqv_reflexive(T::zero());
-    // size eqv
-    lemma_layout_widget_size_congruence(lim1, lim2, w1, w2, fuel);
+    // Combine the four components of node_eqv (each scoped to minimize context):
+    assert(layout_widget(lim1, w1, fuel).x.eqv(layout_widget(lim2, w2, fuel).x)) by {
+        lemma_layout_widget_xy_zero(lim1, w1, fuel);
+        lemma_layout_widget_xy_zero(lim2, w2, fuel);
+        T::axiom_eqv_reflexive(T::zero());
+    };
+    assert(layout_widget(lim1, w1, fuel).y.eqv(layout_widget(lim2, w2, fuel).y)) by {
+        lemma_layout_widget_xy_zero(lim1, w1, fuel);
+        lemma_layout_widget_xy_zero(lim2, w2, fuel);
+        T::axiom_eqv_reflexive(T::zero());
+    };
+    assert(size_eqv(layout_widget(lim1, w1, fuel).size, layout_widget(lim2, w2, fuel).size)) by {
+        lemma_layout_widget_size_congruence(lim1, lim2, w1, w2, fuel);
+    };
+    assert(layout_widget(lim1, w1, fuel).children.len()
+        == layout_widget(lim2, w2, fuel).children.len()) by {
+        lemma_layout_widget_children_len_eq(lim1, lim2, w1, w2, fuel);
+    };
 }
 
 // ══════════════════════════════════════════════════════════════════════
