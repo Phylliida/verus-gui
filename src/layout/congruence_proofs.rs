@@ -294,6 +294,43 @@ pub open spec fn sizes_eqv<T: OrderedRing>(a: Seq<Size<T>>, b: Seq<Size<T>>) -> 
 }
 
 // ══════════════════════════════════════════════════════════════════════
+// sum_weights congruence (scalar T sequence)
+// ══════════════════════════════════════════════════════════════════════
+
+/// sum_weights respects eqv on weight sequences.
+pub proof fn lemma_sum_weights_congruence<T: OrderedRing>(
+    w1: Seq<T>, w2: Seq<T>, count: nat,
+)
+    requires
+        w1.len() == w2.len(),
+        count <= w1.len(),
+        forall|i: int| 0 <= i < w1.len() ==> w1[i].eqv(w2[i]),
+    ensures
+        crate::layout::flex::sum_weights(w1, count)
+            .eqv(crate::layout::flex::sum_weights(w2, count)),
+    decreases count,
+{
+    use crate::layout::flex::sum_weights;
+    if count == 0 {
+        T::axiom_eqv_reflexive(T::zero());
+    } else {
+        lemma_sum_weights_congruence(w1, w2, (count - 1) as nat);
+        T::axiom_add_congruence_left(
+            sum_weights(w1, (count - 1) as nat),
+            sum_weights(w2, (count - 1) as nat),
+            w1[(count - 1) as int]);
+        verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(
+            sum_weights(w2, (count - 1) as nat),
+            w1[(count - 1) as int],
+            w2[(count - 1) as int]);
+        T::axiom_eqv_transitive(
+            sum_weights(w1, (count - 1) as nat).add(w1[(count - 1) as int]),
+            sum_weights(w2, (count - 1) as nat).add(w1[(count - 1) as int]),
+            sum_weights(w2, (count - 1) as nat).add(w2[(count - 1) as int]));
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════
 // sum_heights / sum_widths congruence
 // ══════════════════════════════════════════════════════════════════════
 

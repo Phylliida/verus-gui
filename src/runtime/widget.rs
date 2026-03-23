@@ -2261,11 +2261,14 @@ fn normalize_flex_vec_exec(mut items: Vec<RuntimeFlexItem>, fuel: usize) -> (out
         forall|i: int| 0 <= i < out@.len() ==> (#[trigger] out@[i]).weight@.normalized_spec(),
         forall|i: int| 0 <= i < out@.len() ==> (#[trigger] out@[i]).child.wf_spec(fuel as nat),
         forall|i: int| 0 <= i < out@.len() ==> (#[trigger] out@[i]).child.model_normalized(fuel as nat),
+        // Weight eqv preservation: each normalized weight is eqv to the original
+        forall|i: int| 0 <= i < out@.len() ==>
+            (#[trigger] out@[i]).weight@.eqv_spec(items@[i].weight@),
     decreases fuel, 2nat,
 {
+    let ghost orig = items@;
     let n = items.len();
     let mut result: Vec<RuntimeFlexItem> = Vec::new();
-    let ds = RuntimeSize::zero_exec();
     let dw = RuntimeRational::from_int(0);
     let mut dummy = RuntimeFlexItem {
         weight: dw,
@@ -2274,19 +2277,29 @@ fn normalize_flex_vec_exec(mut items: Vec<RuntimeFlexItem>, fuel: usize) -> (out
     let mut i: usize = 0;
     while i < n
         invariant
-            0 <= i <= n, n == items@.len(), result@.len() == i as int, n > 0 ==> fuel > 0,
+            0 <= i <= n, n == orig.len(), result@.len() == i as int, n > 0 ==> fuel > 0,
             forall|j: int| i <= j < n ==> (#[trigger] items@[j]).weight.wf_spec(),
             forall|j: int| i <= j < n ==> (#[trigger] items@[j]).child.wf_spec(fuel as nat),
+            // Items not yet processed retain original weight models
+            forall|j: int| i <= j < n ==> items@[j].weight@ == orig[j].weight@,
             forall|j: int| 0 <= j < i ==> (#[trigger] result@[j]).weight.wf_spec(),
             forall|j: int| 0 <= j < i ==> (#[trigger] result@[j]).weight@.normalized_spec(),
             forall|j: int| 0 <= j < i ==> (#[trigger] result@[j]).child.wf_spec(fuel as nat),
             forall|j: int| 0 <= j < i ==> (#[trigger] result@[j]).child.model_normalized(fuel as nat),
+            // Weight eqv tracking
+            forall|j: int| 0 <= j < i ==>
+                (#[trigger] result@[j]).weight@.eqv_spec(orig[j].weight@),
             items@.len() == n,
         decreases n - i,
     {
         items.set_and_swap(i, &mut dummy);
         let wn = dummy.weight.normalize();
         let cn = normalize_widget_exec(dummy.child, fuel);
+        proof {
+            // wn@ eqv dummy.weight@ == orig[i].weight@ (from set_and_swap + invariant)
+            // normalize ensures: wn@.eqv_spec(dummy.weight@)
+            // dummy.weight@ == items@[i].weight@ (before swap) == orig[i].weight@
+        }
         result.push(RuntimeFlexItem { weight: wn, child: cn });
         dummy = RuntimeFlexItem { weight: RuntimeRational::from_int(0), child: make_dummy_widget() };
         i = i + 1;
@@ -2452,7 +2465,18 @@ pub fn normalize_widget_exec(widget: RuntimeWidget, fuel: usize) -> (out: Runtim
     decreases fuel, 1nat,
 {
     match widget {
-        RuntimeWidget::Leaf(leaf) => match leaf {
+        RuntimeWidget::Leaf(leaf) => normalize_leaf_exec(leaf, Ghost(fuel as nat)),
+        RuntimeWidget::Wrapper(wrapper) => normalize_wrapper_exec(wrapper, fuel),
+        RuntimeWidget::Container(container) => normalize_container_exec(container, fuel),
+    }
+}
+
+/// Normalize a leaf widget's rational fields.
+fn normalize_leaf_exec(leaf: RuntimeLeafWidget, fuel: Ghost<nat>) -> (out: RuntimeWidget)
+    requires leaf.wf_shallow(), fuel@ > 0,
+    ensures out.wf_spec(fuel@), out.model_normalized(fuel@),
+{
+    match leaf {
             RuntimeLeafWidget::Leaf { size, .. } => {
                 let sn = size.normalize_exec();
                 RuntimeWidget::Leaf(RuntimeLeafWidget::Leaf {
@@ -2473,8 +2497,16 @@ pub fn normalize_widget_exec(widget: RuntimeWidget, fuel: usize) -> (out: Runtim
                     }),
                 })
             },
-        },
-        RuntimeWidget::Wrapper(wrapper) => { match wrapper {
+    }
+}
+
+/// Normalize a wrapper widget's rational fields.
+fn normalize_wrapper_exec(wrapper: RuntimeWrapperWidget, fuel: usize) -> (out: RuntimeWidget)
+    requires fuel > 0, RuntimeWidget::Wrapper(wrapper).wf_spec(fuel as nat),
+    ensures out.wf_spec(fuel as nat), out.model_normalized(fuel as nat),
+    decreases fuel, 0nat,
+{
+    match wrapper {
             RuntimeWrapperWidget::Margin { margin, child, .. } => {
                 assert(child.wf_spec((fuel - 1) as nat)); // from widget.wf_spec(fuel) unfolding
                 let mn = margin.normalize_exec();
@@ -2545,9 +2577,16 @@ pub fn normalize_widget_exec(widget: RuntimeWidget, fuel: usize) -> (out: Runtim
                     }),
                 })
             },
-        }},
-        RuntimeWidget::Container(container) => {
-            match container {
+    }
+}
+
+/// Normalize a container widget's rational fields.
+fn normalize_container_exec(container: RuntimeContainerWidget, fuel: usize) -> (out: RuntimeWidget)
+    requires fuel > 0, RuntimeWidget::Container(container).wf_spec(fuel as nat),
+    ensures out.wf_spec(fuel as nat), out.model_normalized(fuel as nat),
+    decreases fuel, 0nat,
+{
+    match container {
             RuntimeContainerWidget::Column { padding, spacing, alignment, children, .. } => {
                 assert(forall|i: int| 0 <= i < children@.len() ==> (#[trigger] children@[i]).wf_spec((fuel - 1) as nat));
                 if children.len() > 0 { assert(children@[0].wf_spec((fuel - 1) as nat)); }
@@ -2622,9 +2661,48 @@ pub fn normalize_widget_exec(widget: RuntimeWidget, fuel: usize) -> (out: Runtim
             RuntimeContainerWidget::Flex { padding, spacing, alignment, direction, children, .. } => {
                 assert(forall|i: int| 0 <= i < children@.len() ==> (#[trigger] children@[i]).child.wf_spec((fuel - 1) as nat));
                 if children.len() > 0 { assert(children@[0].child.wf_spec((fuel - 1) as nat)); }
+                // Capture original weights before normalization
+                let ghost orig_weights = Seq::new(children@.len() as nat, |i: int| children@[i].weight@);
                 let pn = padding.normalize_exec();
                 let sn = spacing.normalize();
                 let cn = normalize_flex_vec_exec(children, fuel - 1);
+                // sum_weights of normalized weights is eqv to original sum
+                // (each weight eqv-preserves through normalize, and add is congruent)
+                // This ensures the nonzero sum condition carries over.
+                let ghost new_weights = Seq::new(cn@.len() as nat, |i: int| cn@[i].weight@);
+                proof {
+                    if cn@.len() > 0 {
+                        // The original wf_spec guarantees !sum_weights(orig, n).eqv(0)
+                        // normalized weights are eqv to original weights
+                        // sum_weights is congruent → new sum eqv to old sum
+                        // So new sum is also not eqv to 0.
+                        // Z3 needs help: assert the nonzero sum for normalized weights
+                        assert(!sum_weights::<RationalModel>(
+                            orig_weights, orig_weights.len() as nat,
+                        ).eqv_spec(RationalModel::from_int_spec(0)));
+                        // The normalized weights are eqv to original (from normalize ensures)
+                        // sum_weights congruence: proved in congruence_proofs
+                        // For now, help Z3 with the conclusion:
+                        // cn@[i].weight@ eqv orig_weights[i] (from vec helper ensures)
+                        // sum_weights congruence + original nonzero → normalized nonzero
+                        crate::layout::congruence_proofs::lemma_sum_weights_congruence(
+                            new_weights, orig_weights, new_weights.len() as nat);
+                        // new_sum eqv orig_sum. orig_sum not eqv 0.
+                        // If new_sum eqv 0, then orig_sum eqv new_sum eqv 0 → contradiction.
+                        RationalModel::lemma_eqv_symmetric(
+                            sum_weights::<RationalModel>(new_weights, new_weights.len() as nat),
+                            sum_weights::<RationalModel>(orig_weights, orig_weights.len() as nat));
+                        if sum_weights::<RationalModel>(new_weights, new_weights.len() as nat)
+                            .eqv_spec(RationalModel::from_int_spec(0))
+                        {
+                            RationalModel::lemma_eqv_transitive(
+                                sum_weights::<RationalModel>(orig_weights, orig_weights.len() as nat),
+                                sum_weights::<RationalModel>(new_weights, new_weights.len() as nat),
+                                RationalModel::from_int_spec(0));
+                            assert(false);
+                        }
+                    }
+                }
                 RuntimeWidget::Container(RuntimeContainerWidget::Flex {
                     padding: pn, spacing: sn, alignment, direction, children: cn,
                     model: Ghost(ContainerWidget::Flex {
@@ -2667,7 +2745,6 @@ pub fn normalize_widget_exec(widget: RuntimeWidget, fuel: usize) -> (out: Runtim
                     }),
                 })
             },
-        }},
     }
 }
 
