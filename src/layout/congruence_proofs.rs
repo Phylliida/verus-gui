@@ -1820,6 +1820,28 @@ pub open spec fn widget_children_count<T: OrderedField>(w: Widget<T>) -> nat {
 // ListView visible range congruence
 // ══════════════════════════════════════════════════════════════════════
 
+/// lt is congruent: a1.lt(b1) == a2.lt(b2) when eqv.
+pub proof fn lemma_lt_congruence_iff<T: OrderedRing>(a1: T, a2: T, b1: T, b2: T)
+    requires a1.eqv(a2), b1.eqv(b2),
+    ensures a1.lt(b1) == a2.lt(b2),
+{
+    T::axiom_lt_iff_le_and_not_eqv(a1, b1);
+    T::axiom_lt_iff_le_and_not_eqv(a2, b2);
+    lemma_le_congruence_iff(a1, a2, b1, b2);
+    // a1.eqv(b1) iff a2.eqv(b2):
+    // If a1.eqv(b1): a2.eqv(a1).eqv(b1).eqv(b2) → a2.eqv(b2)
+    if a1.eqv(b1) {
+        T::axiom_eqv_symmetric(a1, a2);
+        T::axiom_eqv_transitive(a2, a1, b1);
+        T::axiom_eqv_transitive(a2, b1, b2);
+    }
+    if a2.eqv(b2) {
+        T::axiom_eqv_transitive(a1, a2, b2);
+        T::axiom_eqv_symmetric(b1, b2);
+        T::axiom_eqv_transitive(a1, b2, b1);
+    }
+}
+
 /// listview_child_y respects eqv on sizes and spacing.
 pub proof fn lemma_listview_child_y_congruence<T: OrderedRing>(
     s1: Seq<Size<T>>, s2: Seq<Size<T>>,
@@ -2126,6 +2148,50 @@ proof fn lemma_container_children_len_eq<T: OrderedField>(
                 lemma_absolute_children_count(lim1, p1, ch1, fuel); };
             assert(layout_container(lim2, c2, fuel).children.len() == ch2.len()) by {
                 lemma_absolute_children_count(lim2, p2, ch2, fuel); };
+        },
+        (ContainerWidget::ListView { spacing: sp1, scroll_y: sy1, viewport: v1, children: ch1 },
+         ContainerWidget::ListView { spacing: sp2, scroll_y: sy2, viewport: v2, children: ch2 }) => {
+            // ListView children.len() = end - first (visible range).
+            // first and end are the same for eqv inputs by visible range congruence.
+            // Need measure_children congruence too (child_sizes eqv).
+            // measure_children produces sizes from layout_widget, which we proved congruent.
+            // For now, use reveal + the visible range congruence lemmas.
+            reveal(crate::layout::listview::layout_listview_body);
+            // The key: first1 == first2 and end1 == end2 when inputs are eqv.
+            // child_sizes come from measure_children which uses layout_widget.
+            // Since ch1[i] eqv ch2[i] (widget_eqv) and limits are eqv,
+            // child_sizes1 eqv child_sizes2 (by measure congruence).
+            // Then listview_first/end_visible produce same indices.
+            // This requires threading through measure → size eqv → visible range eq.
+            // For now, the key structural fact: both calls produce the same first/end.
+            assert(ch1.len() == ch2.len());
+            // Full proof requires measure_children congruence → sizes_eqv →
+            // lemma_listview_first_visible_congruence + lemma_listview_end_visible_congruence.
+            // The visible range lemmas are proved above.
+            // Threading measure congruence through the chain:
+            let child_lim1 = Limits { min: Size::zero_size(), max: Size::new(v1.width, v1.height) };
+            let child_lim2 = Limits { min: Size::zero_size(), max: Size::new(v2.width, v2.height) };
+            assert(limits_eqv(child_lim1, child_lim2)) by {
+                T::axiom_eqv_reflexive(T::zero());
+            };
+            // Each child's measure is eqv by measure congruence
+            assert forall|i: int| 0 <= i < ch1.len() implies
+                size_eqv(
+                    crate::measure::measure_widget(child_lim1, ch1[i], (fuel - 1) as nat),
+                    crate::measure::measure_widget(child_lim2, ch2[i], (fuel - 1) as nat))
+            by {
+                lemma_measure_widget_congruence(
+                    child_lim1, child_lim2, ch1[i], ch2[i], (fuel - 1) as nat);
+            }
+            // measure_children produces sizes_eqv
+            let ms1 = Seq::new(ch1.len(), |i: int|
+                crate::measure::measure_widget(child_lim1, ch1[i], (fuel - 1) as nat));
+            let ms2 = Seq::new(ch2.len(), |i: int|
+                crate::measure::measure_widget(child_lim2, ch2[i], (fuel - 1) as nat));
+            assert(sizes_eqv(ms1, ms2));
+            // Visible range congruence
+            lemma_listview_first_visible_congruence(ms1, ms2, sp1, sp2, sy1, sy2, 0);
+            lemma_listview_end_visible_congruence(ms1, ms2, sp1, sp2, sy1, sy2, v1.height, v2.height, 0);
         },
         _ => {},
     }
