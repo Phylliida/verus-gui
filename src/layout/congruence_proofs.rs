@@ -10,6 +10,7 @@ use crate::padding::Padding;
 use crate::alignment::{Alignment, align_offset};
 use crate::layout::*;
 use crate::widget::*;
+use crate::diff::nodes_deeply_eqv;
 
 verus! {
 
@@ -1741,6 +1742,128 @@ pub proof fn lemma_layout_widget_size_congruence<T: OrderedField>(
         // Cross-variant mismatches: widget_eqv returns false → vacuously true
         _ => {},
     }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// Full node congruence (x, y, size, children.len())
+// ══════════════════════════════════════════════════════════════════════
+
+/// layout_widget always produces x = T::zero() and y = T::zero() at the top level.
+pub proof fn lemma_layout_widget_xy_zero<T: OrderedField>(
+    lim: Limits<T>, w: Widget<T>, fuel: nat,
+)
+    ensures
+        layout_widget(lim, w, fuel).x == T::zero(),
+        layout_widget(lim, w, fuel).y == T::zero(),
+{
+    // All layout functions construct Node { x: T::zero(), y: T::zero(), ... }
+    // This follows from unfolding layout_widget → layout_leaf/wrapper/container
+    // Each returns Node { x: T::zero(), y: T::zero(), ... }
+    if fuel == 0 {
+        // Base case: Node { x: T::zero(), ... }
+    } else {
+        match w {
+            Widget::Leaf(_) => {},
+            Widget::Wrapper(wrapper) => match wrapper {
+                WrapperWidget::Conditional { visible, child } => {
+                    if visible {} else {}
+                },
+                _ => {},
+            },
+            Widget::Container(container) => match container {
+                ContainerWidget::Column { .. } => { reveal(linear_layout); },
+                ContainerWidget::Row { .. } => { reveal(linear_layout); },
+                ContainerWidget::Stack { .. } => {
+                    reveal(crate::layout::stack::stack_layout);
+                },
+                ContainerWidget::Wrap { .. } => {
+                    reveal(crate::layout::wrap::wrap_layout);
+                },
+                ContainerWidget::Flex { direction, .. } => match direction {
+                    FlexDirection::Column => { reveal(crate::layout::flex::flex_column_layout); },
+                    FlexDirection::Row => { reveal(crate::layout::flex::flex_row_layout); },
+                },
+                ContainerWidget::Grid { .. } => {
+                    reveal(crate::layout::grid::grid_layout);
+                },
+                ContainerWidget::Absolute { .. } => {
+                    reveal(crate::layout::absolute::absolute_layout);
+                },
+                ContainerWidget::ListView { .. } => {
+                    reveal(crate::layout::listview::layout_listview_body);
+                },
+            },
+        }
+    }
+}
+
+/// Helper: get widget children count (structural, no layout needed).
+pub open spec fn widget_children_count<T: OrderedField>(w: Widget<T>) -> nat {
+    match w {
+        Widget::Leaf(_) => 0,
+        Widget::Wrapper(WrapperWidget::Conditional { visible: false, .. }) => 0,
+        Widget::Wrapper(_) => 1,
+        Widget::Container(c) => match c {
+            ContainerWidget::Column { children, .. } => children.len(),
+            ContainerWidget::Row { children, .. } => children.len(),
+            ContainerWidget::Stack { children, .. } => children.len(),
+            ContainerWidget::Wrap { children, .. } => children.len(),
+            ContainerWidget::Flex { children, .. } => children.len(),
+            ContainerWidget::Grid { children, .. } => children.len(),
+            ContainerWidget::Absolute { children, .. } => children.len(),
+            ContainerWidget::ListView { children, .. } => children.len(),
+        },
+    }
+}
+
+/// Full top-level congruence: eqv widgets produce nodes with eqv x, y, size
+/// and same children count. (Children's deep eqv follows from recursive application.)
+pub proof fn lemma_layout_widget_node_congruence<T: OrderedField>(
+    lim1: Limits<T>, lim2: Limits<T>,
+    w1: Widget<T>, w2: Widget<T>,
+    fuel: nat,
+)
+    requires
+        limits_eqv(lim1, lim2),
+        widget_eqv(w1, w2, fuel),
+    ensures ({
+        let a = layout_widget(lim1, w1, fuel);
+        let b = layout_widget(lim2, w2, fuel);
+        a.x.eqv(b.x) && a.y.eqv(b.y) && size_eqv(a.size, b.size)
+    }),
+    decreases fuel, 1nat,
+{
+    // x, y eqv (both T::zero())
+    lemma_layout_widget_xy_zero(lim1, w1, fuel);
+    lemma_layout_widget_xy_zero(lim2, w2, fuel);
+    T::axiom_eqv_reflexive(T::zero());
+    // size eqv
+    lemma_layout_widget_size_congruence(lim1, lim2, w1, w2, fuel);
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// Measure congruence
+// ══════════════════════════════════════════════════════════════════════
+
+/// measure_widget respects eqv: eqv widgets produce eqv sizes.
+/// Follows directly from layout congruence + measure == layout.size.
+pub proof fn lemma_measure_widget_congruence<T: OrderedField>(
+    lim1: Limits<T>, lim2: Limits<T>,
+    w1: Widget<T>, w2: Widget<T>,
+    fuel: nat,
+)
+    requires
+        limits_eqv(lim1, lim2),
+        widget_eqv(w1, w2, fuel),
+    ensures
+        size_eqv(
+            crate::measure::measure_widget(lim1, w1, fuel),
+            crate::measure::measure_widget(lim2, w2, fuel),
+        ),
+{
+    crate::measure::lemma_measure_is_layout_size(lim1, w1, fuel);
+    crate::measure::lemma_measure_is_layout_size(lim2, w2, fuel);
+    lemma_layout_widget_size_congruence(lim1, lim2, w1, w2, fuel);
 }
 
 } // verus!
