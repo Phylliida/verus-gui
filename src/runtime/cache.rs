@@ -466,4 +466,84 @@ pub fn reconcile_children_dynamic_exec(
     (child_nodes, child_sizes)
 }
 
+// ── Key-based matching ───────────────────────────────────────────────
+
+/// Match old and new children by optional keys.
+/// Returns a mapping: for each new child, the old child index it matches (if any).
+///
+/// Algorithm:
+/// 1. Build index of keyed old children
+/// 2. For each new child with a key, find the matching old child
+/// 3. Unkeyed children are not matched (always recomputed)
+///
+/// Ensures: matched pairs have equal keys, and each old index is used at most once.
+pub fn match_children_by_key(
+    old_keys: &Vec<Option<usize>>,
+    new_keys: &Vec<Option<usize>>,
+) -> (out: Vec<Option<usize>>)
+    ensures
+        out@.len() == new_keys@.len(),
+        // Matched pairs have equal keys
+        forall|i: int| 0 <= i < out@.len() ==> (
+            (#[trigger] out@[i]) is Some ==> {
+                let old_idx = out@[i].unwrap();
+                &&& 0 <= old_idx < old_keys@.len()
+                &&& old_keys@[old_idx as int] == new_keys@[i]
+                &&& new_keys@[i] is Some
+            }
+        ),
+{
+    let mut mapping: Vec<Option<usize>> = Vec::new();
+    let mut i: usize = 0;
+
+    while i < new_keys.len()
+        invariant
+            0 <= i <= new_keys@.len(),
+            mapping@.len() == i as int,
+            forall|j: int| 0 <= j < i ==> (
+                (#[trigger] mapping@[j]) is Some ==> {
+                    let old_idx = mapping@[j].unwrap();
+                    &&& 0 <= old_idx < old_keys@.len()
+                    &&& old_keys@[old_idx as int] == new_keys@[j]
+                    &&& new_keys@[j] is Some
+                }
+            ),
+        decreases new_keys@.len() - i,
+    {
+        match &new_keys[i] {
+            Some(new_key) => {
+                // Search for matching key in old children
+                let mut found: Option<usize> = None;
+                let mut j: usize = 0;
+                while j < old_keys.len()
+                    invariant
+                        0 <= j <= old_keys@.len(),
+                        found is Some ==> {
+                            let idx = found.unwrap();
+                            &&& 0 <= idx < old_keys@.len()
+                            &&& old_keys@[idx as int] == Some(*new_key)
+                        },
+                    decreases old_keys@.len() - j,
+                {
+                    match &old_keys[j] {
+                        Some(old_key) => {
+                            if *old_key == *new_key {
+                                found = Some(j);
+                            }
+                        },
+                        None => {},
+                    }
+                    j = j + 1;
+                }
+                mapping.push(found);
+            },
+            None => {
+                mapping.push(None);
+            },
+        }
+        i = i + 1;
+    }
+    mapping
+}
+
 } // verus!

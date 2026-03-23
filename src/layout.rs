@@ -25,6 +25,7 @@ pub mod bounds_proofs;
 pub mod listview;
 pub mod listview_proofs;
 pub mod congruence_proofs;
+pub mod constraint;
 
 verus! {
 
