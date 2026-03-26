@@ -1,7 +1,10 @@
 use vstd::prelude::*;
 use verus_algebra::traits::ordered_ring::OrderedRing;
+use verus_algebra::traits::field::OrderedField;
 use crate::node::Node;
 use crate::size::Size;
+use crate::diff::nodes_deeply_eqv;
+use crate::layout::congruence_proofs::{lemma_le_congruence_iff, lemma_sub_congruence};
 
 verus! {
 
@@ -392,5 +395,113 @@ pub proof fn lemma_node_local_coords_empty<T: OrderedRing>(
 )
     ensures node_local_coords(node, Seq::empty(), px, py) == (px, py),
 {}
+
+// ── Hit-test congruence ─────────────────────────────────────────
+
+/// point_in_node is congruent: eqv nodes give the same answer for eqv points.
+pub proof fn lemma_point_in_node_congruence<T: OrderedField>(
+    n1: Node<T>, n2: Node<T>,
+    px1: T, px2: T, py1: T, py2: T,
+)
+    requires
+        n1.size.width.eqv(n2.size.width),
+        n1.size.height.eqv(n2.size.height),
+        px1.eqv(px2), py1.eqv(py2),
+    ensures
+        point_in_node(n1, px1, py1) == point_in_node(n2, px2, py2),
+{
+    T::axiom_eqv_reflexive(T::zero());
+    lemma_le_congruence_iff(T::zero(), T::zero(), px1, px2);
+    lemma_le_congruence_iff(px1, px2, n1.size.width, n2.size.width);
+    lemma_le_congruence_iff(T::zero(), T::zero(), py1, py2);
+    lemma_le_congruence_iff(py1, py2, n1.size.height, n2.size.height);
+}
+
+/// hit_test_scan is congruent on deeply eqv nodes with eqv coordinates.
+proof fn lemma_hit_test_scan_congruence<T: OrderedField>(
+    n1: Node<T>, n2: Node<T>,
+    px1: T, px2: T, py1: T, py2: T,
+    index: nat, depth: nat,
+)
+    requires
+        nodes_deeply_eqv(n1, n2, depth),
+        px1.eqv(px2), py1.eqv(py2),
+    ensures
+        hit_test_scan(n1, px1, py1, index, depth)
+            == hit_test_scan(n2, px2, py2, index, depth),
+    decreases depth, index,
+{
+    if index == 0 || depth == 0 {
+        // Both return None
+    } else {
+        let i = (index - 1) as nat;
+        if i >= n1.children.len() {
+            // Both return None (children same length)
+        } else {
+            let c1 = n1.children[i as int];
+            let c2 = n2.children[i as int];
+            // Children are deeply eqv at depth-1
+            assert(nodes_deeply_eqv(c1, c2, (depth - 1) as nat));
+            // Local coords eqv: px.sub(child.x) eqv
+            lemma_sub_congruence(px1, px2, c1.x, c2.x);
+            lemma_sub_congruence(py1, py2, c1.y, c2.y);
+            let lx1 = px1.sub(c1.x);
+            let lx2 = px2.sub(c2.x);
+            let ly1 = py1.sub(c1.y);
+            let ly2 = py2.sub(c2.y);
+            // Recurse into child
+            lemma_hit_test_inner_congruence(c1, c2, lx1, lx2, ly1, ly2, (depth - 1) as nat);
+            let r1 = hit_test_inner(c1, lx1, ly1, (depth - 1) as nat);
+            let r2 = hit_test_inner(c2, lx2, ly2, (depth - 1) as nat);
+            match r1 {
+                Some(_) => {
+                    // Both return Some with same sub_path
+                },
+                None => {
+                    // Both recurse to next sibling
+                    lemma_hit_test_scan_congruence(n1, n2, px1, px2, py1, py2, i, depth);
+                },
+            }
+        }
+    }
+}
+
+/// hit_test_inner is congruent on deeply eqv nodes with eqv coordinates.
+proof fn lemma_hit_test_inner_congruence<T: OrderedField>(
+    n1: Node<T>, n2: Node<T>,
+    px1: T, px2: T, py1: T, py2: T,
+    depth: nat,
+)
+    requires
+        nodes_deeply_eqv(n1, n2, depth),
+        px1.eqv(px2), py1.eqv(py2),
+    ensures
+        hit_test_inner(n1, px1, py1, depth)
+            == hit_test_inner(n2, px2, py2, depth),
+    decreases depth, n1.children.len() + 1,
+{
+    lemma_point_in_node_congruence(n1, n2, px1, px2, py1, py2);
+    if !point_in_node(n1, px1, py1) {
+        // Both return None
+    } else {
+        lemma_hit_test_scan_congruence(n1, n2, px1, px2, py1, py2, n1.children.len(), depth);
+    }
+}
+
+/// Master hit-test congruence: deeply eqv nodes produce the same hit-test
+/// result for eqv coordinates.
+pub proof fn lemma_hit_test_congruence<T: OrderedField>(
+    n1: Node<T>, n2: Node<T>,
+    px1: T, px2: T, py1: T, py2: T,
+    fuel: nat,
+)
+    requires
+        nodes_deeply_eqv(n1, n2, fuel),
+        px1.eqv(px2), py1.eqv(py2),
+    ensures
+        hit_test(n1, px1, py1, fuel) == hit_test(n2, px2, py2, fuel),
+{
+    lemma_hit_test_inner_congruence(n1, n2, px1, px2, py1, py2, fuel);
+}
 
 } // verus!

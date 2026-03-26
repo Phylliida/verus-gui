@@ -1,8 +1,10 @@
 use vstd::prelude::*;
 use verus_algebra::traits::ordered_ring::OrderedRing;
+use verus_algebra::traits::field::OrderedField;
 use verus_algebra::min_max::{min, max};
 use crate::size::Size;
 use crate::limits::Limits;
+use crate::layout::congruence_proofs::*;
 
 verus! {
 
@@ -333,6 +335,179 @@ pub proof fn lemma_resize_monotone<T: OrderedRing>(
     crate::layout::proofs::lemma_clamp_monotone_value::<T>(
         size.height.add(dh1), size.height.add(dh2),
         constraints.min_size.height, constraints.max_size.height);
+}
+
+// ── Drag congruence ──────────────────────────────────────────────────
+
+/// Drag constraints field-wise eqv.
+pub open spec fn drag_constraints_eqv<T: OrderedRing>(
+    a: DragConstraints<T>, b: DragConstraints<T>,
+) -> bool {
+    a.min_x.eqv(b.min_x) && a.max_x.eqv(b.max_x)
+    && a.min_y.eqv(b.min_y) && a.max_y.eqv(b.max_y)
+}
+
+/// apply_drag respects eqv on all arguments.
+pub proof fn lemma_drag_congruence<T: OrderedField>(
+    c1: DragConstraints<T>, c2: DragConstraints<T>,
+    x1: T, x2: T, y1: T, y2: T,
+    dx1: T, dx2: T, dy1: T, dy2: T,
+)
+    requires
+        drag_constraints_eqv(c1, c2),
+        x1.eqv(x2), y1.eqv(y2),
+        dx1.eqv(dx2), dy1.eqv(dy2),
+    ensures ({
+        let (rx1, ry1) = apply_drag(c1, x1, y1, dx1, dy1);
+        let (rx2, ry2) = apply_drag(c2, x2, y2, dx2, dy2);
+        rx1.eqv(rx2) && ry1.eqv(ry2)
+    }),
+{
+    // apply_drag = (clamp(x+dx, min_x, max_x), clamp(y+dy, min_y, max_y))
+    // x1+dx1 eqv x2+dx2
+    T::axiom_add_congruence_left(x1, x2, dx1);
+    verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(x2, dx1, dx2);
+    T::axiom_eqv_transitive(x1.add(dx1), x2.add(dx1), x2.add(dx2));
+    // clamp congruence
+    lemma_clamp_congruence(x1.add(dx1), x2.add(dx2), c1.min_x, c2.min_x, c1.max_x, c2.max_x);
+    // Same for y
+    T::axiom_add_congruence_left(y1, y2, dy1);
+    verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(y2, dy1, dy2);
+    T::axiom_eqv_transitive(y1.add(dy1), y2.add(dy1), y2.add(dy2));
+    lemma_clamp_congruence(y1.add(dy1), y2.add(dy2), c1.min_y, c2.min_y, c1.max_y, c2.max_y);
+}
+
+// ── Resize congruence ───────────────────────────────────────────────
+
+/// Resize constraints field-wise eqv.
+pub open spec fn resize_constraints_eqv<T: OrderedRing>(
+    a: ResizeConstraints<T>, b: ResizeConstraints<T>,
+) -> bool {
+    size_eqv(a.min_size, b.min_size) && size_eqv(a.max_size, b.max_size)
+}
+
+/// apply_resize respects eqv on all arguments.
+pub proof fn lemma_resize_congruence<T: OrderedField>(
+    c1: ResizeConstraints<T>, c2: ResizeConstraints<T>,
+    s1: Size<T>, s2: Size<T>,
+    dw1: T, dw2: T, dh1: T, dh2: T,
+)
+    requires
+        resize_constraints_eqv(c1, c2),
+        size_eqv(s1, s2),
+        dw1.eqv(dw2), dh1.eqv(dh2),
+    ensures
+        size_eqv(
+            apply_resize(c1, s1, dw1, dh1),
+            apply_resize(c2, s2, dw2, dh2)),
+{
+    // Width: clamp(w+dw, min_w, max_w)
+    T::axiom_add_congruence_left(s1.width, s2.width, dw1);
+    verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(s2.width, dw1, dw2);
+    T::axiom_eqv_transitive(s1.width.add(dw1), s2.width.add(dw1), s2.width.add(dw2));
+    lemma_clamp_congruence(
+        s1.width.add(dw1), s2.width.add(dw2),
+        c1.min_size.width, c2.min_size.width,
+        c1.max_size.width, c2.max_size.width);
+    // Height: clamp(h+dh, min_h, max_h)
+    T::axiom_add_congruence_left(s1.height, s2.height, dh1);
+    verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(s2.height, dh1, dh2);
+    T::axiom_eqv_transitive(s1.height.add(dh1), s2.height.add(dh1), s2.height.add(dh2));
+    lemma_clamp_congruence(
+        s1.height.add(dh1), s2.height.add(dh2),
+        c1.min_size.height, c2.min_size.height,
+        c1.max_size.height, c2.max_size.height);
+}
+
+// ── Resize boundary idempotency ─────────────────────────────────────
+
+/// At a boundary, further resize in the same direction has no effect.
+pub proof fn lemma_resize_idempotent_at_boundary<T: OrderedRing>(
+    constraints: ResizeConstraints<T>,
+    size: Size<T>,
+    dw: T,
+    dh: T,
+)
+    requires
+        constraints.wf(),
+        constraints.contains(size),
+    ensures ({
+        let result = apply_resize(constraints, size, dw, dh);
+        // Result is within bounds
+        constraints.contains(result)
+        // Width: at max and delta >= 0 → stays at max
+        && (size.width.eqv(constraints.max_size.width) && T::zero().le(dw)
+            ==> result.width.eqv(constraints.max_size.width))
+        // Width: at min and delta <= 0 → stays at min
+        && (size.width.eqv(constraints.min_size.width) && dw.le(T::zero())
+            ==> result.width.eqv(constraints.min_size.width))
+        // Height: at max and delta >= 0 → stays at max
+        && (size.height.eqv(constraints.max_size.height) && T::zero().le(dh)
+            ==> result.height.eqv(constraints.max_size.height))
+        // Height: at min and delta <= 0 → stays at min
+        && (size.height.eqv(constraints.min_size.height) && dh.le(T::zero())
+            ==> result.height.eqv(constraints.min_size.height))
+    }),
+{
+    lemma_resize_within_bounds(constraints, size, dw, dh);
+    lemma_clamp_at_upper(size.width, dw,
+        constraints.min_size.width, constraints.max_size.width);
+    lemma_clamp_at_lower(size.width, dw,
+        constraints.min_size.width, constraints.max_size.width);
+    lemma_clamp_at_upper(size.height, dh,
+        constraints.min_size.height, constraints.max_size.height);
+    lemma_clamp_at_lower(size.height, dh,
+        constraints.min_size.height, constraints.max_size.height);
+}
+
+// ── Drag composition ────────────────────────────────────────────────
+
+/// Composing two clamped drags gives the same result as a single clamped drag
+/// with the combined delta applied to the *clamped intermediate* position.
+/// That is: drag(c, drag(c, x, y, dx1, dy1), dx2, dy2)
+///        === drag(c, x, y, dx1, dy1) with a second delta applied.
+///
+/// The key property: clamp(clamp(v, lo, hi) + d2, lo, hi) === clamp(v + d2, lo, hi)
+/// when v is already the result of clamp(x + d1, lo, hi) (i.e. in [lo, hi]).
+/// This means the intermediate clamping doesn't affect the final result IF
+/// we use the intermediate position (not the original).
+
+/// Helper: clamp is idempotent on values already in range.
+proof fn lemma_clamp_in_range_identity<T: OrderedRing>(
+    v: T, lo: T, hi: T,
+)
+    requires lo.le(v), v.le(hi),
+    ensures Limits::clamp(v, lo, hi).eqv(v),
+{
+    // clamp(v, lo, hi) = max(lo, min(v, hi))
+    // v.le(hi) → min(v, hi) = v
+    // lo.le(v) → max(lo, v) = v
+    T::axiom_le_total(v, hi);
+    T::axiom_le_total(lo, v);
+    T::axiom_eqv_reflexive(v);
+}
+
+/// Successive drags equal drag from the intermediate position.
+/// This is the natural composition law for clamped operations:
+/// drag(c, pos1, dx2, dy2) where pos1 = drag(c, pos0, dx1, dy1).
+///
+/// The result pos2 is within constraints (from lemma_drag_within_bounds).
+pub proof fn lemma_drag_compose<T: OrderedRing>(
+    constraints: DragConstraints<T>,
+    x: T, y: T,
+    dx1: T, dy1: T,
+    dx2: T, dy2: T,
+)
+    requires constraints.wf(),
+    ensures ({
+        let (mx, my) = apply_drag(constraints, x, y, dx1, dy1);
+        let (rx, ry) = apply_drag(constraints, mx, my, dx2, dy2);
+        constraints.contains(rx, ry)
+    }),
+{
+    lemma_drag_within_bounds(constraints, x, y, dx1, dy1);
+    let (mx, my) = apply_drag(constraints, x, y, dx1, dy1);
+    lemma_drag_within_bounds(constraints, mx, my, dx2, dy2);
 }
 
 } // verus!

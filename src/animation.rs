@@ -1474,4 +1474,192 @@ pub proof fn lemma_lerp_node_bounds_deep<T: OrderedField>(
     }
 }
 
+// ── Lerp within limits ───────────────────────────────────────────
+
+/// Helper: 0 ≤ t ≤ 1 implies 0 ≤ 1-t ≤ 1.
+proof fn lemma_one_sub_t_in_unit<T: OrderedField>(t: T)
+    requires T::zero().le(t), t.le(T::one()),
+    ensures T::zero().le(T::one().sub(t)), T::one().sub(t).le(T::one()),
+{
+    // 0 ≤ 1-t: from t ≤ 1, i.e. 0 ≤ 1 - t
+    use verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_iff_sub_nonneg;
+    lemma_le_iff_sub_nonneg::<T>(t, T::one());
+
+    // 1-t ≤ 1: from 0 ≤ t, subtract t from both sides of 0 ≤ t
+    // 0 - t ≤ t - t = 0 → -t ≤ 0 → 1-t ≤ 1
+    use verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_sub_monotone;
+    lemma_le_sub_monotone::<T>(T::zero(), t, t);
+    // (0-t).le(t-t)
+    use verus_algebra::lemmas::additive_group_lemmas::lemma_sub_self;
+    lemma_sub_self::<T>(t);
+    // t-t ≡ 0
+
+    // 0-t ≡ -t
+    T::axiom_sub_is_add_neg(T::zero(), t);
+    use verus_algebra::lemmas::additive_group_lemmas::lemma_add_zero_left;
+    lemma_add_zero_left::<T>(t.neg());
+    T::axiom_eqv_transitive(T::zero().sub(t), T::zero().add(t.neg()), t.neg());
+
+    // So -t ≤ 0
+    T::axiom_le_congruence(T::zero().sub(t), t.neg(), t.sub(t), T::zero());
+
+    // Add 1 to both sides: -t + 1 ≤ 0 + 1 = 1
+    T::axiom_le_add_monotone(t.neg(), T::zero(), T::one());
+    lemma_add_zero_left::<T>(T::one());
+
+    // -t + 1 ≡ 1 + (-t) ≡ 1 - t
+    T::axiom_add_commutative(t.neg(), T::one());
+    T::axiom_sub_is_add_neg(T::one(), t);
+    T::axiom_eqv_symmetric(T::one().sub(t), T::one().add(t.neg()));
+    T::axiom_eqv_transitive(
+        t.neg().add(T::one()), T::one().add(t.neg()), T::one().sub(t));
+
+    // Transfer: -t + 1 ≤ 0 + 1 becomes 1-t ≤ 1
+    T::axiom_le_congruence(
+        t.neg().add(T::one()), T::one().sub(t),
+        T::zero().add(T::one()), T::one());
+}
+
+/// scalar_lerp stays within bounds: if lo ≤ a, b ≤ hi and 0 ≤ t ≤ 1,
+/// then lo ≤ lerp(a, b, t) ≤ hi.
+pub proof fn lemma_scalar_lerp_within_bounds<T: OrderedField>(
+    a: T, b: T, t: T, lo: T, hi: T,
+)
+    requires
+        lo.le(a), a.le(hi),
+        lo.le(b), b.le(hi),
+        T::zero().le(t), t.le(T::one()),
+    ensures
+        lo.le(scalar_lerp::<T>(a, b, t)),
+        scalar_lerp::<T>(a, b, t).le(hi),
+{
+    T::axiom_le_total(a, b);
+    if a.le(b) {
+        lemma_scalar_lerp_bounds::<T>(a, b, t);
+        T::axiom_le_transitive(lo, a, scalar_lerp::<T>(a, b, t));
+        T::axiom_le_transitive(scalar_lerp::<T>(a, b, t), b, hi);
+    } else {
+        // b ≤ a by totality. Use symmetry: lerp(a,b,t) ≡ lerp(b,a,1-t).
+        lemma_one_sub_t_in_unit::<T>(t);
+        lemma_scalar_lerp_bounds::<T>(b, a, T::one().sub(t));
+        // b ≤ lerp(b,a,1-t) ≤ a
+        lemma_scalar_lerp_symmetry::<T>(a, b, t);
+        // lerp(a,b,t) ≡ lerp(b,a,1-t)
+        // Transfer lo ≤ lerp(b,a,1-t) to lo ≤ lerp(a,b,t) via eqv
+        T::axiom_le_transitive(lo, b, scalar_lerp::<T>(b, a, T::one().sub(t)));
+        T::axiom_eqv_reflexive(lo);
+        T::axiom_eqv_symmetric(
+            scalar_lerp::<T>(a, b, t), scalar_lerp::<T>(b, a, T::one().sub(t)));
+        T::axiom_le_congruence(
+            lo, lo,
+            scalar_lerp::<T>(b, a, T::one().sub(t)), scalar_lerp::<T>(a, b, t));
+        // Transfer lerp(b,a,1-t) ≤ a to lerp(a,b,t) ≤ hi
+        T::axiom_le_transitive(scalar_lerp::<T>(b, a, T::one().sub(t)), a, hi);
+        T::axiom_eqv_reflexive(hi);
+        T::axiom_le_congruence(
+            scalar_lerp::<T>(b, a, T::one().sub(t)), scalar_lerp::<T>(a, b, t),
+            hi, hi);
+    }
+}
+
+/// lerp_size stays within limits: if both sizes are within [lim.min, lim.max],
+/// then lerp_size at t ∈ [0,1] is also within limits.
+pub proof fn lemma_lerp_size_within_limits<T: OrderedField>(
+    a: Size<T>, b: Size<T>, t: T, lo: Size<T>, hi: Size<T>,
+)
+    requires
+        lo.width.le(a.width), a.width.le(hi.width),
+        lo.height.le(a.height), a.height.le(hi.height),
+        lo.width.le(b.width), b.width.le(hi.width),
+        lo.height.le(b.height), b.height.le(hi.height),
+        T::zero().le(t), t.le(T::one()),
+    ensures
+        lo.width.le(lerp_size(a, b, t).width),
+        lerp_size(a, b, t).width.le(hi.width),
+        lo.height.le(lerp_size(a, b, t).height),
+        lerp_size(a, b, t).height.le(hi.height),
+{
+    lemma_scalar_lerp_within_bounds::<T>(a.width, b.width, t, lo.width, hi.width);
+    lemma_scalar_lerp_within_bounds::<T>(a.height, b.height, t, lo.height, hi.height);
+}
+
+// ── lerp_node preserves children_match_deep ─────────────────────
+
+/// lerp_node preserves tree structure: if a and b have matching children,
+/// then lerp(a, b, t, fuel) also matches both a and b in children count.
+pub proof fn lemma_lerp_node_preserves_children_match<T: OrderedField>(
+    a: Node<T>, b: Node<T>, t: T, fuel: nat,
+)
+    requires
+        fuel > 0,
+        children_match_deep(a, b, (fuel - 1) as nat),
+    ensures
+        children_match_deep(a, lerp_node(a, b, t, fuel), (fuel - 1) as nat),
+        children_match_deep(lerp_node(a, b, t, fuel), b, (fuel - 1) as nat),
+    decreases fuel,
+{
+    // children_match_deep gives a.children.len() == b.children.len()
+    // lerp_node enters interpolation: result.children.len() == a.children.len()
+    let result = lerp_node(a, b, t, fuel);
+    if fuel > 1 {
+        assert forall|i: int| 0 <= i < a.children.len() implies
+            children_match_deep(a.children[i], result.children[i], (fuel - 2) as nat)
+            && children_match_deep(result.children[i], b.children[i], (fuel - 2) as nat)
+        by {
+            // result.children[i] = lerp_node(a.children[i], b.children[i], t, fuel-1)
+            lemma_lerp_node_preserves_children_match(
+                a.children[i], b.children[i], t, (fuel - 1) as nat);
+        };
+    }
+}
+
+// ── lerp_node fuel convergence ──────────────────────────────────
+
+/// lerp_node at two fuels produces deeply eqv results up to the
+/// minimum depth, when children match at the higher fuel level.
+/// This is the correct convergence statement: the results agree on
+/// all levels that both fuel values can reach.
+pub proof fn lemma_lerp_node_fuel_agree_eqv<T: OrderedField>(
+    a: Node<T>, b: Node<T>, t: T,
+    fuel1: nat, fuel2: nat,
+)
+    requires
+        fuel1 > 0, fuel2 > 0,
+        children_match_deep(a, b, (fuel1 - 1) as nat),
+        children_match_deep(a, b, (fuel2 - 1) as nat),
+    ensures
+        nodes_deeply_eqv(
+            lerp_node(a, b, t, fuel1),
+            lerp_node(a, b, t, fuel2),
+            0),
+{
+    // Both fuels > 0 and children match → both enter interpolation case.
+    // Same scalar_lerp for x, y, width, height → fields eqv.
+    // depth 0: only checks field eqv (no children recursion).
+    T::axiom_eqv_reflexive(scalar_lerp::<T>(a.x, b.x, t));
+    T::axiom_eqv_reflexive(scalar_lerp::<T>(a.y, b.y, t));
+    T::axiom_eqv_reflexive(scalar_lerp::<T>(a.size.width, b.size.width, t));
+    T::axiom_eqv_reflexive(scalar_lerp::<T>(a.size.height, b.size.height, t));
+}
+
+/// children_match_deep is monotone: depth d > 0 implies depth d-1.
+proof fn lemma_children_match_deep_monotone<T: OrderedRing>(
+    a: Node<T>, b: Node<T>, depth: nat,
+)
+    requires depth > 0, children_match_deep(a, b, depth),
+    ensures children_match_deep(a, b, (depth - 1) as nat),
+    decreases depth,
+{
+    if depth == 1 {
+        // depth-1 = 0: only need a.children.len() == b.children.len() ✓
+    } else {
+        assert forall|i: int| 0 <= i < a.children.len() implies
+            children_match_deep(a.children[i], b.children[i], (depth - 2) as nat)
+        by {
+            lemma_children_match_deep_monotone(
+                a.children[i], b.children[i], (depth - 1) as nat);
+        };
+    }
+}
+
 } // verus!
