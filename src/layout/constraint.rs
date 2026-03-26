@@ -102,4 +102,29 @@ pub proof fn lemma_constraint_distribute_respects_bounds<T: OrderedField>(
     }
 }
 
+/// All distributed sizes respect their respective min/max constraints.
+pub proof fn lemma_constraint_distribute_all_respect_bounds<T: OrderedField>(
+    constraints: Seq<ChildConstraint<T>>,
+    available_main: T,
+)
+    requires
+        forall|j: int| 0 <= j < constraints.len() ==>
+            constraints[j].min_size.width.le(constraints[j].max_size.width),
+    ensures ({
+        let sizes = constraint_distribute_main(constraints, available_main);
+        forall|i: int| 0 <= i < constraints.len() ==> {
+            &&& constraints[i].min_size.width.le(#[trigger] sizes[i])
+            &&& sizes[i].le(constraints[i].max_size.width)
+        }
+    }),
+{
+    let sizes = constraint_distribute_main(constraints, available_main);
+    assert forall|i: int| 0 <= i < constraints.len() implies
+        constraints[i].min_size.width.le(#[trigger] sizes[i])
+        && sizes[i].le(constraints[i].max_size.width)
+    by {
+        lemma_constraint_distribute_respects_bounds(constraints, available_main, i as nat);
+    };
+}
+
 } // verus!

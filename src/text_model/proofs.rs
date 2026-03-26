@@ -1212,4 +1212,24 @@ pub proof fn lemma_dispatch_compose_commit_preserves_wf(model: TextModel)
     lemma_compose_commit_preserves_wf(model);
 }
 
+/// compose_update preserves model wf.
+/// Only changes composition.provisional and cursor; all other fields unchanged.
+pub proof fn lemma_compose_update_preserves_wf(
+    model: TextModel, provisional: Seq<char>, cursor: nat,
+)
+    requires
+        model.wf(),
+        model.composition.is_some(),
+        cursor <= provisional.len(),
+    ensures
+        compose_update(model, provisional, cursor).wf(),
+{
+    // compose_update returns TextModel { composition: Some(Composition { provisional, cursor, ..c }), ..model }
+    // All wf fields besides composition.provisional and composition.cursor are unchanged:
+    // - text, styles, anchor, focus, focus_affinity, paragraph_styles: unchanged (..model)
+    // - composition.range_start, range_end, original: unchanged (..c)
+    // - composition.cursor <= provisional.len(): from precondition
+    // Z3 can verify field-by-field that wf() holds.
+}
+
 } // verus!

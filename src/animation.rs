@@ -1695,4 +1695,22 @@ proof fn lemma_children_match_deep_monotone<T: OrderedRing>(
     }
 }
 
+// ── lerp_size monotone in t ──────────────────────────────────────
+
+/// lerp_size is monotone in t: if a ≤ b componentwise and s ≤ t,
+/// then lerp_size(a, b, s) ≤ lerp_size(a, b, t) componentwise.
+pub proof fn lemma_lerp_size_monotone<T: OrderedField>(
+    a: Size<T>, b: Size<T>, s: T, t: T,
+)
+    requires
+        a.width.le(b.width), a.height.le(b.height),
+        s.le(t),
+    ensures
+        lerp_size(a, b, s).width.le(lerp_size(a, b, t).width),
+        lerp_size(a, b, s).height.le(lerp_size(a, b, t).height),
+{
+    lemma_scalar_lerp_monotone::<T>(a.width, b.width, s, t);
+    lemma_scalar_lerp_monotone::<T>(a.height, b.height, s, t);
+}
+
 } // verus!

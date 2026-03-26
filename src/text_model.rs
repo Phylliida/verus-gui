@@ -522,6 +522,39 @@ pub uninterp spec fn visual_to_text_pos(
 ) -> (nat, Affinity);
 
 // ──────────────────────────────────────────────────────────────────────
+// Visual position axioms
+// ──────────────────────────────────────────────────────────────────────
+
+/// Round-trip: text_pos_to_visual → visual_to_text_pos returns the original position
+/// (when the position is a grapheme boundary within the text).
+#[verifier::external_body]
+pub proof fn axiom_visual_roundtrip(text: Seq<char>, pos: nat, aff: Affinity)
+    requires
+        wf_text(text),
+        pos <= text.len(),
+        is_grapheme_boundary(text, pos),
+    ensures ({
+        let (line, col) = text_pos_to_visual(text, pos, aff);
+        visual_to_text_pos(text, line, col).0 == pos
+    }),
+{}
+
+/// Visual line is monotone in text position: earlier positions map to
+/// equal or earlier lines.
+#[verifier::external_body]
+pub proof fn axiom_visual_line_monotone(
+    text: Seq<char>, pos1: nat, pos2: nat, aff: Affinity,
+)
+    requires
+        wf_text(text),
+        pos1 <= pos2,
+        pos2 <= text.len(),
+    ensures
+        text_pos_to_visual(text, pos1, aff).0
+            <= text_pos_to_visual(text, pos2, aff).0,
+{}
+
+// ──────────────────────────────────────────────────────────────────────
 // Well-formedness
 // ──────────────────────────────────────────────────────────────────────
 
