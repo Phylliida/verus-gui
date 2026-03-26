@@ -1106,4 +1106,72 @@ pub proof fn lemma_redo_style_history_position(
     // redo splice = seq_splice(before_s, start, start+removed_styles.len(), inserted_styles) =~= after_s
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Combined text + styles roundtrip
+// ──────────────────────────────────────────────────────────────────────
+
+/// After edit → undo → redo, both text AND styles match the edited version.
+/// Combines the text roundtrip (lemma_undo_redo_cancel) with the style
+/// roundtrip via undo/redo style history maintenance.
+pub proof fn lemma_undo_redo_cancel_full(
+    model: TextModel,
+    start: nat,
+    end: nat,
+    new_text: Seq<char>,
+    new_styles: Seq<StyleSet>,
+    new_focus: nat,
+)
+    requires
+        model.wf(),
+        start <= end,
+        end <= model.text.len(),
+        new_text.len() == new_styles.len(),
+    ensures
+        ({
+            let entry = undo_entry_for_splice(
+                model, start, end, new_text, new_styles, new_focus);
+            let model_after = splice(
+                model, start, end, new_text, new_styles, new_focus);
+            let stack = push_undo(empty_undo_stack(), entry);
+            let (stack2, model_undone) = apply_undo(stack, model_after);
+            let (_, model_redone) = apply_redo(stack2, model_undone);
+            &&& model_redone.text =~= model_after.text
+            &&& model_redone.styles =~= model_after.styles
+        }),
+{
+    let entry = undo_entry_for_splice(
+        model, start, end, new_text, new_styles, new_focus);
+    let model_after = splice(
+        model, start, end, new_text, new_styles, new_focus);
+    let stack = push_undo(empty_undo_stack(), entry);
+
+    // Text roundtrip
+    lemma_undo_redo_cancel(model, start, end, new_text, new_styles, new_focus);
+
+    // Styles roundtrip: same logic as text, using seq_splice on styles
+    let (stack2, model_undone) = apply_undo(stack, model_after);
+
+    // After undo: model_undone.styles comes from splicing back the removed_styles
+    // entry.removed_styles = model.styles[start..end)
+    // entry.inserted_styles = new_styles
+    // undo splice = seq_splice(model_after.styles, start, start + new_styles.len(), removed_styles)
+    //             =~= model.styles
+    lemma_seq_splice_roundtrip::<StyleSet>(
+        model.styles, start as int, end as int, new_styles);
+    assert(model_undone.styles =~= model.styles);
+
+    // After redo: splice(model_undone.styles, start, start + removed.len(), inserted)
+    //           = splice(model.styles, start, end, new_styles) = model_after.styles
+    assert(entry.removed_styles.len() == end - start);
+    assert(model.styles.subrange(start as int, end as int).len() == end - start);
+
+    let (_, model_redone) = apply_redo(stack2, model_undone);
+    lemma_seq_splice_roundtrip::<StyleSet>(
+        model_undone.styles,
+        start as int,
+        (start + entry.removed_styles.len()) as int,
+        new_styles,
+    );
+}
+
 } // verus!

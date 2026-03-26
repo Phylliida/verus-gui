@@ -2390,6 +2390,8 @@ proof fn lemma_wrapper_child_deep_congruence<T: OrderedField>(
 }
 
 /// Master deep congruence: eqv widgets produce deeply eqv layout nodes.
+/// Proved at depth 0 for all widgets, and at depth 1 for leaf/wrapper widgets
+/// (which have 0 or 1 children with simple position logic).
 pub proof fn lemma_layout_widget_deep_congruence<T: OrderedField>(
     lim1: Limits<T>, lim2: Limits<T>,
     w1: Widget<T>, w2: Widget<T>,
@@ -2402,14 +2404,82 @@ pub proof fn lemma_layout_widget_deep_congruence<T: OrderedField>(
         crate::diff::nodes_deeply_eqv(
             layout_widget(lim1, w1, fuel),
             layout_widget(lim2, w2, fuel),
-            0,  // depth 0: top-level eqv (fields eqv, children.len() equal)
+            0,
         ),
 {
-    // Use existing node_eqv proof which gives x, y, size eqv and children.len() equal
     lemma_layout_widget_node_congruence(lim1, lim2, w1, w2, fuel);
-    let n1 = layout_widget(lim1, w1, fuel);
-    let n2 = layout_widget(lim2, w2, fuel);
-    // nodes_deeply_eqv at depth 0 only checks fields, no children recursion
+}
+
+/// Deep congruence at depth 1 for leaf widgets (no children → trivially deep).
+pub proof fn lemma_layout_leaf_deep_congruence<T: OrderedField>(
+    lim1: Limits<T>, lim2: Limits<T>,
+    l1: LeafWidget<T>, l2: LeafWidget<T>,
+    fuel: nat, depth: nat,
+)
+    requires
+        limits_eqv(lim1, lim2),
+        fuel > 0,
+        widget_eqv(Widget::Leaf(l1), Widget::Leaf(l2), fuel),
+    ensures
+        crate::diff::nodes_deeply_eqv(
+            layout_widget(lim1, Widget::Leaf(l1), fuel),
+            layout_widget(lim2, Widget::Leaf(l2), fuel),
+            depth,
+        ),
+{
+    lemma_layout_widget_node_congruence(lim1, lim2,
+        Widget::Leaf(l1), Widget::Leaf(l2), fuel);
+    // Leaf widgets have empty children → deeply_eqv at any depth
+    let n1 = layout_widget(lim1, Widget::Leaf(l1), fuel);
+    let n2 = layout_widget(lim2, Widget::Leaf(l2), fuel);
+    assert(n1.children.len() == 0);
+    assert(n2.children.len() == 0);
+    lemma_empty_children_deeply_eqv(n1, n2, depth);
+}
+
+/// Nodes with eqv fields and no children are deeply eqv at any depth.
+proof fn lemma_empty_children_deeply_eqv<T: OrderedRing>(
+    a: Node<T>, b: Node<T>, depth: nat,
+)
+    requires
+        a.x.eqv(b.x), a.y.eqv(b.y),
+        a.size.width.eqv(b.size.width), a.size.height.eqv(b.size.height),
+        a.children.len() == 0, b.children.len() == 0,
+    ensures
+        crate::diff::nodes_deeply_eqv(a, b, depth),
+    decreases depth,
+{
+    // No children → forall over empty range is vacuously true
+    if depth > 0 {
+        // The children forall is over 0 elements → trivially true
+    }
+}
+
+/// Deep congruence at arbitrary depth for leaf widgets (no children).
+pub proof fn lemma_layout_leaf_deep_congruence_any<T: OrderedField>(
+    lim1: Limits<T>, lim2: Limits<T>,
+    l1: LeafWidget<T>, l2: LeafWidget<T>,
+    fuel: nat, depth: nat,
+)
+    requires
+        limits_eqv(lim1, lim2),
+        fuel > 0,
+        widget_eqv(Widget::Leaf(l1), Widget::Leaf(l2), fuel),
+    ensures
+        crate::diff::nodes_deeply_eqv(
+            layout_widget(lim1, Widget::Leaf(l1), fuel),
+            layout_widget(lim2, Widget::Leaf(l2), fuel),
+            depth,
+        ),
+{
+    lemma_layout_widget_node_congruence(lim1, lim2,
+        Widget::Leaf(l1), Widget::Leaf(l2), fuel);
+    let n1 = layout_widget(lim1, Widget::Leaf(l1), fuel);
+    let n2 = layout_widget(lim2, Widget::Leaf(l2), fuel);
+    // Leaf widgets have empty children
+    assert(n1.children.len() == 0);
+    assert(n2.children.len() == 0);
+    lemma_empty_children_deeply_eqv(n1, n2, depth);
 }
 
 } // verus!

@@ -9,7 +9,7 @@ use super::session::{
 };
 use super::undo::{can_undo, can_redo, apply_undo, apply_redo};
 use crate::event::{
-    dispatch_key, KeyAction, KeyEvent, KeyEventKind,
+    dispatch_key, key_to_move_direction, KeyAction, KeyEvent, KeyEventKind,
     ExternalAction, Modifiers,
 };
 
@@ -1113,6 +1113,103 @@ pub proof fn lemma_apply_key_kind_determines_result(
     }),
 {
     reveal(apply_key_to_session);
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Master wf preservation: dispatch_key
+// ──────────────────────────────────────────────────────────────────────
+
+/// Single-char insert via dispatch_key preserves model wf.
+pub proof fn lemma_dispatch_insert_preserves_wf(model: TextModel, ch: char)
+    requires
+        model.wf(),
+        is_permitted(ch), ch != '\r',
+        model.composition.is_none(),
+    ensures
+        insert_char(model, ch).wf(),
+{
+    let (sel_start, sel_end) = selection_range(model.anchor, model.focus);
+    axiom_splice_wf(model.text, sel_start, sel_end, seq![ch]);
+    lemma_insert_char_preserves_wf(model, ch);
+}
+
+/// Delete selection via dispatch_key preserves model wf.
+pub proof fn lemma_dispatch_delete_selection_preserves_wf(model: TextModel)
+    requires
+        model.wf(),
+        has_selection(model.anchor, model.focus),
+        model.composition.is_none(),
+    ensures
+        delete_selection(model).wf(),
+{
+    let (sel_start, sel_end) = selection_range(model.anchor, model.focus);
+    axiom_splice_wf(model.text, sel_start, sel_end, Seq::empty());
+    lemma_delete_selection_preserves_wf(model);
+}
+
+/// Delete backward (single grapheme) via dispatch_key preserves model wf.
+pub proof fn lemma_dispatch_delete_backward_preserves_wf(model: TextModel)
+    requires
+        model.wf(),
+        !has_selection(model.anchor, model.focus),
+        model.focus > 0,
+        model.composition.is_none(),
+    ensures
+        delete_backward(model).wf(),
+{
+    axiom_prev_grapheme_boundary_valid(model.text, model.focus);
+    let prev = prev_grapheme_boundary(model.text, model.focus);
+    axiom_splice_wf(model.text, prev, model.focus, Seq::empty());
+    lemma_delete_backward_preserves_wf(model);
+}
+
+/// Delete forward (single grapheme) via dispatch_key preserves model wf.
+pub proof fn lemma_dispatch_delete_forward_preserves_wf(model: TextModel)
+    requires
+        model.wf(),
+        !has_selection(model.anchor, model.focus),
+        model.focus < model.text.len(),
+        model.composition.is_none(),
+    ensures
+        delete_forward(model).wf(),
+{
+    axiom_next_grapheme_boundary_valid(model.text, model.focus);
+    let next = next_grapheme_boundary(model.text, model.focus);
+    axiom_splice_wf(model.text, model.focus, next, Seq::empty());
+    lemma_delete_forward_preserves_wf(model);
+}
+
+/// Cursor movement preserves model wf.
+pub proof fn lemma_dispatch_move_preserves_wf(model: TextModel, dir: MoveDirection)
+    requires model.wf(),
+    ensures move_cursor(model, dir).wf(),
+{
+    axiom_movement_valid(model.text, model.focus, model.focus_affinity,
+        model.preferred_column, dir);
+    lemma_move_cursor_preserves_wf(model, dir);
+}
+
+/// Selection extension preserves model wf.
+pub proof fn lemma_dispatch_extend_selection_preserves_wf(model: TextModel, dir: MoveDirection)
+    requires model.wf(),
+    ensures extend_selection(model, dir).wf(),
+{
+    axiom_movement_valid(model.text, model.focus, model.focus_affinity,
+        model.preferred_column, dir);
+    lemma_extend_selection_preserves_wf(model, dir);
+}
+
+/// Compose commit preserves model wf.
+pub proof fn lemma_dispatch_compose_commit_preserves_wf(model: TextModel)
+    requires
+        model.wf(),
+        model.composition.is_some(),
+    ensures
+        compose_commit(model).wf(),
+{
+    let c = model.composition.unwrap();
+    axiom_compose_commit_wf(model.text, c.range_start, c.range_end, c.provisional);
+    lemma_compose_commit_preserves_wf(model);
 }
 
 } // verus!
