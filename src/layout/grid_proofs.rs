@@ -1119,4 +1119,140 @@ pub proof fn lemma_grid_children_within_bounds<T: OrderedField>(
     crate::layout::proofs::lemma_merge_layout_cwb(layout, cn);
 }
 
+// ── Grid cell non-overlapping (arbitrary pairs) ─────────────────
+
+/// Columns non-overlapping for arbitrary col1 < col2 (not just consecutive).
+pub proof fn lemma_grid_columns_nonoverlapping_any<T: OrderedRing>(
+    padding_left: T,
+    col_widths: Seq<Size<T>>,
+    h_spacing: T,
+    col1: nat, col2: nat,
+)
+    requires
+        col1 < col2,
+        col2 < col_widths.len(),
+        T::zero().le(h_spacing),
+        forall|j: int| 0 <= j < col_widths.len() ==> T::zero().le(col_widths[j].width),
+    ensures
+        grid_cell_x(padding_left, col_widths, h_spacing, col1)
+            .add(col_widths[col1 as int].width)
+            .le(grid_cell_x(padding_left, col_widths, h_spacing, col2)),
+    decreases col2 - col1,
+{
+    if col1 + 1 == col2 {
+        lemma_grid_columns_nonoverlapping(padding_left, col_widths, h_spacing, col1);
+    } else {
+        // IH: col1's right edge ≤ cell_x(col1+1)
+        lemma_grid_columns_nonoverlapping(padding_left, col_widths, h_spacing, col1);
+        // IH: cell_x(col1+1) + width[col1+1] ≤ cell_x(col2)
+        lemma_grid_columns_nonoverlapping_any(
+            padding_left, col_widths, h_spacing, col1 + 1, col2);
+        // cell_x(col1+1) ≤ cell_x(col1+1) + width[col1+1] (nonneg width)
+        let cx = grid_cell_x(padding_left, col_widths, h_spacing, (col1 + 1) as nat);
+        crate::layout::proofs::lemma_le_add_nonneg::<T>(
+            cx, col_widths[(col1 + 1) as int].width);
+        // Chain: col1_right ≤ cell_x(col1+1) ≤ cell_x(col1+1)+w ≤ cell_x(col2)
+        T::axiom_le_transitive(
+            grid_cell_x(padding_left, col_widths, h_spacing, col1)
+                .add(col_widths[col1 as int].width),
+            cx,
+            cx.add(col_widths[(col1 + 1) as int].width));
+        T::axiom_le_transitive(
+            grid_cell_x(padding_left, col_widths, h_spacing, col1)
+                .add(col_widths[col1 as int].width),
+            cx.add(col_widths[(col1 + 1) as int].width),
+            grid_cell_x(padding_left, col_widths, h_spacing, col2));
+    }
+}
+
+/// Rows non-overlapping for arbitrary row1 < row2.
+pub proof fn lemma_grid_rows_nonoverlapping_any<T: OrderedRing>(
+    padding_top: T,
+    row_heights: Seq<Size<T>>,
+    v_spacing: T,
+    row1: nat, row2: nat,
+)
+    requires
+        row1 < row2,
+        row2 < row_heights.len(),
+        T::zero().le(v_spacing),
+        forall|j: int| 0 <= j < row_heights.len() ==> T::zero().le(row_heights[j].height),
+    ensures
+        grid_cell_y(padding_top, row_heights, v_spacing, row1)
+            .add(row_heights[row1 as int].height)
+            .le(grid_cell_y(padding_top, row_heights, v_spacing, row2)),
+    decreases row2 - row1,
+{
+    if row1 + 1 == row2 {
+        lemma_grid_rows_nonoverlapping(padding_top, row_heights, v_spacing, row1);
+    } else {
+        lemma_grid_rows_nonoverlapping(padding_top, row_heights, v_spacing, row1);
+        lemma_grid_rows_nonoverlapping_any(
+            padding_top, row_heights, v_spacing, row1 + 1, row2);
+        let cy = grid_cell_y(padding_top, row_heights, v_spacing, (row1 + 1) as nat);
+        crate::layout::proofs::lemma_le_add_nonneg::<T>(
+            cy, row_heights[(row1 + 1) as int].height);
+        T::axiom_le_transitive(
+            grid_cell_y(padding_top, row_heights, v_spacing, row1)
+                .add(row_heights[row1 as int].height),
+            cy,
+            cy.add(row_heights[(row1 + 1) as int].height));
+        T::axiom_le_transitive(
+            grid_cell_y(padding_top, row_heights, v_spacing, row1)
+                .add(row_heights[row1 as int].height),
+            cy.add(row_heights[(row1 + 1) as int].height),
+            grid_cell_y(padding_top, row_heights, v_spacing, row2));
+    }
+}
+
+/// Any two distinct grid cells don't overlap in 2D.
+/// Either their column ranges or row ranges are disjoint.
+pub proof fn lemma_grid_cells_nonoverlapping<T: OrderedRing>(
+    padding_left: T, padding_top: T,
+    col_widths: Seq<Size<T>>, row_heights: Seq<Size<T>>,
+    h_spacing: T, v_spacing: T,
+    r1: nat, c1: nat, r2: nat, c2: nat,
+)
+    requires
+        r1 < row_heights.len(), c1 < col_widths.len(),
+        r2 < row_heights.len(), c2 < col_widths.len(),
+        (r1 != r2 || c1 != c2),
+        T::zero().le(h_spacing), T::zero().le(v_spacing),
+        forall|j: int| 0 <= j < col_widths.len() ==> T::zero().le(col_widths[j].width),
+        forall|j: int| 0 <= j < row_heights.len() ==> T::zero().le(row_heights[j].height),
+    ensures
+        // Either x-ranges disjoint or y-ranges disjoint
+        grid_cell_x(padding_left, col_widths, h_spacing, c1)
+            .add(col_widths[c1 as int].width)
+            .le(grid_cell_x(padding_left, col_widths, h_spacing, c2))
+        || grid_cell_x(padding_left, col_widths, h_spacing, c2)
+            .add(col_widths[c2 as int].width)
+            .le(grid_cell_x(padding_left, col_widths, h_spacing, c1))
+        || grid_cell_y(padding_top, row_heights, v_spacing, r1)
+            .add(row_heights[r1 as int].height)
+            .le(grid_cell_y(padding_top, row_heights, v_spacing, r2))
+        || grid_cell_y(padding_top, row_heights, v_spacing, r2)
+            .add(row_heights[r2 as int].height)
+            .le(grid_cell_y(padding_top, row_heights, v_spacing, r1)),
+{
+    if c1 != c2 {
+        if c1 < c2 {
+            lemma_grid_columns_nonoverlapping_any(
+                padding_left, col_widths, h_spacing, c1, c2);
+        } else {
+            lemma_grid_columns_nonoverlapping_any(
+                padding_left, col_widths, h_spacing, c2, c1);
+        }
+    } else {
+        // c1 == c2, so r1 != r2
+        if r1 < r2 {
+            lemma_grid_rows_nonoverlapping_any(
+                padding_top, row_heights, v_spacing, r1, r2);
+        } else {
+            lemma_grid_rows_nonoverlapping_any(
+                padding_top, row_heights, v_spacing, r2, r1);
+        }
+    }
+}
+
 } // verus!

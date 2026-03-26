@@ -504,4 +504,103 @@ pub proof fn lemma_hit_test_congruence<T: OrderedField>(
     lemma_hit_test_inner_congruence(n1, n2, px1, px2, py1, py2, fuel);
 }
 
+// ── Hit-test geometric containment ──────────────────────────────
+
+/// A path is geometrically valid: at each step, the point (in local coords)
+/// is within the node's bounds.
+pub open spec fn path_geometrically_valid<T: OrderedRing>(
+    node: Node<T>, path: Seq<nat>, px: T, py: T,
+) -> bool
+    decreases path.len(),
+{
+    point_in_node(node, px, py)
+    && if path.len() == 0 {
+        true
+    } else {
+        let idx = path[0];
+        idx < node.children.len() && {
+            let child = node.children[idx as int];
+            let local_x = px.sub(child.x);
+            let local_y = py.sub(child.y);
+            path_geometrically_valid(
+                child, path.subrange(1, path.len() as int), local_x, local_y)
+        }
+    }
+}
+
+/// hit_test_inner returns geometrically valid paths.
+proof fn lemma_hit_test_inner_geometric<T: OrderedRing>(
+    node: Node<T>, px: T, py: T, depth: nat,
+)
+    requires hit_test_inner(node, px, py, depth) is Some,
+    ensures
+        path_geometrically_valid(
+            node, hit_test_inner(node, px, py, depth).unwrap(), px, py),
+    decreases depth, node.children.len() + 1,
+{
+    // hit_test_inner checks point_in_node first — that's the geometric containment
+    lemma_hit_test_point_in_node(node, px, py, depth);
+    // point_in_node(node, px, py) ✓
+    let result = hit_test_inner(node, px, py, depth);
+    let path = result.unwrap();
+    let child_hit = hit_test_scan(node, px, py, node.children.len(), depth);
+    match child_hit {
+        Some(child_path) => {
+            // path = child_path, which came from scan
+            lemma_hit_test_scan_geometric(node, px, py, node.children.len(), depth);
+        },
+        None => {
+            // path = Seq::empty(), geometrically valid (just point_in_node)
+        },
+    }
+}
+
+/// hit_test_scan returns geometrically valid paths (given point_in_node).
+proof fn lemma_hit_test_scan_geometric<T: OrderedRing>(
+    node: Node<T>, px: T, py: T, index: nat, depth: nat,
+)
+    requires
+        hit_test_scan(node, px, py, index, depth) is Some,
+        point_in_node(node, px, py),
+    ensures
+        path_geometrically_valid(
+            node, hit_test_scan(node, px, py, index, depth).unwrap(), px, py),
+    decreases depth, index,
+{
+    if index == 0 || depth == 0 {
+    } else {
+        let i = (index - 1) as nat;
+        if i >= node.children.len() {
+        } else {
+            let child = node.children[i as int];
+            let lx = px.sub(child.x);
+            let ly = py.sub(child.y);
+            let child_result = hit_test_inner(child, lx, ly, (depth - 1) as nat);
+            match child_result {
+                Some(sub_path) => {
+                    lemma_hit_test_inner_geometric(child, lx, ly, (depth - 1) as nat);
+                    let full_path = Seq::empty().push(i).add(sub_path);
+                    assert(full_path.subrange(1, full_path.len() as int) =~= sub_path);
+                },
+                None => {
+                    lemma_hit_test_scan_geometric(node, px, py, i, depth);
+                },
+            }
+        }
+    }
+}
+
+/// Master: if hit_test returns Some(path), the point is within the node
+/// at every step along the path (geometric containment, not just index validity).
+pub proof fn lemma_hit_test_geometrically_valid<T: OrderedRing>(
+    node: Node<T>, px: T, py: T, fuel: nat,
+)
+    requires hit_test(node, px, py, fuel) is Some,
+    ensures
+        path_geometrically_valid(
+            node, hit_test(node, px, py, fuel).unwrap(), px, py),
+{
+    lemma_hit_test_inner_geometric(node, px, py, fuel);
+}
+
 } // verus!

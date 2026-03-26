@@ -1232,4 +1232,45 @@ pub proof fn lemma_compose_update_preserves_wf(
     // Z3 can verify field-by-field that wf() holds.
 }
 
+/// delete_word_backward preserves model wf.
+pub proof fn lemma_delete_word_backward_preserves_wf(model: TextModel)
+    requires
+        model.wf(),
+        model.composition.is_none(),
+        !has_selection(model.anchor, model.focus),
+        model.focus > 0,
+    ensures
+        delete_word_backward(model).wf(),
+{
+    // delete_word_backward uses prev_boundary_in(word_start_boundaries, focus)
+    // then splice(model, prev, focus, empty, empty, prev)
+    axiom_prev_word_boundary_valid(model.text, model.focus);
+    let prev = prev_boundary_in(word_start_boundaries(model.text), model.focus);
+    // prev <= focus, is_grapheme_boundary(text, prev)
+    // focus is a grapheme boundary (from model.wf())
+    axiom_splice_wf(model.text, prev, model.focus, Seq::empty());
+    lemma_seq_splice_len(model.text, prev as int, model.focus as int, Seq::<char>::empty());
+    lemma_splice_preserves_wf(model, prev, model.focus, Seq::empty(), Seq::empty(), prev);
+}
+
+/// delete_word_forward preserves model wf.
+pub proof fn lemma_delete_word_forward_preserves_wf(model: TextModel)
+    requires
+        model.wf(),
+        model.composition.is_none(),
+        !has_selection(model.anchor, model.focus),
+        model.focus < model.text.len(),
+    ensures
+        delete_word_forward(model).wf(),
+{
+    // delete_word_forward uses next_boundary_in(word_end_boundaries, focus)
+    // then splice(model, focus, next, empty, empty, focus)
+    axiom_next_word_boundary_valid(model.text, model.focus);
+    let next = next_boundary_in(word_end_boundaries(model.text), model.focus);
+    // next >= focus, next <= text.len(), is_grapheme_boundary(text, next)
+    axiom_splice_wf(model.text, model.focus, next, Seq::empty());
+    lemma_seq_splice_len(model.text, model.focus as int, next as int, Seq::<char>::empty());
+    lemma_splice_preserves_wf(model, model.focus, next, Seq::empty(), Seq::empty(), model.focus);
+}
+
 } // verus!

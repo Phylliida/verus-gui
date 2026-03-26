@@ -1,10 +1,14 @@
 use vstd::prelude::*;
 use verus_algebra::traits::ordered_ring::OrderedRing;
 use verus_algebra::traits::field::OrderedField;
+use verus_algebra::min_max::{min, max};
 use crate::size::Size;
+use crate::limits::Limits;
 use crate::node::Node;
 use crate::draw::*;
 use crate::diff::nodes_deeply_eqv;
+use crate::widget::*;
+use crate::vulkan_bridge::{draw_command_valid, all_draws_valid};
 
 verus! {
 
@@ -274,6 +278,180 @@ proof fn lemma_children_node_count_congruence<T: OrderedRing>(
         lemma_node_count_congruence::<T>(ch1[from as int], ch2[from as int], fuel);
         lemma_children_node_count_congruence::<T>(ch1, ch2, fuel, from + 1);
     }
+}
+
+// ── Draw command validity ────────────────────────────────────────────
+
+/// All nodes in a tree have non-negative sizes.
+pub open spec fn all_sizes_nonneg<T: OrderedRing>(node: Node<T>, fuel: nat) -> bool
+    decreases fuel,
+{
+    node.size.is_nonneg()
+    && (fuel > 0 ==> forall|i: int| 0 <= i < node.children.len() ==>
+        all_sizes_nonneg(node.children[i], (fuel - 1) as nat))
+}
+
+/// If a node has nonneg size, its self-draw is valid.
+proof fn lemma_nonneg_implies_self_draw_valid<T: OrderedRing>(
+    node: Node<T>, offset_x: T, offset_y: T, depth: nat,
+)
+    requires node.size.is_nonneg(),
+    ensures
+        draw_command_valid(DrawCommand {
+            x: offset_x.add(node.x), y: offset_y.add(node.y),
+            width: node.size.width, height: node.size.height, depth,
+        }),
+{
+}
+
+/// If all nodes in a tree have nonneg sizes, flatten produces valid draws.
+pub proof fn lemma_flatten_all_valid<T: OrderedRing>(
+    node: Node<T>, offset_x: T, offset_y: T, depth: nat, fuel: nat,
+)
+    requires all_sizes_nonneg(node, fuel),
+    ensures all_draws_valid(flatten_node_to_draws(node, offset_x, offset_y, depth, fuel)),
+    decreases fuel, 0nat,
+{
+    let draws = flatten_node_to_draws(node, offset_x, offset_y, depth, fuel);
+    if fuel == 0 {
+        // Single draw: node.size.is_nonneg() → draw_command_valid
+        assert forall|i: int| 0 <= i < draws.len()
+            implies draw_command_valid(#[trigger] draws[i])
+        by {
+            assert(i == 0);
+        };
+    } else {
+        let abs_x = offset_x.add(node.x);
+        let abs_y = offset_y.add(node.y);
+        // Self draw is valid
+        // Children draws are valid by IH
+        lemma_flatten_children_all_valid(
+            node.children, abs_x, abs_y, depth + 1, (fuel - 1) as nat, 0);
+        let child_draws = flatten_children_to_draws(
+            node.children, abs_x, abs_y, depth + 1, (fuel - 1) as nat, 0);
+        assert forall|i: int| 0 <= i < draws.len()
+            implies draw_command_valid(#[trigger] draws[i])
+        by {
+            if i == 0 {
+                // Self draw
+            } else {
+                // Child draw: draws[i] == child_draws[i-1]
+                assert(draws[i] == child_draws[i - 1]);
+            }
+        };
+    }
+}
+
+/// Children flatten all valid.
+proof fn lemma_flatten_children_all_valid<T: OrderedRing>(
+    children: Seq<Node<T>>,
+    parent_abs_x: T, parent_abs_y: T,
+    start_depth: nat, fuel: nat, from: nat,
+)
+    requires
+        forall|i: int| 0 <= i < children.len() ==>
+            all_sizes_nonneg(children[i], fuel),
+    ensures
+        all_draws_valid(
+            flatten_children_to_draws(children, parent_abs_x, parent_abs_y,
+                start_depth, fuel, from)),
+    decreases fuel, children.len() - from,
+{
+    if from >= children.len() {
+    } else {
+        lemma_flatten_all_valid(
+            children[from as int], parent_abs_x, parent_abs_y, start_depth, fuel);
+        let first = flatten_node_to_draws(
+            children[from as int], parent_abs_x, parent_abs_y, start_depth, fuel);
+        let next_depth = start_depth + first.len();
+        lemma_flatten_children_all_valid(
+            children, parent_abs_x, parent_abs_y, next_depth, fuel, from + 1);
+        let rest = flatten_children_to_draws(
+            children, parent_abs_x, parent_abs_y, next_depth, fuel, from + 1);
+        let full = flatten_children_to_draws(
+            children, parent_abs_x, parent_abs_y, start_depth, fuel, from);
+        assert forall|i: int| 0 <= i < full.len()
+            implies draw_command_valid(#[trigger] full[i])
+        by {
+            if i < first.len() as int {
+                assert(full[i] == first[i]);
+            } else {
+                assert(full[i] == rest[i - first.len() as int]);
+            }
+        };
+    }
+}
+
+/// Resolve with wf limits produces nonneg sizes.
+pub proof fn lemma_resolve_nonneg<T: OrderedRing>(
+    limits: Limits<T>, size: Size<T>,
+)
+    requires limits.wf(),
+    ensures limits.resolve(size).is_nonneg(),
+{
+    // resolve.width = clamp(size.width, min.width, max.width) = max(min.width, min(size.width, max.width))
+    // limits.wf() → min.width ≥ 0
+    // max(min.width, _) ≥ min.width ≥ 0
+    verus_algebra::min_max::lemma_max_ge_left::<T>(
+        limits.min.width, min::<T>(size.width, limits.max.width));
+    T::axiom_le_transitive(
+        T::zero(), limits.min.width,
+        max::<T>(limits.min.width, min::<T>(size.width, limits.max.width)));
+    verus_algebra::min_max::lemma_max_ge_left::<T>(
+        limits.min.height, min::<T>(size.height, limits.max.height));
+    T::axiom_le_transitive(
+        T::zero(), limits.min.height,
+        max::<T>(limits.min.height, min::<T>(size.height, limits.max.height)));
+}
+
+/// Root draw validity: the root-level draw command from layout is always valid.
+/// This proves the root node's dimensions are non-negative.
+pub proof fn lemma_layout_root_draw_valid<T: OrderedField>(
+    limits: Limits<T>,
+    widget: Widget<T>,
+    fuel: nat,
+    draw_fuel: nat,
+)
+    requires limits.wf(), fuel > 0,
+    ensures ({
+        let draws = flatten_node_to_draws(
+            layout_widget(limits, widget, fuel),
+            T::zero(), T::zero(), 0, draw_fuel);
+        draws.len() > 0 && draw_command_valid(draws[0])
+    }),
+{
+    crate::layout::bounds_proofs::lemma_layout_widget_respects_limits(limits, widget, fuel);
+    let node = layout_widget(limits, widget, fuel);
+    T::axiom_le_transitive(T::zero(), limits.min.width, node.size.width);
+    T::axiom_le_transitive(T::zero(), limits.min.height, node.size.height);
+    lemma_flatten_first_depth(node, T::zero(), T::zero(), 0, draw_fuel);
+}
+
+/// Full draw validity: if all nodes in a layout tree have nonneg sizes,
+/// then all draw commands from flattening are valid.
+/// Combined with lemma_flatten_all_valid, this gives the end-to-end guarantee.
+///
+/// Usage: prove all_sizes_nonneg for a specific widget tree
+/// (e.g., by strengthening lemma_layout_widget_respects_limits to be recursive),
+/// then call this lemma.
+pub proof fn lemma_layout_all_draws_valid_from_nonneg<T: OrderedField>(
+    limits: Limits<T>,
+    widget: Widget<T>,
+    fuel: nat,
+    draw_fuel: nat,
+)
+    requires
+        limits.wf(), fuel > 0,
+        all_sizes_nonneg(layout_widget(limits, widget, fuel), draw_fuel),
+    ensures
+        all_draws_valid(
+            flatten_node_to_draws(
+                layout_widget(limits, widget, fuel),
+                T::zero(), T::zero(), 0, draw_fuel)),
+{
+    lemma_flatten_all_valid(
+        layout_widget(limits, widget, fuel),
+        T::zero(), T::zero(), 0, draw_fuel);
 }
 
 } // verus!

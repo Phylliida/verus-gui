@@ -2482,4 +2482,34 @@ pub proof fn lemma_layout_leaf_deep_congruence_any<T: OrderedField>(
     lemma_empty_children_deeply_eqv(n1, n2, depth);
 }
 
+/// Deep congruence at arbitrary depth for Conditional(false): no children.
+pub proof fn lemma_layout_conditional_false_deep_any<T: OrderedField>(
+    lim1: Limits<T>, lim2: Limits<T>,
+    c1: Box<Widget<T>>, c2: Box<Widget<T>>,
+    fuel: nat, depth: nat,
+)
+    requires
+        limits_eqv(lim1, lim2),
+        fuel > 0,
+        widget_eqv(
+            Widget::Wrapper(WrapperWidget::Conditional { visible: false, child: c1 }),
+            Widget::Wrapper(WrapperWidget::Conditional { visible: false, child: c2 }),
+            fuel),
+    ensures
+        crate::diff::nodes_deeply_eqv(
+            layout_widget(lim1, Widget::Wrapper(WrapperWidget::Conditional { visible: false, child: c1 }), fuel),
+            layout_widget(lim2, Widget::Wrapper(WrapperWidget::Conditional { visible: false, child: c2 }), fuel),
+            depth),
+{
+    lemma_layout_widget_node_congruence(lim1, lim2,
+        Widget::Wrapper(WrapperWidget::Conditional { visible: false, child: c1 }),
+        Widget::Wrapper(WrapperWidget::Conditional { visible: false, child: c2 }),
+        fuel);
+    let n1 = layout_widget(lim1, Widget::Wrapper(WrapperWidget::Conditional { visible: false, child: c1 }), fuel);
+    let n2 = layout_widget(lim2, Widget::Wrapper(WrapperWidget::Conditional { visible: false, child: c2 }), fuel);
+    assert(n1.children.len() == 0);
+    assert(n2.children.len() == 0);
+    lemma_empty_children_deeply_eqv(n1, n2, depth);
+}
+
 } // verus!

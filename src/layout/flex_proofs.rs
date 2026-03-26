@@ -1623,4 +1623,30 @@ pub proof fn lemma_flex_linear_children_element<T: OrderedField>(
     );
 }
 
+// ── Flex conservation (axis-parameterized) ──────────────────────
+
+/// Flex sizes sum to available in the axis-parameterized form.
+/// Since flex_linear_children dispatches to the same flex_child_main_size
+/// as flex_column/row_children, the conservation identity holds for any axis.
+pub proof fn lemma_flex_linear_sizes_sum_to_available<T: OrderedField>(
+    weights: Seq<T>,
+    available: T,
+)
+    requires
+        weights.len() > 0,
+        !sum_weights(weights, weights.len() as nat).eqv(T::zero()),
+    ensures
+        flex_main_sum(
+            weights,
+            sum_weights(weights, weights.len() as nat),
+            available,
+            weights.len() as nat,
+        ).eqv(available),
+{
+    // flex_main_sum is axis-independent — it only uses flex_child_main_size
+    // which is the same function for column, row, and linear variants.
+    // Direct delegation to the existing proof.
+    lemma_flex_sizes_sum_to_available(weights, available);
+}
+
 } // verus!
