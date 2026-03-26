@@ -1583,6 +1583,39 @@ pub proof fn lemma_lerp_size_within_limits<T: OrderedField>(
     lemma_scalar_lerp_within_bounds::<T>(a.height, b.height, t, lo.height, hi.height);
 }
 
+// ── lerp_node full two-argument congruence ──────────────────────
+
+/// lerp_node respects deep eqv on both arguments simultaneously.
+/// Combines left and right congruence via transitivity.
+pub proof fn lemma_lerp_node_congruence_both<T: OrderedField>(
+    a1: Node<T>, a2: Node<T>,
+    b1: Node<T>, b2: Node<T>,
+    t: T, fuel: nat,
+)
+    requires
+        fuel > 0,
+        nodes_deeply_eqv(a1, a2, (fuel - 1) as nat),
+        nodes_deeply_eqv(b1, b2, (fuel - 1) as nat),
+    ensures
+        nodes_deeply_eqv(
+            lerp_node(a1, b1, t, fuel),
+            lerp_node(a2, b2, t, fuel),
+            (fuel - 1) as nat,
+        ),
+{
+    // Step 1: lerp(a1, b1, t, fuel) ≡ lerp(a2, b1, t, fuel) by left congruence
+    lemma_lerp_node_congruence_left(a1, a2, b1, t, fuel);
+    // Step 2: lerp(a2, b1, t, fuel) ≡ lerp(a2, b2, t, fuel) by right congruence
+    lemma_lerp_node_congruence_right(a2, b1, b2, t, fuel);
+    // Step 3: transitivity
+    crate::diff::lemma_deeply_eqv_transitive(
+        lerp_node(a1, b1, t, fuel),
+        lerp_node(a2, b1, t, fuel),
+        lerp_node(a2, b2, t, fuel),
+        (fuel - 1) as nat,
+    );
+}
+
 // ── lerp_node preserves children_match_deep ─────────────────────
 
 /// lerp_node preserves tree structure: if a and b have matching children,

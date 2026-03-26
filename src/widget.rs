@@ -1359,4 +1359,82 @@ proof fn lemma_layout_deterministic_helper<T: OrderedField>(
     }
 }
 
+// ── widget_at_path composition and properties ───────────────────
+
+/// widget_at_path composes: navigating path1 ++ path2 is the same as
+/// navigating path1 first, then path2 from the result.
+pub proof fn lemma_widget_at_path_compose<T: OrderedRing>(
+    widget: Widget<T>,
+    path1: Seq<nat>,
+    path2: Seq<nat>,
+)
+    ensures
+        widget_at_path(widget, path1 + path2) ==
+        match widget_at_path(widget, path1) {
+            Some(w) => widget_at_path(w, path2),
+            None => None,
+        },
+    decreases path1.len(),
+{
+    if path1.len() == 0 {
+        assert(path1 + path2 =~= path2);
+    } else {
+        let children = get_children(widget);
+        let idx = path1[0];
+        if idx >= children.len() {
+            // widget_at_path(widget, path1) = None
+            // widget_at_path(widget, path1 + path2) = None (first step fails)
+            let combined = path1 + path2;
+            assert(combined[0] == path1[0]);
+            assert(combined.len() > 0);
+        } else {
+            let rest1 = path1.subrange(1, path1.len() as int);
+            let combined = path1 + path2;
+            // combined[0] == path1[0] = idx
+            assert(combined[0] == idx);
+            // combined.subrange(1, ..) == rest1 + path2
+            assert(combined.subrange(1, combined.len() as int) =~= rest1 + path2);
+            // IH: widget_at_path(children[idx], rest1 + path2) ==
+            //     match widget_at_path(children[idx], rest1) { Some(w) => widget_at_path(w, path2), None => None }
+            lemma_widget_at_path_compose(children[idx as int], rest1, path2);
+        }
+    }
+}
+
+/// widget_at_path is deterministic: same inputs → same output.
+/// (This is trivially true for spec functions, but worth stating.)
+pub proof fn lemma_widget_at_path_deterministic<T: OrderedRing>(
+    w1: Widget<T>, w2: Widget<T>,
+    path1: Seq<nat>, path2: Seq<nat>,
+)
+    requires w1 === w2, path1 === path2,
+    ensures widget_at_path(w1, path1) === widget_at_path(w2, path2),
+{}
+
+/// Single-step navigation: widget_at_path with a one-element path.
+pub proof fn lemma_widget_at_path_single<T: OrderedRing>(
+    widget: Widget<T>, idx: nat,
+)
+    requires idx < get_children(widget).len(),
+    ensures
+        widget_at_path(widget, seq![idx]) == Some(get_children(widget)[idx as int]),
+{
+    let path = seq![idx];
+    let rest = path.subrange(1, path.len() as int);
+    assert(rest =~= Seq::<nat>::empty());
+    assert(widget_at_path(get_children(widget)[idx as int], rest)
+        == Some(get_children(widget)[idx as int]));
+}
+
+/// widget_at_path returns None when path index is out of bounds.
+pub proof fn lemma_widget_at_path_oob<T: OrderedRing>(
+    widget: Widget<T>, path: Seq<nat>,
+)
+    requires
+        path.len() > 0,
+        path[0] >= get_children(widget).len(),
+    ensures
+        widget_at_path(widget, path).is_none(),
+{}
+
 } // verus!
