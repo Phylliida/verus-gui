@@ -60,3 +60,6 @@ pub mod draw_proofs;
 
 #[cfg(verus_keep_ghost)]
 pub mod vulkan_bridge;
+
+#[cfg(verus_keep_ghost)]
+pub mod theorems;
