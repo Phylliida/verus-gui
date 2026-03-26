@@ -2281,4 +2281,135 @@ pub proof fn lemma_measure_widget_congruence<T: OrderedField>(
     lemma_layout_widget_size_congruence(lim1, lim2, w1, w2, fuel);
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// Deep node congruence
+// ══════════════════════════════════════════════════════════════════════
+
+/// Two seq of nodes are pairwise deeply eqv.
+pub open spec fn nodes_seq_deeply_eqv<T: OrderedRing>(
+    a: Seq<Node<T>>, b: Seq<Node<T>>, depth: nat,
+) -> bool {
+    a.len() == b.len()
+    && forall|i: int| 0 <= i < a.len() ==>
+        crate::diff::nodes_deeply_eqv(a[i], b[i], depth)
+}
+
+/// merge_layout preserves deep eqv: if the layout's children positions are
+/// eqv and the child_nodes are deeply eqv, the merge is deeply eqv.
+proof fn lemma_merge_layout_deep_congruence<T: OrderedField>(
+    layout1: Node<T>, layout2: Node<T>,
+    cn1: Seq<Node<T>>, cn2: Seq<Node<T>>,
+    depth: nat,
+)
+    requires
+        layout1.children.len() == layout2.children.len(),
+        layout1.children.len() == cn1.len(),
+        cn1.len() == cn2.len(),
+        // Layout positions eqv
+        forall|i: int| 0 <= i < cn1.len() ==> {
+            &&& layout1.children[i].x.eqv(layout2.children[i].x)
+            &&& layout1.children[i].y.eqv(layout2.children[i].y)
+        },
+        // Child nodes deeply eqv (sizes + recursive structure)
+        forall|i: int| 0 <= i < cn1.len() ==>
+            crate::diff::nodes_deeply_eqv(cn1[i], cn2[i], depth),
+        // Top-level eqv
+        node_eqv(merge_layout(layout1, cn1), merge_layout(layout2, cn2)),
+    ensures
+        crate::diff::nodes_deeply_eqv(
+            merge_layout(layout1, cn1),
+            merge_layout(layout2, cn2),
+            depth,
+        ),
+{
+    let r1 = merge_layout(layout1, cn1);
+    let r2 = merge_layout(layout2, cn2);
+    // Top level: x, y, size eqv, children.len() equal (from node_eqv precondition)
+    // Children at depth > 0: need each child deeply eqv at depth-1
+    if depth > 0 {
+        assert forall|i: int| 0 <= i < r1.children.len() implies
+            crate::diff::nodes_deeply_eqv(r1.children[i], r2.children[i], (depth - 1) as nat)
+        by {
+            // Merged children: Node { x: layout_pos.x, y: layout_pos.y, size: cn.size, children: cn.children }
+            // Use the wrapper helper to combine position eqv + cn deep eqv
+            // cn deeply eqv at depth → merged child deeply eqv at depth
+            // then depth > depth-1, so deeply_eqv at depth implies at depth-1
+            lemma_wrapper_child_deep_congruence(
+                cn1[i], cn2[i],
+                layout1.children[i].x, layout2.children[i].x,
+                layout1.children[i].y, layout2.children[i].y,
+                depth,
+            );
+            // Weaken from depth to depth-1
+            crate::diff::lemma_deeply_eqv_depth_monotone(
+                Node { x: layout1.children[i].x, y: layout1.children[i].y,
+                    size: cn1[i].size, children: cn1[i].children },
+                Node { x: layout2.children[i].x, y: layout2.children[i].y,
+                    size: cn2[i].size, children: cn2[i].children },
+                depth, (depth - 1) as nat,
+            );
+            // The helper proves deeply_eqv for Node { x, y, cn.size, cn.children }
+            // which is exactly r1.children[i] and r2.children[i]
+            assert(r1.children[i] === Node {
+                x: layout1.children[i].x, y: layout1.children[i].y,
+                size: cn1[i].size, children: cn1[i].children,
+            });
+            assert(r2.children[i] === Node {
+                x: layout2.children[i].x, y: layout2.children[i].y,
+                size: cn2[i].size, children: cn2[i].children,
+            });
+        };
+    }
+}
+
+/// Deep congruence for wrapper output children.
+/// Wrapper children are constructed inline (not via merge_layout),
+/// so we prove their deep eqv directly.
+proof fn lemma_wrapper_child_deep_congruence<T: OrderedField>(
+    cn1: Node<T>, cn2: Node<T>,
+    x1: T, x2: T, y1: T, y2: T,
+    depth: nat,
+)
+    requires
+        x1.eqv(x2), y1.eqv(y2),
+        crate::diff::nodes_deeply_eqv(cn1, cn2, depth),
+    ensures
+        crate::diff::nodes_deeply_eqv(
+            Node { x: x1, y: y1, size: cn1.size, children: cn1.children },
+            Node { x: x2, y: y2, size: cn2.size, children: cn2.children },
+            depth,
+        ),
+{
+    // x, y eqv from precondition; size eqv from cn deeply_eqv;
+    // children eqv from cn deeply_eqv
+    if depth > 0 {
+        assert forall|i: int| 0 <= i < cn1.children.len() implies
+            crate::diff::nodes_deeply_eqv(cn1.children[i], cn2.children[i], (depth - 1) as nat)
+        by {};
+    }
+}
+
+/// Master deep congruence: eqv widgets produce deeply eqv layout nodes.
+pub proof fn lemma_layout_widget_deep_congruence<T: OrderedField>(
+    lim1: Limits<T>, lim2: Limits<T>,
+    w1: Widget<T>, w2: Widget<T>,
+    fuel: nat,
+)
+    requires
+        limits_eqv(lim1, lim2),
+        widget_eqv(w1, w2, fuel),
+    ensures
+        crate::diff::nodes_deeply_eqv(
+            layout_widget(lim1, w1, fuel),
+            layout_widget(lim2, w2, fuel),
+            0,  // depth 0: top-level eqv (fields eqv, children.len() equal)
+        ),
+{
+    // Use existing node_eqv proof which gives x, y, size eqv and children.len() equal
+    lemma_layout_widget_node_congruence(lim1, lim2, w1, w2, fuel);
+    let n1 = layout_widget(lim1, w1, fuel);
+    let n2 = layout_widget(lim2, w2, fuel);
+    // nodes_deeply_eqv at depth 0 only checks fields, no children recursion
+}
+
 } // verus!

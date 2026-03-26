@@ -404,6 +404,34 @@ proof fn lemma_diff_children_transitive_same<T: OrderedRing>(
     }
 }
 
+// ── Depth monotonicity ───────────────────────────────────────────
+
+/// nodes_deeply_eqv at depth d implies nodes_deeply_eqv at any d' <= d.
+pub proof fn lemma_deeply_eqv_depth_monotone<T: OrderedRing>(
+    a: Node<T>, b: Node<T>, d1: nat, d2: nat,
+)
+    requires
+        nodes_deeply_eqv(a, b, d1),
+        d2 <= d1,
+    ensures
+        nodes_deeply_eqv(a, b, d2),
+    decreases d2,
+{
+    if d2 == 0 {
+        // depth 0: just check fields, no children recursion
+    } else {
+        // d2 > 0, d1 >= d2 > 0
+        // nodes_deeply_eqv(a, b, d1) at d1 > 0 gives children at d1-1
+        // Need children at d2-1 where d2-1 <= d1-1
+        assert forall|i: int| 0 <= i < a.children.len() implies
+            nodes_deeply_eqv(a.children[i], b.children[i], (d2 - 1) as nat)
+        by {
+            lemma_deeply_eqv_depth_monotone(
+                a.children[i], b.children[i], (d1 - 1) as nat, (d2 - 1) as nat);
+        };
+    }
+}
+
 // ── Diff completeness: deeply_eqv implies diff Same ─────────────
 
 /// If nodes are deeply eqv to depth d, then diff_nodes with fuel d+1 returns Same.
