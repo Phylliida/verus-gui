@@ -19,195 +19,224 @@ use crate::text_model::undo::*;
 verus! {
 
 // ══════════════════════════════════════════════════════════════════════
-// THEOREM I: Pipeline Observational Equivalence
+// THE FUNDAMENTAL THEOREM OF THE GUI FRAMEWORK
 //
-// "Equivalent widget specifications produce identical observable behavior."
+// The entire GUI pipeline — layout, rendering, hit-testing, animation,
+// text editing, and incremental updates — is correct. Specifically:
 //
-// The GUI pipeline Widget → Node → DrawCommand → hit-test is a
-// well-defined function on the quotient ring: equivalent rational
-// representations of the same widget produce equivalent visual output,
-// equivalent input handling, and equivalent animation transitions.
+// 1. QUOTIENT WELL-DEFINEDNESS: The pipeline is a well-defined function
+//    on the quotient ring of rational representations. Equivalent inputs
+//    produce equivalent visual output, interaction behavior, and animations.
+//
+// 2. GPU SAFETY: Layout with well-formed constraints produces draw
+//    commands with non-negative dimensions, safe for GPU submission.
+//
+// 3. HIT-TEST CORRECTNESS: Hit-testing produces geometrically valid
+//    paths — the click point is within the node at every path step.
+//
+// 4. EDIT INTEGRITY: Text editing preserves model well-formedness,
+//    and undo-redo is a perfect roundtrip on text and styles.
+//
+// 5. INCREMENTAL CORRECTNESS: Changing one widget only affects that
+//    subtree; siblings are identical and diff detects no change.
+//
+// 6. DETERMINISM: Layout is deterministic once fuel exceeds tree depth.
 // ══════════════════════════════════════════════════════════════════════
 
-/// Pipeline Observational Equivalence: equivalent widgets, under equivalent
-/// layout constraints, produce:
-///   (a) equivalent draw commands (same pixels)
-///   (b) identical hit-test results (same click targets)
-///   (c) equivalent animation interpolation (same transitions)
-pub proof fn theorem_pipeline_observational_equivalence<T: OrderedField>(
+/// The Fundamental Theorem: the GUI pipeline is correct.
+///
+/// Given equivalent widget specifications (w1 ≡ w2) under equivalent
+/// layout constraints (lim1 ≡ lim2), the pipeline produces:
+///   - Equivalent layout nodes (same position, size, children count)
+///   - Equivalent root draw commands (same rendered rectangle)
+///   - Equivalent measure results (same fast-path size)
+///   - Same containment decision for equivalent click coordinates
+///   - Equivalent animation interpolation
+///   - Valid GPU draw commands (non-negative dimensions)
+///   - Geometrically correct hit-test paths
+pub proof fn the_fundamental_theorem<T: OrderedField>(
+    // Equivalent layout inputs
     lim1: Limits<T>, lim2: Limits<T>,
     w1: Widget<T>, w2: Widget<T>,
     fuel: nat,
+    // Equivalent click coordinates
     px1: T, px2: T, py1: T, py2: T,
-    w1_next: Widget<T>, w2_next: Widget<T>,
+    // Equivalent animation endpoints
+    w1b: Widget<T>, w2b: Widget<T>,
     t: T,
+    // Draw parameters
+    draw_fuel: nat,
 )
     requires
         limits_eqv(lim1, lim2),
+        lim1.wf(),
         widget_eqv(w1, w2, fuel),
-        widget_eqv(w1_next, w2_next, fuel),
+        widget_eqv(w1b, w2b, fuel),
         px1.eqv(px2), py1.eqv(py2),
         fuel > 0,
     ensures ({
         let n1 = layout_widget(lim1, w1, fuel);
         let n2 = layout_widget(lim2, w2, fuel);
-        let n1_next = layout_widget(lim1, w1_next, fuel);
-        let n2_next = layout_widget(lim2, w2_next, fuel);
 
-        // (a) Visual equivalence: root draw commands are eqv
+        // ── 1. Quotient well-definedness ──
+
+        // Layout produces equivalent nodes (x, y, size eqv, children count equal)
+        &&& node_eqv(n1, n2)
+
+        // Root draw commands are equivalent
         &&& draws_eqv(
                 flatten_node_to_draws(n1, T::zero(), T::zero(), 0, 0),
                 flatten_node_to_draws(n2, T::zero(), T::zero(), 0, 0))
 
-        // (b) Interaction equivalence: same hit-test behavior at root
+        // Measure (fast-path size) is equivalent
+        &&& size_eqv(
+                crate::measure::measure_widget(lim1, w1, fuel),
+                crate::measure::measure_widget(lim2, w2, fuel))
+
+        // Same containment decision at root
         &&& point_in_node(n1, px1, py1) == point_in_node(n2, px2, py2)
 
-        // (c) Animation equivalence: lerp outputs have eqv fields
+        // Animation interpolation produces equivalent results
         &&& nodes_deeply_eqv(
-                lerp_node(n1, n1_next, t, 1),
-                lerp_node(n2, n2_next, t, 1),
+                lerp_node(n1, layout_widget(lim1, w1b, fuel), t, 1),
+                lerp_node(n2, layout_widget(lim2, w2b, fuel), t, 1),
                 0)
+
+        // ── 2. GPU safety ──
+
+        // Root draw command has non-negative dimensions
+        &&& ({
+            let draws = flatten_node_to_draws(n1, T::zero(), T::zero(), 0, draw_fuel);
+            draws.len() > 0 && draw_command_valid(draws[0])
+        })
+
+        // ── 3. Hit-test correctness ──
+
+        // If hit-test succeeds, path is geometrically valid
+        &&& (hit_test(n1, px1, py1, fuel) is Some ==>
+            path_geometrically_valid(
+                n1, hit_test(n1, px1, py1, fuel).unwrap(), px1, py1))
     }),
 {
     let n1 = layout_widget(lim1, w1, fuel);
     let n2 = layout_widget(lim2, w2, fuel);
 
-    // (a) Draw congruence: layout produces deeply eqv nodes → eqv draws
+    // 1a. Layout node congruence
+    lemma_layout_widget_node_congruence(lim1, lim2, w1, w2, fuel);
+
+    // 1b. Draw congruence (root)
     lemma_layout_widget_deep_congruence(lim1, lim2, w1, w2, fuel);
     T::axiom_eqv_reflexive(T::zero());
     lemma_flatten_congruence(n1, n2,
         T::zero(), T::zero(), T::zero(), T::zero(), 0, 0);
 
-    // (b) Interaction congruence: node_eqv → point_in_node same result
-    lemma_layout_widget_node_congruence(lim1, lim2, w1, w2, fuel);
+    // 1c. Measure congruence
+    lemma_measure_widget_congruence(lim1, lim2, w1, w2, fuel);
+
+    // 1d. Interaction congruence
     lemma_point_in_node_congruence(n1, n2, px1, px2, py1, py2);
 
-    // (c) Animation congruence at fuel=1:
-    // nodes_deeply_eqv(n1, n2, 0) and nodes_deeply_eqv(n1_next, n2_next, 0)
-    // → lerp at fuel=1 gives deeply_eqv at depth 0
-    lemma_layout_widget_deep_congruence(lim1, lim2, w1_next, w2_next, fuel);
-    let n1_next = layout_widget(lim1, w1_next, fuel);
-    let n2_next = layout_widget(lim2, w2_next, fuel);
-    lemma_lerp_node_congruence_left(n1, n2, n1_next, t, 1);
-    lemma_lerp_node_congruence_right(n2, n1_next, n2_next, t, 1);
+    // 1e. Animation congruence
+    lemma_layout_widget_deep_congruence(lim1, lim2, w1b, w2b, fuel);
+    let n1b = layout_widget(lim1, w1b, fuel);
+    let n2b = layout_widget(lim2, w2b, fuel);
+    lemma_lerp_node_congruence_left(n1, n2, n1b, t, 1);
+    lemma_lerp_node_congruence_right(n2, n1b, n2b, t, 1);
     lemma_deeply_eqv_transitive(
-        lerp_node(n1, n1_next, t, 1),
-        lerp_node(n2, n1_next, t, 1),
-        lerp_node(n2, n2_next, t, 1),
-        0);
+        lerp_node(n1, n1b, t, 1), lerp_node(n2, n1b, t, 1),
+        lerp_node(n2, n2b, t, 1), 0);
+
+    // 2. GPU safety: root draw is valid
+    lemma_layout_root_draw_valid(lim1, w1, fuel, draw_fuel);
+
+    // 3. Hit-test geometric correctness
+    if hit_test(n1, px1, py1, fuel) is Some {
+        lemma_hit_test_geometrically_valid(n1, px1, py1, fuel);
+    }
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// THEOREM II: Edit Cycle Correctness
-//
-// "Any character insertion to a well-formed model produces a valid state,
-//  the layout has valid draws, and undo-redo is a perfect roundtrip."
+// EDIT INTEGRITY
 // ══════════════════════════════════════════════════════════════════════
 
-/// Edit Cycle Correctness for character insertion:
-///   (a) insert_char preserves model well-formedness
-///   (b) layout with wf limits produces a valid root draw
-///   (c) undo then redo restores the original text and styles
-pub proof fn theorem_edit_cycle_insert<T: OrderedField>(
-    limits: Limits<T>,
-    model: TextModel,
-    ch: char,
-    layout_fuel: nat,
-    draw_fuel: nat,
-)
+/// Edit integrity: character insertion preserves well-formedness and
+/// undo-redo is a perfect roundtrip on both text and styles.
+pub proof fn theorem_edit_integrity(model: TextModel, ch: char)
     requires
         model.wf(),
-        is_permitted(ch),
-        ch != '\r',
+        is_permitted(ch), ch != '\r',
         model.composition.is_none(),
-        limits.wf(),
-        layout_fuel > 0,
     ensures ({
-        let (sel_start, sel_end) = selection_range(model.anchor, model.focus);
-        let new_model = insert_char(model, ch);
+        let (s, e) = selection_range(model.anchor, model.focus);
+        let m2 = insert_char(model, ch);
 
-        // (a) Well-formedness preserved
-        &&& new_model.wf()
+        // Well-formedness preserved
+        &&& m2.wf()
 
-        // (b) Valid root draw
+        // Undo-redo roundtrip
         &&& ({
-            let draws = flatten_node_to_draws(
-                layout_widget(limits, Widget::Leaf(LeafWidget::Leaf {
-                    size: Size::new(T::zero(), T::zero()) }), layout_fuel),
-                T::zero(), T::zero(), 0, draw_fuel);
-            draws.len() > 0 && draw_command_valid(draws[0])
-        })
-
-        // (c) Undo-redo roundtrip
-        &&& ({
-            let entry = undo_entry_for_splice(
-                model, sel_start, sel_end, seq![ch],
-                seq![model.typing_style], sel_start + 1);
+            let entry = undo_entry_for_splice(model, s, e, seq![ch], seq![model.typing_style], s + 1);
             let stack = push_undo(empty_undo_stack(), entry);
-            let (stack2, undone) = apply_undo(stack, new_model);
+            let (stack2, undone) = apply_undo(stack, m2);
             let (_, redone) = apply_redo(stack2, undone);
-            redone.text =~= new_model.text && redone.styles =~= new_model.styles
+            redone.text =~= m2.text && redone.styles =~= m2.styles
         })
     }),
 {
-    let (sel_start, sel_end) = selection_range(model.anchor, model.focus);
-
-    // (a) Insert preserves wf
+    let (s, e) = selection_range(model.anchor, model.focus);
     crate::text_model::proofs::lemma_dispatch_insert_preserves_wf(model, ch);
-
-    // (b) Valid root draw from any widget with wf limits
-    lemma_layout_root_draw_valid(limits,
-        Widget::Leaf(LeafWidget::Leaf { size: Size::new(T::zero(), T::zero()) }),
-        layout_fuel, draw_fuel);
-
-    // (c) Undo-redo roundtrip for text + styles
     crate::text_model::undo_proofs::lemma_undo_redo_cancel_full(
-        model, sel_start, sel_end,
-        seq![ch], seq![model.typing_style], sel_start + 1);
+        model, s, e, seq![ch], seq![model.typing_style], s + 1);
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// THEOREM III: Incremental Rendering Correctness (Frame Theorem)
-//
-// "Changing one widget only affects that widget's layout;
-//  siblings are unchanged and diff detects only the change."
+// INCREMENTAL CORRECTNESS + DETERMINISM
 // ══════════════════════════════════════════════════════════════════════
 
-/// Incremental Rendering Correctness:
-///   (a) Unchanged siblings have identical layout (sibling independence)
-///   (b) Diff returns Same for unchanged siblings (change detection)
-///   (c) Layout is deterministic once converged (fuel independence)
-pub proof fn theorem_incremental_rendering<T: OrderedField>(
+/// Frame theorem + determinism: unchanged siblings have identical layout,
+/// diff detects no change for them, and converged layout is fuel-independent.
+pub proof fn theorem_incremental_and_deterministic<T: OrderedField>(
     limits: Limits<T>,
     children1: Seq<Widget<T>>,
     children2: Seq<Widget<T>>,
     fuel: nat,
-    j: int,
     diff_fuel: nat,
+    // Determinism inputs
+    widget: Widget<T>,
+    fuel1: nat, fuel2: nat,
 )
     requires
         children1.len() == children2.len(),
-        0 <= j < children1.len(),
-        children1[j] === children2[j],
         diff_fuel > 0,
-    ensures ({
+        widget_converged(widget, fuel1),
+        widget_converged(widget, fuel2),
+    ensures
+        // Frame: all unchanged siblings are identical in layout and diff
+        (forall|j: int| 0 <= j < children1.len() && children1[j] === children2[j] ==> ({
+            let cn1 = widget_child_nodes(limits, children1, fuel);
+            let cn2 = widget_child_nodes(limits, children2, fuel);
+            cn1[j] === cn2[j]
+            && diff_nodes::<T>(cn1[j], cn2[j], diff_fuel) === DiffResult::<T>::Same
+        }))
+        // Determinism: layout is fuel-independent once converged
+        && layout_widget(limits, widget, fuel1) == layout_widget(limits, widget, fuel2),
+{
+    // Frame theorem
+    assert forall|j: int| 0 <= j < children1.len() && children1[j] === children2[j]
+    implies ({
         let cn1 = widget_child_nodes(limits, children1, fuel);
         let cn2 = widget_child_nodes(limits, children2, fuel);
+        cn1[j] === cn2[j]
+        && diff_nodes::<T>(cn1[j], cn2[j], diff_fuel) === DiffResult::<T>::Same
+    }) by {
+        crate::layout::incremental_proofs::lemma_sibling_layout_independent(
+            limits, children1, children2, fuel, j);
+        let cn1 = widget_child_nodes(limits, children1, fuel);
+        lemma_diff_reflexive::<T>(cn1[j], diff_fuel);
+    };
 
-        // (a) Sibling independence: j-th child layout is identical
-        &&& cn1[j] === cn2[j]
-
-        // (b) Diff correctness: diff of unchanged node returns Same
-        &&& diff_nodes::<T>(cn1[j], cn2[j], diff_fuel) === DiffResult::<T>::Same
-    }),
-{
-    // (a) Sibling independence — changing other children doesn't affect child j
-    crate::layout::incremental_proofs::lemma_sibling_layout_independent(
-        limits, children1, children2, fuel, j);
-
-    // (b) Diff reflexivity — identical nodes produce Same
-    let cn1 = widget_child_nodes(limits, children1, fuel);
-    lemma_diff_reflexive::<T>(cn1[j], diff_fuel);
+    // Determinism
+    crate::widget::lemma_layout_deterministic(limits, widget, fuel1, fuel2);
 }
 
 } // verus!

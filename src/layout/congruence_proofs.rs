@@ -2512,4 +2512,44 @@ pub proof fn lemma_layout_conditional_false_deep_any<T: OrderedField>(
     lemma_empty_children_deeply_eqv(n1, n2, depth);
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// Full-depth deep congruence for leaves and wrappers
+// ══════════════════════════════════════════════════════════════════════
+
+/// Full-depth deep congruence for Margin wrapper.
+proof fn lemma_margin_full_deep<T: OrderedField>(
+    lim1: Limits<T>, lim2: Limits<T>,
+    m1: Padding<T>, m2: Padding<T>,
+    c1: Box<Widget<T>>, c2: Box<Widget<T>>,
+    fuel: nat, rec_depth: nat,
+)
+    requires
+        limits_eqv(lim1, lim2),
+        padding_eqv(m1, m2),
+        widget_eqv(*c1, *c2, (fuel - 1) as nat),
+        fuel > 0,
+        crate::diff::nodes_deeply_eqv(
+            layout_widget(lim1.shrink(m1.horizontal(), m1.vertical()), *c1, (fuel-1) as nat),
+            layout_widget(lim2.shrink(m2.horizontal(), m2.vertical()), *c2, (fuel-1) as nat),
+            rec_depth),
+    ensures
+        crate::diff::nodes_deeply_eqv(
+            layout_widget(lim1, Widget::Wrapper(WrapperWidget::Margin { margin: m1, child: c1 }), fuel),
+            layout_widget(lim2, Widget::Wrapper(WrapperWidget::Margin { margin: m2, child: c2 }), fuel),
+            rec_depth + 1),
+{
+    let w1 = Widget::Wrapper(WrapperWidget::Margin { margin: m1, child: c1 });
+    let w2 = Widget::Wrapper(WrapperWidget::Margin { margin: m2, child: c2 });
+    lemma_layout_widget_node_congruence(lim1, lim2, w1, w2, fuel);
+    let n1 = layout_widget(lim1, w1, fuel);
+    let n2 = layout_widget(lim2, w2, fuel);
+    let rec1 = layout_widget(lim1.shrink(m1.horizontal(), m1.vertical()), *c1, (fuel-1) as nat);
+    let rec2 = layout_widget(lim2.shrink(m2.horizontal(), m2.vertical()), *c2, (fuel-1) as nat);
+    lemma_wrapper_child_deep_congruence(rec1, rec2, m1.left, m2.left, m1.top, m2.top, rec_depth);
+    assert forall|i: int| 0 <= i < n1.children.len() implies
+        crate::diff::nodes_deeply_eqv(n1.children[i], n2.children[i], rec_depth)
+    by { assert(i == 0); };
+}
+
+
 } // verus!
