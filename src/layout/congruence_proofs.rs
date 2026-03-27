@@ -2531,9 +2531,16 @@ pub open spec fn congruence_depth<T: OrderedRing>(widget: Widget<T>, fuel: nat) 
                 else {
                     match container {
                         ContainerWidget::Column { children, .. }
-                        | ContainerWidget::Row { children, .. } => {
+                        | ContainerWidget::Row { children, .. }
+                        | ContainerWidget::Stack { children, .. }
+                        | ContainerWidget::Wrap { children, .. } => {
                             if children.len() == 0 { 0 }
                             else { min_children_congruence_depth(children, (fuel - 1) as nat, 0) + 1 }
+                        },
+                        ContainerWidget::Absolute { children, .. } => {
+                            let wc = Seq::new(children.len(), |i: int| children[i].child);
+                            if wc.len() == 0 { 0 }
+                            else { min_children_congruence_depth(wc, (fuel - 1) as nat, 0) + 1 }
                         },
                         _ => 0,
                     }
@@ -2861,6 +2868,178 @@ proof fn lemma_min_children_depth_le<T: OrderedRing>(
         lemma_min_children_depth_le::<T>(children, fuel, from + 1, i);
         // rest <= congruence_depth(children[i], fuel)
         // result = min(cur, rest) <= rest <= congruence_depth(children[i], fuel)
+    }
+}
+
+/// Stack full-depth dispatch.
+proof fn lemma_container_full_depth_stack_dispatch<T: OrderedField>(
+    lim1: Limits<T>, lim2: Limits<T>,
+    p1: Padding<T>, ha: Alignment, va: Alignment, ch1: Seq<Widget<T>>,
+    w2: Widget<T>, fuel: nat,
+)
+    requires
+        limits_eqv(lim1, lim2),
+        widget_eqv(Widget::Container(ContainerWidget::Stack { padding: p1, h_align: ha, v_align: va, children: ch1 }), w2, fuel),
+        fuel > 1, ch1.len() > 0,
+    ensures crate::diff::nodes_deeply_eqv(
+        layout_widget(lim1, Widget::Container(ContainerWidget::Stack { padding: p1, h_align: ha, v_align: va, children: ch1 }), fuel),
+        layout_widget(lim2, w2, fuel),
+        min_children_congruence_depth(ch1, (fuel - 1) as nat, 0) + 1),
+    decreases fuel, 1nat,
+{
+    if let Widget::Container(ContainerWidget::Stack { padding: p2, children: ch2, .. }) = w2 {
+        lemma_padding_horizontal_congruence(p1, p2);
+        lemma_padding_vertical_congruence(p1, p2);
+        lemma_shrink_congruence(lim1, lim2, p1.horizontal(), p2.horizontal(), p1.vertical(), p2.vertical());
+        let inner1 = lim1.shrink(p1.horizontal(), p1.vertical());
+        let inner2 = lim2.shrink(p2.horizontal(), p2.vertical());
+        let cn1 = widget_child_nodes(inner1, ch1, (fuel - 1) as nat);
+        let cn2 = widget_child_nodes(inner2, ch2, (fuel - 1) as nat);
+        let rd = min_children_congruence_depth(ch1, (fuel - 1) as nat, 0);
+        assert forall|i: int| 0 <= i < cn1.len() implies
+            crate::diff::nodes_deeply_eqv(#[trigger] cn1[i], cn2[i], rd)
+        by {
+            lemma_layout_widget_full_depth_congruence(inner1, inner2, ch1[i], ch2[i], (fuel - 1) as nat);
+            lemma_min_children_depth_le::<T>(ch1, (fuel - 1) as nat, 0, i);
+            crate::diff::lemma_deeply_eqv_depth_monotone(cn1[i], cn2[i],
+                congruence_depth(ch1[i], (fuel - 1) as nat), rd);
+        };
+        lemma_sizes_eqv_from_deeply_eqv(cn1, cn2, rd);
+        let cs1 = Seq::new(cn1.len(), |i: int| cn1[i].size);
+        let cs2 = Seq::new(cn2.len(), |i: int| cn2[i].size);
+        reveal(crate::layout::stack::stack_layout);
+        let sl1 = crate::layout::stack::stack_layout(lim1, p1, ha, va, cs1);
+        let sl2 = crate::layout::stack::stack_layout(lim2, p2, ha, va, cs2);
+        crate::layout::stack_proofs::lemma_stack_layout_children_len(lim1, p1, ha, va, cs1);
+        crate::layout::stack_proofs::lemma_stack_layout_children_len(lim2, p2, ha, va, cs2);
+        // Position congruence: stack_children use align_offset
+        lemma_sub_congruence(lim1.max.width, lim2.max.width, p1.horizontal(), p2.horizontal());
+        lemma_sub_congruence(lim1.max.height, lim2.max.height, p1.vertical(), p2.vertical());
+        let aw1 = lim1.max.width.sub(p1.horizontal());
+        let aw2 = lim2.max.width.sub(p2.horizontal());
+        let ah1 = lim1.max.height.sub(p1.vertical());
+        let ah2 = lim2.max.height.sub(p2.vertical());
+        assert forall|i: int| 0 <= i < sl1.children.len() implies
+            sl1.children[i].x.eqv(sl2.children[i].x) && sl1.children[i].y.eqv(sl2.children[i].y)
+        by {
+            crate::layout::proofs::lemma_stack_children_element(p1, ha, va, cs1, aw1, ah1, i as nat);
+            crate::layout::proofs::lemma_stack_children_element(p2, ha, va, cs2, aw2, ah2, i as nat);
+            lemma_align_offset_congruence(ha, aw1, aw2, cs1[i].width, cs2[i].width);
+            lemma_align_offset_congruence(va, ah1, ah2, cs1[i].height, cs2[i].height);
+            lemma_add_congruence(p1.left, p2.left,
+                align_offset(ha, aw1, cs1[i].width), align_offset(ha, aw2, cs2[i].width));
+            lemma_add_congruence(p1.top, p2.top,
+                align_offset(va, ah1, cs1[i].height), align_offset(va, ah2, cs2[i].height));
+        };
+        lemma_layout_widget_node_congruence(lim1, lim2,
+            Widget::Container(ContainerWidget::Stack { padding: p1, h_align: ha, v_align: va, children: ch1 }),
+            w2, fuel);
+        lemma_merge_layout_deep_congruence_plus_one(sl1, sl2, cn1, cn2, rd);
+    }
+}
+
+/// Wrap full-depth dispatch.
+proof fn lemma_container_full_depth_wrap_dispatch<T: OrderedField>(
+    lim1: Limits<T>, lim2: Limits<T>,
+    p1: Padding<T>, hs1: T, vs1: T, ch1: Seq<Widget<T>>,
+    w2: Widget<T>, fuel: nat,
+)
+    requires
+        limits_eqv(lim1, lim2),
+        widget_eqv(Widget::Container(ContainerWidget::Wrap { padding: p1, h_spacing: hs1, v_spacing: vs1, children: ch1 }), w2, fuel),
+        fuel > 1, ch1.len() > 0,
+    ensures crate::diff::nodes_deeply_eqv(
+        layout_widget(lim1, Widget::Container(ContainerWidget::Wrap { padding: p1, h_spacing: hs1, v_spacing: vs1, children: ch1 }), fuel),
+        layout_widget(lim2, w2, fuel),
+        min_children_congruence_depth(ch1, (fuel - 1) as nat, 0) + 1),
+    decreases fuel, 1nat,
+{
+    if let Widget::Container(ContainerWidget::Wrap { padding: p2, h_spacing: hs2, v_spacing: vs2, children: ch2 }) = w2 {
+        lemma_padding_horizontal_congruence(p1, p2);
+        lemma_padding_vertical_congruence(p1, p2);
+        lemma_shrink_congruence(lim1, lim2, p1.horizontal(), p2.horizontal(), p1.vertical(), p2.vertical());
+        let inner1 = lim1.shrink(p1.horizontal(), p1.vertical());
+        let inner2 = lim2.shrink(p2.horizontal(), p2.vertical());
+        let cn1 = widget_child_nodes(inner1, ch1, (fuel - 1) as nat);
+        let cn2 = widget_child_nodes(inner2, ch2, (fuel - 1) as nat);
+        let rd = min_children_congruence_depth(ch1, (fuel - 1) as nat, 0);
+        assert forall|i: int| 0 <= i < cn1.len() implies
+            crate::diff::nodes_deeply_eqv(#[trigger] cn1[i], cn2[i], rd)
+        by {
+            lemma_layout_widget_full_depth_congruence(inner1, inner2, ch1[i], ch2[i], (fuel - 1) as nat);
+            lemma_min_children_depth_le::<T>(ch1, (fuel - 1) as nat, 0, i);
+            crate::diff::lemma_deeply_eqv_depth_monotone(cn1[i], cn2[i],
+                congruence_depth(ch1[i], (fuel - 1) as nat), rd);
+        };
+        lemma_sizes_eqv_from_deeply_eqv(cn1, cn2, rd);
+        let cs1 = Seq::new(cn1.len(), |i: int| cn1[i].size);
+        let cs2 = Seq::new(cn2.len(), |i: int| cn2[i].size);
+        reveal(crate::layout::wrap::wrap_layout);
+        let wl1 = crate::layout::wrap::wrap_layout(lim1, p1, hs1, vs1, cs1);
+        let wl2 = crate::layout::wrap::wrap_layout(lim2, p2, hs2, vs2, cs2);
+        crate::layout::wrap_proofs::lemma_wrap_layout_children_len(lim1, p1, hs1, vs1, cs1);
+        crate::layout::wrap_proofs::lemma_wrap_layout_children_len(lim2, p2, hs2, vs2, cs2);
+        // Position congruence for wrap_children
+        let avail_w1 = lim1.max.width.sub(p1.horizontal());
+        let avail_w2 = lim2.max.width.sub(p2.horizontal());
+        lemma_sub_congruence(lim1.max.width, lim2.max.width, p1.horizontal(), p2.horizontal());
+        lemma_wrap_children_positions_congruence(p1, p2, hs1, hs2, vs1, vs2, cs1, cs2, avail_w1, avail_w2, 0);
+        lemma_layout_widget_node_congruence(lim1, lim2,
+            Widget::Container(ContainerWidget::Wrap { padding: p1, h_spacing: hs1, v_spacing: vs1, children: ch1 }),
+            w2, fuel);
+        lemma_merge_layout_deep_congruence_plus_one(wl1, wl2, cn1, cn2, rd);
+    }
+}
+
+/// Absolute full-depth dispatch.
+proof fn lemma_container_full_depth_absolute_dispatch<T: OrderedField>(
+    lim1: Limits<T>, lim2: Limits<T>,
+    p1: Padding<T>, ch1: Seq<AbsoluteChild<T>>,
+    w2: Widget<T>, fuel: nat,
+)
+    requires
+        limits_eqv(lim1, lim2),
+        widget_eqv(Widget::Container(ContainerWidget::Absolute { padding: p1, children: ch1 }), w2, fuel),
+        fuel > 1, ch1.len() > 0,
+    ensures crate::diff::nodes_deeply_eqv(
+        layout_widget(lim1, Widget::Container(ContainerWidget::Absolute { padding: p1, children: ch1 }), fuel),
+        layout_widget(lim2, w2, fuel),
+        min_children_congruence_depth(
+            Seq::new(ch1.len(), |i: int| ch1[i].child), (fuel - 1) as nat, 0) + 1),
+    decreases fuel, 1nat,
+{
+    if let Widget::Container(ContainerWidget::Absolute { padding: p2, children: ch2 }) = w2 {
+        lemma_padding_horizontal_congruence(p1, p2);
+        lemma_padding_vertical_congruence(p1, p2);
+        lemma_shrink_congruence(lim1, lim2, p1.horizontal(), p2.horizontal(), p1.vertical(), p2.vertical());
+        let inner1 = lim1.shrink(p1.horizontal(), p1.vertical());
+        let inner2 = lim2.shrink(p2.horizontal(), p2.vertical());
+        let cn1 = absolute_widget_child_nodes(inner1, ch1, (fuel - 1) as nat);
+        let cn2 = absolute_widget_child_nodes(inner2, ch2, (fuel - 1) as nat);
+        let wc1 = Seq::new(ch1.len(), |i: int| ch1[i].child);
+        let rd = min_children_congruence_depth(wc1, (fuel - 1) as nat, 0);
+        assert forall|i: int| 0 <= i < cn1.len() implies
+            crate::diff::nodes_deeply_eqv(#[trigger] cn1[i], cn2[i], rd)
+        by {
+            lemma_layout_widget_full_depth_congruence(inner1, inner2, ch1[i].child, ch2[i].child, (fuel - 1) as nat);
+            lemma_min_children_depth_le::<T>(wc1, (fuel - 1) as nat, 0, i);
+            crate::diff::lemma_deeply_eqv_depth_monotone(cn1[i], cn2[i],
+                congruence_depth(ch1[i].child, (fuel - 1) as nat), rd);
+        };
+        lemma_sizes_eqv_from_deeply_eqv(cn1, cn2, rd);
+        // Absolute layout: positions come from explicit (x, y) offsets in child data
+        let cd1 = Seq::new(cn1.len(), |i: int| (ch1[i].x, ch1[i].y, cn1[i].size));
+        let cd2 = Seq::new(cn2.len(), |i: int| (ch2[i].x, ch2[i].y, cn2[i].size));
+        reveal(crate::layout::absolute::absolute_layout);
+        let al1 = crate::layout::absolute::absolute_layout(lim1, p1, cd1);
+        let al2 = crate::layout::absolute::absolute_layout(lim2, p2, cd2);
+        // Position congruence
+        lemma_absolute_children_positions_congruence(p1, p2, cd1, cd2, 0);
+        crate::layout::absolute_proofs::lemma_absolute_layout_children_len(lim1, p1, cd1);
+        crate::layout::absolute_proofs::lemma_absolute_layout_children_len(lim2, p2, cd2);
+        lemma_layout_widget_node_congruence(lim1, lim2,
+            Widget::Container(ContainerWidget::Absolute { padding: p1, children: ch1 }), w2, fuel);
+        lemma_merge_layout_deep_congruence_plus_one(al1, al2, cn1, cn2, rd);
     }
 }
 
