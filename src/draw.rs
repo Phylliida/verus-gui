@@ -2,6 +2,7 @@ use vstd::prelude::*;
 use verus_algebra::traits::ordered_ring::OrderedRing;
 use crate::size::Size;
 use crate::node::Node;
+use crate::widget::{Widget, get_children};
 
 verus! {
 
@@ -44,6 +45,33 @@ pub open spec fn children_node_count<T: OrderedRing>(
     } else {
         node_count(children[from as int], fuel) +
             children_node_count(children, fuel, from + 1)
+    }
+}
+
+/// Count widgets in a widget tree (fuel-bounded, like widget_depth).
+/// When fuel exceeds widget_depth, this gives the exact widget count.
+pub open spec fn widget_node_count<T: OrderedRing>(widget: Widget<T>, fuel: nat) -> nat
+    decreases fuel, 0nat,
+{
+    if fuel == 0 {
+        1
+    } else {
+        let children = get_children(widget);
+        1 + widget_children_node_count(children, (fuel - 1) as nat, children.len())
+    }
+}
+
+/// Sum of widget_node_count for children[0..count].
+pub open spec fn widget_children_node_count<T: OrderedRing>(
+    children: Seq<Widget<T>>, fuel: nat, count: nat,
+) -> nat
+    decreases fuel, count,
+{
+    if count == 0 || count > children.len() {
+        0
+    } else {
+        widget_children_node_count(children, fuel, (count - 1) as nat)
+            + widget_node_count(children[(count - 1) as int], fuel)
     }
 }
 

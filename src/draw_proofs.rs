@@ -81,6 +81,87 @@ pub proof fn lemma_flatten_first_depth<T: OrderedRing>(
     // Both fuel==0 and fuel>0 cases produce a first element with the given depth
 }
 
+// ── Z-order: draws are strictly depth-ordered ────────────────────────
+
+/// Draws from flatten_node have sequential depths: draws[i].depth == depth + i.
+pub proof fn lemma_flatten_depth_sequential<T: OrderedRing>(
+    node: Node<T>, offset_x: T, offset_y: T, depth: nat, fuel: nat,
+)
+    ensures ({
+        let draws = flatten_node_to_draws(node, offset_x, offset_y, depth, fuel);
+        forall|i: int| 0 <= i < draws.len() ==> (#[trigger] draws[i]).depth == depth + i
+    }),
+    decreases fuel, 0nat,
+{
+    let draws = flatten_node_to_draws(node, offset_x, offset_y, depth, fuel);
+    if fuel == 0 {
+        // Single draw at depth
+    } else {
+        let abs_x = offset_x.add(node.x);
+        let abs_y = offset_y.add(node.y);
+        let child_draws = flatten_children_to_draws(
+            node.children, abs_x, abs_y, depth + 1, (fuel - 1) as nat, 0);
+        lemma_flatten_children_depth_sequential(
+            node.children, abs_x, abs_y, depth + 1, (fuel - 1) as nat, 0);
+        assert forall|i: int| 0 <= i < draws.len()
+            implies (#[trigger] draws[i]).depth == depth + i
+        by {
+            if i == 0 {
+                // Self draw at depth
+            } else {
+                // Child draw: draws[i] == child_draws[i-1], depth == (depth+1) + (i-1) == depth + i
+                assert(draws[i] == child_draws[i - 1]);
+            }
+        };
+    }
+}
+
+/// Children draws have sequential depths starting at start_depth.
+proof fn lemma_flatten_children_depth_sequential<T: OrderedRing>(
+    children: Seq<Node<T>>, px: T, py: T, start_depth: nat, fuel: nat, from: nat,
+)
+    ensures ({
+        let draws = flatten_children_to_draws(children, px, py, start_depth, fuel, from);
+        forall|i: int| 0 <= i < draws.len() ==> (#[trigger] draws[i]).depth == start_depth + i
+    }),
+    decreases fuel, children.len() - from,
+{
+    if from >= children.len() {
+        // Empty
+    } else {
+        let first = flatten_node_to_draws(children[from as int], px, py, start_depth, fuel);
+        lemma_flatten_depth_sequential(children[from as int], px, py, start_depth, fuel);
+        let next_depth = start_depth + first.len();
+        lemma_flatten_children_depth_sequential(children, px, py, next_depth, fuel, from + 1);
+        let rest = flatten_children_to_draws(children, px, py, next_depth, fuel, from + 1);
+        let full = flatten_children_to_draws(children, px, py, start_depth, fuel, from);
+        assert forall|i: int| 0 <= i < full.len()
+            implies (#[trigger] full[i]).depth == start_depth + i
+        by {
+            if i < first.len() as int {
+                assert(full[i] == first[i]);
+            } else {
+                assert(full[i] == rest[i - first.len() as int]);
+                // rest[i - first.len()].depth == next_depth + (i - first.len())
+                //   == (start_depth + first.len()) + (i - first.len()) == start_depth + i
+            }
+        };
+    }
+}
+
+/// Corollary: draws from flatten are strictly monotone in depth.
+pub proof fn lemma_flatten_depth_monotone<T: OrderedRing>(
+    node: Node<T>, offset_x: T, offset_y: T, depth: nat, fuel: nat,
+)
+    ensures ({
+        let draws = flatten_node_to_draws(node, offset_x, offset_y, depth, fuel);
+        forall|i: int, j: int| 0 <= i < j < draws.len() ==>
+            (#[trigger] draws[i]).depth < (#[trigger] draws[j]).depth
+    }),
+{
+    lemma_flatten_depth_sequential(node, offset_x, offset_y, depth, fuel);
+}
+
 // ── Structural identity ──────────────────────────────────────────────
 
 /// If two nodes are structurally identical, their draw command
@@ -899,6 +980,34 @@ proof fn lemma_flex_child_nonneg<T: OrderedField>(
                 children[i].child, (fuel - 1) as nat, (check_fuel - 1) as nat);
         },
     }
+}
+
+// ── Memory/allocation bounds ─────────────────────────────────────────
+
+/// The number of draw commands equals node_count of the layout result.
+/// Combined with lemma_flatten_preserves_count, this gives an exact allocation bound.
+pub proof fn lemma_draw_count_bound<T: OrderedField>(
+    limits: Limits<T>, widget: Widget<T>, fuel: nat,
+    offset_x: T, offset_y: T, depth: nat,
+)
+    ensures ({
+        let node = layout_widget(limits, widget, fuel);
+        let draws = flatten_node_to_draws(node, offset_x, offset_y, depth, fuel);
+        // Exact count
+        &&& draws.len() == node_count::<T>(node, fuel)
+        // At least one draw
+        &&& draws.len() >= 1
+    }),
+{
+    let node = layout_widget(limits, widget, fuel);
+    lemma_flatten_preserves_count(node, offset_x, offset_y, depth, fuel);
+    lemma_flatten_first_depth(node, offset_x, offset_y, depth, fuel);
+}
+
+/// node_count is always >= 1 (every node produces at least its self-draw).
+pub proof fn lemma_node_count_ge_one<T: OrderedRing>(node: Node<T>, fuel: nat)
+    ensures node_count::<T>(node, fuel) >= 1,
+{
 }
 
 /// Root draw validity: the root-level draw command from layout is always valid.

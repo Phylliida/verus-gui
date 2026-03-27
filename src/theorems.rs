@@ -337,4 +337,36 @@ pub proof fn theorem_incremental_and_deterministic<T: OrderedField>(
     crate::widget::lemma_layout_deterministic(limits, widget, fuel1, fuel2);
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// FULL DRAW VALIDITY
+// ══════════════════════════════════════════════════════════════════════
+
+/// Full draw validity: ALL draw commands from layout are GPU-safe.
+///
+/// Composes:
+///   1. lemma_layout_widget_all_sizes_nonneg — all nodes in layout tree have nonneg sizes
+///   2. lemma_flatten_all_valid — nonneg sizes → all draws valid
+///
+/// This is the end-to-end GPU safety guarantee: for any widget tree laid out with
+/// non-negative min limits, every generated draw command has non-negative dimensions.
+pub proof fn theorem_full_draw_validity<T: OrderedField>(
+    limits: Limits<T>,
+    widget: Widget<T>,
+    fuel: nat,
+    draw_fuel: nat,
+)
+    requires limits.wf(),
+    ensures
+        all_draws_valid(
+            flatten_node_to_draws(
+                layout_widget(limits, widget, fuel),
+                T::zero(), T::zero(), 0, draw_fuel)),
+{
+    let node = layout_widget(limits, widget, fuel);
+    // Step 1: all nodes in the layout tree have nonneg sizes
+    lemma_layout_widget_all_sizes_nonneg(limits, widget, fuel, draw_fuel);
+    // Step 2: nonneg sizes → all draws valid
+    lemma_flatten_all_valid(node, T::zero(), T::zero(), 0, draw_fuel);
+}
+
 } // verus!
