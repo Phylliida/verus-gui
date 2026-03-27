@@ -14,6 +14,9 @@ use crate::layout::congruence_proofs::*;
 
 verus! {
 
+// NOTE: The Flex dispatch requires !tw.eqv(zero) which comes from widget_wf (not widget_eqv).
+// The user must ensure widget_wf for Flex widgets to use full-depth congruence.
+
 /// flex_child_main_size congruence: w.div(tw).mul(av) eqv when all args eqv.
 proof fn lemma_flex_child_main_size_congruence<T: OrderedField>(
     w1: T, w2: T, tw1: T, tw2: T, av1: T, av2: T,
@@ -133,14 +136,20 @@ pub proof fn lemma_flex_column_full_depth_dispatch<T: OrderedField>(
         let ccs2 = Seq::new(cn2.len(), |i: int| cn2[i].size.width);
         let fl1 = flex_column_layout(lim1, p1, sp1, al, w1s, ccs1);
         let fl2 = flex_column_layout(lim2, p2, sp2, al, w2s, ccs2);
-        crate::layout::flex_proofs::lemma_flex_column_children_len(p1, sp1, al, w1s, ccs1, tw1, inner1.max.width, inner1.max.height, 0);
-        crate::layout::flex_proofs::lemma_flex_column_children_len(p2, sp2, al, w2s, ccs2, tw2, inner2.max.width, inner2.max.height, 0);
-        // After reveal: fl1 = flex_column_layout(...) = Node { children: flex_column_children(...) }
-        // flex_column_children_len gives len == w1s.len()
-        // Z3 should see fl1.children.len() from the revealed definition
-        // fl1.children = flex_column_children after reveal
-        let fc1 = flex_column_children(p1, sp1, al, w1s, ccs1, tw1, inner1.max.width, inner1.max.height, 0);
-        let fc2 = flex_column_children(p2, sp2, al, w2s, ccs2, tw2, inner2.max.width, inner2.max.height, 0);
+        // flex_column_layout uses lim.max.width/height.sub(pad) for available dims
+        let fw1 = lim1.max.width.sub(p1.horizontal());
+        let fw2 = lim2.max.width.sub(p2.horizontal());
+        lemma_sub_congruence(lim1.max.width, lim2.max.width, p1.horizontal(), p2.horizontal());
+        let fhp1 = lim1.max.height.sub(p1.vertical());
+        let fhp2 = lim2.max.height.sub(p2.vertical());
+        lemma_sub_congruence(lim1.max.height, lim2.max.height, p1.vertical(), p2.vertical());
+        let fh1 = fhp1.sub(ts1);
+        let fh2 = fhp2.sub(ts2);
+        lemma_sub_congruence(fhp1, fhp2, ts1, ts2);
+        crate::layout::flex_proofs::lemma_flex_column_children_len(p1, sp1, al, w1s, ccs1, tw1, fw1, fh1, 0);
+        crate::layout::flex_proofs::lemma_flex_column_children_len(p2, sp2, al, w2s, ccs2, tw2, fw2, fh2, 0);
+        let fc1 = flex_column_children(p1, sp1, al, w1s, ccs1, tw1, fw1, fh1, 0);
+        let fc2 = flex_column_children(p2, sp2, al, w2s, ccs2, tw2, fw2, fh2, 0);
         assert(fl1.children =~= fc1);
         assert(fl2.children =~= fc2);
         // Position congruence per-index (each gets full rlimit)
@@ -148,7 +157,7 @@ pub proof fn lemma_flex_column_full_depth_dispatch<T: OrderedField>(
             fc1[i].x.eqv(fc2[i].x) && fc1[i].y.eqv(fc2[i].y)
         by {
             lemma_flex_column_position_eqv_at(p1, p2, sp1, sp2, al, w1s, w2s, ccs1, ccs2,
-                tw1, tw2, inner1.max.width, inner2.max.width, inner1.max.height, inner2.max.height, i as nat);
+                tw1, tw2, fw1, fw2, fh1, fh2, i as nat);
         };
         lemma_layout_widget_node_congruence(lim1, lim2,
             Widget::Container(ContainerWidget::Flex { padding: p1, spacing: sp1, alignment: al, direction: FlexDirection::Column, children: ch1 }), w2, fuel);

@@ -2746,7 +2746,8 @@ proof fn lemma_container_full_depth<T: OrderedField>(
             }
         },
         ContainerWidget::Flex { .. } => {
-            // Flex: depth 0. Full-depth dispatch needs separate module for rlimit.
+            // Flex: depth 0 in congruence_depth. Full-depth available via
+            // full_depth_proofs::lemma_flex_column_full_depth_dispatch (requires widget_wf for !tw.eqv(zero)).
         },
         _ => {
             // Grid, Absolute, ListView: depth 0 for now
