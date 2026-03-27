@@ -2542,7 +2542,7 @@ pub open spec fn congruence_depth<T: OrderedRing>(widget: Widget<T>, fuel: nat) 
                             if wc.len() == 0 { 0 }
                             else { min_children_congruence_depth(wc, (fuel - 1) as nat, 0) + 1 }
                         },
-                        ContainerWidget::Absolute { .. } => 0,
+                        _ => 0,  // Grid, Absolute, ListView: depth 0
                         _ => 0,
                     }
                 }
@@ -2748,10 +2748,14 @@ proof fn lemma_container_full_depth<T: OrderedField>(
                 };
             }
         },
-        ContainerWidget::Absolute { .. } => {
-            // Depth 0: rlimit issue with child_data Seq construction
+        ContainerWidget::Flex { padding: p1, spacing: sp1, alignment: al, direction: dir, children: ch1 } => {
+            if ch1.len() > 0 && fuel > 1 {
+                lemma_container_full_depth_flex_dispatch(lim1, lim2, p1, sp1, al, dir, ch1, w2, fuel);
+            }
         },
-        _ => {},
+        _ => {
+            // Grid, Absolute, ListView: depth 0 for now
+        },
     }
 }
 
@@ -3114,6 +3118,179 @@ proof fn lemma_wrap_positions_eqv<T: OrderedField>(
 // absolute_layout through layout_absolute_body to merge_layout.
 // The pattern is proven (works for Column/Row/Stack) but Absolute's
 // additional Seq::new for child_data exhausts rlimit.
+
+// Flex structural bridges removed — Z3 can unfold the transparent chain
+// (layout_widget → layout_container → layout_flex_linear_body → layout_flex_column_body
+// → merge_layout(flex_column_layout, cn)) automatically after reveal(flex_column_layout).
+
+/// ListView structural bridge.
+proof fn lemma_listview_structural_bridge<T: OrderedField>(
+    lim: Limits<T>, sp: T, sy: T, vp: Size<T>,
+    children: Seq<Widget<T>>, fuel: nat,
+)
+    requires fuel > 0,
+    ensures ({
+        let cl = Limits { min: Size::zero_size(), max: Size::new(vp.width, vp.height) };
+        let cs = crate::measure::measure_children(cl, children, (fuel - 1) as nat);
+        let first = crate::layout::listview::listview_first_visible(cs, sp, sy);
+        let end = crate::layout::listview::listview_end_visible(cs, sp, sy, vp.height);
+        let cn = crate::layout::listview::listview_widget_child_nodes(cl, children, first, end, (fuel - 1) as nat);
+        // ListView output: Node { size: lim.resolve(vp), children with listview_child_y positions }
+        layout_widget(lim, Widget::Container(ContainerWidget::ListView {
+            spacing: sp, scroll_y: sy, viewport: vp, children,
+        }), fuel).size == lim.resolve(vp)
+        && layout_widget(lim, Widget::Container(ContainerWidget::ListView {
+            spacing: sp, scroll_y: sy, viewport: vp, children,
+        }), fuel).children.len() == cn.len()
+    }),
+{
+    reveal(crate::layout::listview::layout_listview_body);
+}
+
+/// Flex full-depth dispatch.
+proof fn lemma_container_full_depth_flex_dispatch<T: OrderedField>(
+    lim1: Limits<T>, lim2: Limits<T>,
+    p1: Padding<T>, sp1: T, al: Alignment, dir: FlexDirection, ch1: Seq<FlexItem<T>>,
+    w2: Widget<T>, fuel: nat,
+)
+    requires
+        limits_eqv(lim1, lim2),
+        widget_eqv(Widget::Container(ContainerWidget::Flex {
+            padding: p1, spacing: sp1, alignment: al, direction: dir, children: ch1 }), w2, fuel),
+        fuel > 1, ch1.len() > 0,
+    ensures crate::diff::nodes_deeply_eqv(
+        layout_widget(lim1, Widget::Container(ContainerWidget::Flex {
+            padding: p1, spacing: sp1, alignment: al, direction: dir, children: ch1 }), fuel),
+        layout_widget(lim2, w2, fuel),
+        min_children_congruence_depth(
+            Seq::new(ch1.len(), |i: int| ch1[i].child), (fuel - 1) as nat, 0) + 1),
+    decreases fuel, 1nat,
+{
+    if let Widget::Container(ContainerWidget::Flex {
+        padding: p2, spacing: sp2, children: ch2, ..
+    }) = w2 {
+        lemma_padding_horizontal_congruence(p1, p2);
+        lemma_padding_vertical_congruence(p1, p2);
+        lemma_shrink_congruence(lim1, lim2, p1.horizontal(), p2.horizontal(), p1.vertical(), p2.vertical());
+        let inner1 = lim1.shrink(p1.horizontal(), p1.vertical());
+        let inner2 = lim2.shrink(p2.horizontal(), p2.vertical());
+        let w1s = Seq::new(ch1.len(), |i: int| ch1[i].weight);
+        let w2s = Seq::new(ch2.len(), |i: int| ch2[i].weight);
+        let tw1 = sum_weights(w1s, w1s.len() as nat);
+        let ts1 = if ch1.len() > 0 { crate::layout::repeated_add(sp1, (ch1.len() - 1) as nat) } else { T::zero() };
+        let axis = dir.axis();
+        let am1 = inner1.max.main_dim(axis).sub(ts1);
+        let cn1 = flex_linear_widget_child_nodes(inner1, ch1, w1s, tw1, am1, axis, (fuel - 1) as nat);
+        let tw2 = sum_weights(w2s, w2s.len() as nat);
+        let ts2 = if ch2.len() > 0 { crate::layout::repeated_add(sp2, (ch2.len() - 1) as nat) } else { T::zero() };
+        let am2 = inner2.max.main_dim(axis).sub(ts2);
+        let cn2 = flex_linear_widget_child_nodes(inner2, ch2, w2s, tw2, am2, axis, (fuel - 1) as nat);
+        let wc1 = Seq::new(ch1.len(), |i: int| ch1[i].child);
+        let rd = min_children_congruence_depth(wc1, (fuel - 1) as nat, 0);
+        // ts (total spacing) congruence: repeated_add(sp, n) is eqv when sp eqv
+        lemma_repeated_add_congruence(sp1, sp2, (ch1.len() - 1) as nat);
+        // main_dim congruence (from limits_eqv + shrink_congruence → inner eqv)
+        // am (available_main) congruence: main_dim.sub(ts) eqv
+        lemma_sub_congruence(inner1.max.main_dim(axis), inner2.max.main_dim(axis), ts1, ts2);
+        // IH: each flex child deeply eqv at rd
+        assert forall|i: int| 0 <= i < cn1.len() implies
+            crate::diff::nodes_deeply_eqv(#[trigger] cn1[i], cn2[i], rd)
+        by {
+            lemma_min_children_depth_le::<T>(wc1, (fuel - 1) as nat, 0, i);
+            // flex_child_main_size eqv: w.div(tw).mul(av)
+            verus_algebra::quadratic::lemma_div_congruence(w1s[i], w2s[i], tw1, tw2);
+            T::axiom_mul_congruence_left(w1s[i].div(tw1), w2s[i].div(tw2), am1);
+            verus_algebra::lemmas::ring_lemmas::lemma_mul_congruence_right::<T>(
+                w2s[i].div(tw2), am1, am2);
+            T::axiom_eqv_transitive(
+                flex_child_main_size(w1s[i], tw1, am1),
+                w2s[i].div(tw2).mul(am1),
+                flex_child_main_size(w2s[i], tw2, am2));
+            // IH call with per-child eqv limits
+            match axis {
+                crate::layout::Axis::Vertical => {
+                    lemma_layout_widget_full_depth_congruence(
+                        Limits { min: inner1.min, max: Size::new(inner1.max.width, flex_child_main_size(w1s[i], tw1, am1)) },
+                        Limits { min: inner2.min, max: Size::new(inner2.max.width, flex_child_main_size(w2s[i], tw2, am2)) },
+                        ch1[i].child, ch2[i].child, (fuel - 1) as nat);
+                },
+                crate::layout::Axis::Horizontal => {
+                    lemma_layout_widget_full_depth_congruence(
+                        Limits { min: inner1.min, max: Size::new(flex_child_main_size(w1s[i], tw1, am1), inner1.max.height) },
+                        Limits { min: inner2.min, max: Size::new(flex_child_main_size(w2s[i], tw2, am2), inner2.max.height) },
+                        ch1[i].child, ch2[i].child, (fuel - 1) as nat);
+                },
+            }
+            crate::diff::lemma_deeply_eqv_depth_monotone(cn1[i], cn2[i],
+                congruence_depth(ch1[i].child, (fuel - 1) as nat), rd);
+        };
+        lemma_sizes_eqv_from_deeply_eqv(cn1, cn2, rd);
+        // Structural bridge + position congruence + merge+1
+        match dir {
+            FlexDirection::Column => {
+                reveal(flex_column_layout);
+                let ccs1 = Seq::new(cn1.len(), |i: int| cn1[i].size.width);
+                let ccs2 = Seq::new(cn2.len(), |i: int| cn2[i].size.width);
+                let fl1 = flex_column_layout(lim1, p1, sp1, al, w1s, ccs1);
+                let fl2 = flex_column_layout(lim2, p2, sp2, al, w2s, ccs2);
+                crate::layout::flex_proofs::lemma_flex_column_children_len(p1, sp1, al, w1s, ccs1, tw1, inner1.max.width, inner1.max.height, 0);
+                crate::layout::flex_proofs::lemma_flex_column_children_len(p2, sp2, al, w2s, ccs2, tw2, inner2.max.width, inner2.max.height, 0);
+                // Position congruence via flex_column_children_element + flex_column_child_y_congruence
+                assert forall|i: int| 0 <= i < fl1.children.len() implies
+                    fl1.children[i].x.eqv(fl2.children[i].x) && fl1.children[i].y.eqv(fl2.children[i].y)
+                by {
+                    crate::layout::flex_proofs::lemma_flex_column_children_element(
+                        p1, sp1, al, w1s, ccs1, tw1, inner1.max.width, inner1.max.height, i as nat);
+                    crate::layout::flex_proofs::lemma_flex_column_children_element(
+                        p2, sp2, al, w2s, ccs2, tw2, inner2.max.width, inner2.max.height, i as nat);
+                    lemma_align_offset_congruence(al, inner1.max.width, inner2.max.width, ccs1[i], ccs2[i]);
+                    T::axiom_add_congruence_left(p1.left, p2.left, align_offset(al, inner1.max.width, ccs1[i]));
+                    verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(
+                        p2.left, align_offset(al, inner1.max.width, ccs1[i]), align_offset(al, inner2.max.width, ccs2[i]));
+                    T::axiom_eqv_transitive(
+                        p1.left.add(align_offset(al, inner1.max.width, ccs1[i])),
+                        p2.left.add(align_offset(al, inner1.max.width, ccs1[i])),
+                        p2.left.add(align_offset(al, inner2.max.width, ccs2[i])));
+                    lemma_flex_column_child_y_congruence(p1.top, p2.top, w1s, w2s, tw1, tw2,
+                        inner1.max.height, inner2.max.height, sp1, sp2, i as nat);
+                };
+                lemma_layout_widget_node_congruence(lim1, lim2,
+                    Widget::Container(ContainerWidget::Flex { padding: p1, spacing: sp1, alignment: al, direction: dir, children: ch1 }), w2, fuel);
+                lemma_merge_layout_deep_congruence_plus_one(fl1, fl2, cn1, cn2, rd);
+            },
+            FlexDirection::Row => {
+                reveal(flex_row_layout);
+                let ccs1 = Seq::new(cn1.len(), |i: int| cn1[i].size.height);
+                let ccs2 = Seq::new(cn2.len(), |i: int| cn2[i].size.height);
+                let fl1 = flex_row_layout(lim1, p1, sp1, al, w1s, ccs1);
+                let fl2 = flex_row_layout(lim2, p2, sp2, al, w2s, ccs2);
+                crate::layout::flex_proofs::lemma_flex_row_children_len(p1, sp1, al, w1s, ccs1, tw1, inner1.max.width, inner1.max.height, 0);
+                crate::layout::flex_proofs::lemma_flex_row_children_len(p2, sp2, al, w2s, ccs2, tw2, inner2.max.width, inner2.max.height, 0);
+                assert forall|i: int| 0 <= i < fl1.children.len() implies
+                    fl1.children[i].x.eqv(fl2.children[i].x) && fl1.children[i].y.eqv(fl2.children[i].y)
+                by {
+                    crate::layout::flex_proofs::lemma_flex_row_children_element(
+                        p1, sp1, al, w1s, ccs1, tw1, inner1.max.width, inner1.max.height, i as nat);
+                    crate::layout::flex_proofs::lemma_flex_row_children_element(
+                        p2, sp2, al, w2s, ccs2, tw2, inner2.max.width, inner2.max.height, i as nat);
+                    lemma_flex_row_child_x_congruence(p1.left, p2.left, w1s, w2s, tw1, tw2,
+                        inner1.max.width, inner2.max.width, sp1, sp2, i as nat);
+                    lemma_align_offset_congruence(al, inner1.max.height, inner2.max.height, ccs1[i], ccs2[i]);
+                    T::axiom_add_congruence_left(p1.top, p2.top, align_offset(al, inner1.max.height, ccs1[i]));
+                    verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(
+                        p2.top, align_offset(al, inner1.max.height, ccs1[i]), align_offset(al, inner2.max.height, ccs2[i]));
+                    T::axiom_eqv_transitive(
+                        p1.top.add(align_offset(al, inner1.max.height, ccs1[i])),
+                        p2.top.add(align_offset(al, inner1.max.height, ccs1[i])),
+                        p2.top.add(align_offset(al, inner2.max.height, ccs2[i])));
+                };
+                lemma_layout_widget_node_congruence(lim1, lim2,
+                    Widget::Container(ContainerWidget::Flex { padding: p1, spacing: sp1, alignment: al, direction: dir, children: ch1 }), w2, fuel);
+                lemma_merge_layout_deep_congruence_plus_one(fl1, fl2, cn1, cn2, rd);
+            },
+        }
+    }
+}
 
 /// Container full-depth for Column/Row (linear layout).
 proof fn lemma_container_full_depth_linear<T: OrderedField>(
