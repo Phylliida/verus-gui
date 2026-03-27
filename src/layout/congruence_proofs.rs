@@ -2438,6 +2438,67 @@ pub proof fn lemma_layout_widget_deep_congruence<T: OrderedField>(
     lemma_layout_widget_node_congruence(lim1, lim2, w1, w2, fuel);
 }
 
+/// Minimum congruence_depth across children[0..count].
+pub open spec fn min_children_congruence_depth<T: OrderedRing>(
+    children: Seq<Widget<T>>, fuel: nat, count: nat,
+) -> nat
+    decreases fuel, count,
+{
+    if count == 0 || count > children.len() {
+        fuel  // no children → any depth
+    } else if count == 1 {
+        congruence_depth(children[0], fuel)
+    } else {
+        let rest = min_children_congruence_depth(children, fuel, (count - 1) as nat);
+        let cur = congruence_depth(children[(count - 1) as int], fuel);
+        if cur <= rest { cur } else { rest }
+    }
+}
+
+/// Strengthened merge_layout congruence: children at depth rd → output at rd + 1.
+/// The standard merge_layout_deep_congruence gives rd; this adds +1 since merge
+/// wraps children in an extra nesting level.
+pub proof fn lemma_merge_layout_deep_congruence_plus_one<T: OrderedField>(
+    layout1: Node<T>, layout2: Node<T>,
+    cn1: Seq<Node<T>>, cn2: Seq<Node<T>>,
+    depth: nat,
+)
+    requires
+        layout1.children.len() == layout2.children.len(),
+        layout1.children.len() == cn1.len(),
+        cn1.len() == cn2.len(),
+        forall|i: int| 0 <= i < cn1.len() ==> {
+            &&& layout1.children[i].x.eqv(layout2.children[i].x)
+            &&& layout1.children[i].y.eqv(layout2.children[i].y)
+        },
+        forall|i: int| 0 <= i < cn1.len() ==>
+            crate::diff::nodes_deeply_eqv(cn1[i], cn2[i], depth),
+        node_eqv(merge_layout(layout1, cn1), merge_layout(layout2, cn2)),
+    ensures
+        crate::diff::nodes_deeply_eqv(
+            merge_layout(layout1, cn1),
+            merge_layout(layout2, cn2),
+            depth + 1,
+        ),
+{
+    // nodes_deeply_eqv at depth+1 requires:
+    //   1. Top-level eqv ← from node_eqv
+    //   2. Children pairwise at depth ← from wrapper_child_deep_congruence per child
+    let out1 = merge_layout(layout1, cn1);
+    let out2 = merge_layout(layout2, cn2);
+    // Each output child: Node { x: layout.children[i].x, y: ..., size: cn[i].size, children: cn[i].children }
+    // wrapper_child_deep_congruence: eqv x/y + cn deeply eqv at depth → merged child deeply eqv at depth
+    assert forall|i: int| 0 <= i < out1.children.len() implies
+        crate::diff::nodes_deeply_eqv(#[trigger] out1.children[i], out2.children[i], depth)
+    by {
+        lemma_wrapper_child_deep_congruence(
+            cn1[i], cn2[i],
+            layout1.children[i].x, layout2.children[i].x,
+            layout1.children[i].y, layout2.children[i].y,
+            depth);
+    };
+}
+
 /// The depth at which the master congruence proof works for a widget tree.
 /// Leaf/Conditional(false): any depth (no children).
 /// Conditional(true): passthrough — depth = IH depth (no +1).
@@ -2462,7 +2523,11 @@ pub open spec fn congruence_depth<T: OrderedRing>(widget: Widget<T>, fuel: nat) 
             Widget::Wrapper(WrapperWidget::AspectRatio { .. }) => 0,
             Widget::Wrapper(WrapperWidget::Margin { child, .. }) =>
                 congruence_depth(*child, (fuel - 1) as nat) + 1,
-            Widget::Container(_) => 0,
+            Widget::Container(container) => {
+                let children = get_children(Widget::Container(container));
+                if children.len() == 0 { fuel }
+                else { min_children_congruence_depth(children, (fuel - 1) as nat, children.len()) + 1 }
+            },
         }
     }
 }
