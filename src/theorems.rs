@@ -338,6 +338,49 @@ pub proof fn theorem_incremental_and_deterministic<T: OrderedField>(
 }
 
 // ══════════════════════════════════════════════════════════════════════
+// HIT-TEST CONGRUENCE AT ARBITRARY DEPTH
+// ══════════════════════════════════════════════════════════════════════
+
+/// Hit-test congruence: eqv widgets produce the same hit-test result.
+///
+/// Uses the full-depth congruence master (congruence_depth) to establish
+/// deep eqv at the hit-test fuel depth. When congruence_depth(widget, fuel)
+/// >= hit_fuel, both hit-tests return the same path.
+///
+/// For widget trees without SizedBox/AspectRatio/ScrollView/Container at the root,
+/// congruence_depth = fuel (or fuel - conditional_nesting for Conditional(true)).
+pub proof fn theorem_hit_test_congruence<T: OrderedField>(
+    lim1: Limits<T>, lim2: Limits<T>,
+    w1: Widget<T>, w2: Widget<T>,
+    fuel: nat,
+    hit_fuel: nat,
+    px1: T, px2: T, py1: T, py2: T,
+)
+    requires
+        limits_eqv(lim1, lim2),
+        widget_eqv(w1, w2, fuel),
+        px1.eqv(px2), py1.eqv(py2),
+        hit_fuel <= crate::layout::congruence_proofs::congruence_depth(w1, fuel),
+    ensures
+        hit_test(
+            layout_widget(lim1, w1, fuel), px1, py1, hit_fuel)
+        == hit_test(
+            layout_widget(lim2, w2, fuel), px2, py2, hit_fuel),
+{
+    crate::layout::congruence_proofs::lemma_layout_widget_full_depth_congruence(
+        lim1, lim2, w1, w2, fuel);
+    crate::diff::lemma_deeply_eqv_depth_monotone(
+        layout_widget(lim1, w1, fuel),
+        layout_widget(lim2, w2, fuel),
+        crate::layout::congruence_proofs::congruence_depth(w1, fuel),
+        hit_fuel);
+    lemma_hit_test_congruence(
+        layout_widget(lim1, w1, fuel),
+        layout_widget(lim2, w2, fuel),
+        px1, px2, py1, py2, hit_fuel);
+}
+
+// ══════════════════════════════════════════════════════════════════════
 // FULL DRAW VALIDITY
 // ══════════════════════════════════════════════════════════════════════
 
