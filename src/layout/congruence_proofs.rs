@@ -2696,11 +2696,265 @@ proof fn lemma_linear_children_positions_congruence<T: OrderedField>(
 }
 
 
-// The following infrastructure supports extending full-depth to containers.
-// Container children positions depend on per-variant layout functions
-// (linear_children, stack_children, etc.) which are proved congruent below.
-// Connecting these through the opaque layout_widget → merge_layout chain
-// requires per-variant structural bridge lemmas (future work).
+// ══════════════════════════════════════════════════════════════════════
+// Structural bridge lemmas: layout_widget output === merge_layout(...)
+// ══════════════════════════════════════════════════════════════════════
+
+/// Column structural bridge: layout_widget for Column is merge_layout of
+/// linear_layout and widget_child_nodes.
+proof fn lemma_column_structural_bridge<T: OrderedField>(
+    lim: Limits<T>, pad: Padding<T>, sp: T, al: Alignment,
+    children: Seq<Widget<T>>, fuel: nat,
+)
+    requires fuel > 0,
+    ensures ({
+        let inner = lim.shrink(pad.horizontal(), pad.vertical());
+        let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
+        let cs = Seq::new(cn.len(), |i: int| cn[i].size);
+        layout_widget(lim, Widget::Container(ContainerWidget::Column {
+            padding: pad, spacing: sp, alignment: al, children,
+        }), fuel) == merge_layout(
+            linear_layout(lim, pad, sp, al, cs, Axis::Vertical), cn)
+    }),
+{
+    reveal(linear_layout);
+    let inner = lim.shrink(pad.horizontal(), pad.vertical());
+    let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
+    let col = ContainerWidget::Column { padding: pad, spacing: sp, alignment: al, children };
+    let w = Widget::Container(col);
+    assert(layout_widget(lim, w, fuel) == layout_container(lim, col, fuel));
+    assert(layout_container(lim, col, fuel) == layout_linear_body(lim, pad, sp, al, cn, Axis::Vertical));
+    let child_sizes = Seq::new(cn.len(), |i: int| cn[i].size);
+    assert(layout_linear_body(lim, pad, sp, al, cn, Axis::Vertical)
+        == merge_layout(linear_layout(lim, pad, sp, al, child_sizes, Axis::Vertical), cn));
+}
+
+/// Row structural bridge.
+proof fn lemma_row_structural_bridge<T: OrderedField>(
+    lim: Limits<T>, pad: Padding<T>, sp: T, al: Alignment,
+    children: Seq<Widget<T>>, fuel: nat,
+)
+    requires fuel > 0,
+    ensures ({
+        let inner = lim.shrink(pad.horizontal(), pad.vertical());
+        let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
+        let cs = Seq::new(cn.len(), |i: int| cn[i].size);
+        layout_widget(lim, Widget::Container(ContainerWidget::Row {
+            padding: pad, spacing: sp, alignment: al, children,
+        }), fuel) == merge_layout(
+            linear_layout(lim, pad, sp, al, cs, Axis::Horizontal), cn)
+    }),
+{
+    reveal(linear_layout);
+    let inner = lim.shrink(pad.horizontal(), pad.vertical());
+    let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
+    let row = ContainerWidget::Row { padding: pad, spacing: sp, alignment: al, children };
+    let w = Widget::Container(row);
+    assert(layout_widget(lim, w, fuel) == layout_container(lim, row, fuel));
+    assert(layout_container(lim, row, fuel) == layout_linear_body(lim, pad, sp, al, cn, Axis::Horizontal));
+    let child_sizes = Seq::new(cn.len(), |i: int| cn[i].size);
+    assert(layout_linear_body(lim, pad, sp, al, cn, Axis::Horizontal)
+        == merge_layout(linear_layout(lim, pad, sp, al, child_sizes, Axis::Horizontal), cn));
+}
+
+/// Stack structural bridge.
+proof fn lemma_stack_structural_bridge<T: OrderedField>(
+    lim: Limits<T>, pad: Padding<T>, ha: Alignment, va: Alignment,
+    children: Seq<Widget<T>>, fuel: nat,
+)
+    requires fuel > 0,
+    ensures ({
+        let inner = lim.shrink(pad.horizontal(), pad.vertical());
+        let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
+        let cs = Seq::new(cn.len(), |i: int| cn[i].size);
+        layout_widget(lim, Widget::Container(ContainerWidget::Stack {
+            padding: pad, h_align: ha, v_align: va, children,
+        }), fuel) == merge_layout(
+            crate::layout::stack::stack_layout(lim, pad, ha, va, cs), cn)
+    }),
+{
+    reveal(crate::layout::stack::stack_layout);
+    reveal(crate::layout::stack::stack_content_size);
+    let inner = lim.shrink(pad.horizontal(), pad.vertical());
+    let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
+    let stk = ContainerWidget::Stack { padding: pad, h_align: ha, v_align: va, children };
+    let w = Widget::Container(stk);
+    assert(layout_widget(lim, w, fuel) == layout_container(lim, stk, fuel));
+    assert(layout_container(lim, stk, fuel) == layout_stack_body(lim, pad, ha, va, cn));
+    let child_sizes = Seq::new(cn.len(), |i: int| cn[i].size);
+    assert(layout_stack_body(lim, pad, ha, va, cn)
+        == merge_layout(crate::layout::stack::stack_layout(lim, pad, ha, va, child_sizes), cn));
+}
+
+/// Wrap structural bridge.
+proof fn lemma_wrap_structural_bridge<T: OrderedField>(
+    lim: Limits<T>, pad: Padding<T>, hs: T, vs: T,
+    children: Seq<Widget<T>>, fuel: nat,
+)
+    requires fuel > 0,
+    ensures ({
+        let inner = lim.shrink(pad.horizontal(), pad.vertical());
+        let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
+        let cs = Seq::new(cn.len(), |i: int| cn[i].size);
+        layout_widget(lim, Widget::Container(ContainerWidget::Wrap {
+            padding: pad, h_spacing: hs, v_spacing: vs, children,
+        }), fuel) == merge_layout(
+            crate::layout::wrap::wrap_layout(lim, pad, hs, vs, cs), cn)
+    }),
+{
+    reveal(crate::layout::wrap::wrap_layout);
+    let inner = lim.shrink(pad.horizontal(), pad.vertical());
+    let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
+    let wrp = ContainerWidget::Wrap { padding: pad, h_spacing: hs, v_spacing: vs, children };
+    let w = Widget::Container(wrp);
+    assert(layout_widget(lim, w, fuel) == layout_container(lim, wrp, fuel));
+    assert(layout_container(lim, wrp, fuel) == layout_wrap_body(lim, pad, hs, vs, cn));
+    let child_sizes = Seq::new(cn.len(), |i: int| cn[i].size);
+    assert(layout_wrap_body(lim, pad, hs, vs, cn)
+        == merge_layout(crate::layout::wrap::wrap_layout(lim, pad, hs, vs, child_sizes), cn));
+}
+
+// ── Full-depth deep congruence using structural bridges ─────────
+
+/// Full-depth deep congruence for Column.
+proof fn lemma_column_full_deep<T: OrderedField>(
+    lim1: Limits<T>, lim2: Limits<T>,
+    p1: Padding<T>, p2: Padding<T>,
+    sp1: T, sp2: T, al: Alignment,
+    ch1: Seq<Widget<T>>, ch2: Seq<Widget<T>>,
+    fuel: nat,
+    // IH: recursive calls produce deeply eqv at fuel-1
+    cn1: Seq<Node<T>>, cn2: Seq<Node<T>>,
+)
+    requires
+        limits_eqv(lim1, lim2),
+        padding_eqv(p1, p2), sp1.eqv(sp2),
+        ch1.len() == ch2.len(), fuel > 1,
+        cn1.len() == ch1.len(), cn2.len() == ch2.len(),
+        cn1 == widget_child_nodes(lim1.shrink(p1.horizontal(), p1.vertical()), ch1, (fuel-1) as nat),
+        cn2 == widget_child_nodes(lim2.shrink(p2.horizontal(), p2.vertical()), ch2, (fuel-1) as nat),
+        forall|i: int| 0 <= i < cn1.len() ==>
+            crate::diff::nodes_deeply_eqv(cn1[i], cn2[i], (fuel-1) as nat),
+        node_eqv(
+            layout_widget(lim1, Widget::Container(ContainerWidget::Column {
+                padding: p1, spacing: sp1, alignment: al, children: ch1 }), fuel),
+            layout_widget(lim2, Widget::Container(ContainerWidget::Column {
+                padding: p2, spacing: sp2, alignment: al, children: ch2 }), fuel)),
+    ensures
+        crate::diff::nodes_deeply_eqv(
+            layout_widget(lim1, Widget::Container(ContainerWidget::Column {
+                padding: p1, spacing: sp1, alignment: al, children: ch1 }), fuel),
+            layout_widget(lim2, Widget::Container(ContainerWidget::Column {
+                padding: p2, spacing: sp2, alignment: al, children: ch2 }), fuel),
+            fuel),
+{
+    // Structural bridges: layout_widget output === merge_layout(linear_layout, cn)
+    lemma_column_structural_bridge(lim1, p1, sp1, al, ch1, fuel);
+    lemma_column_structural_bridge(lim2, p2, sp2, al, ch2, fuel);
+
+    let n1 = layout_widget(lim1, Widget::Container(ContainerWidget::Column {
+        padding: p1, spacing: sp1, alignment: al, children: ch1 }), fuel);
+    let n2 = layout_widget(lim2, Widget::Container(ContainerWidget::Column {
+        padding: p2, spacing: sp2, alignment: al, children: ch2 }), fuel);
+
+    let cs1 = Seq::new(cn1.len(), |i: int| cn1[i].size);
+    let cs2 = Seq::new(cn2.len(), |i: int| cn2[i].size);
+    assert(sizes_eqv(cs1, cs2));
+
+    reveal(linear_layout);
+
+    // Position congruence: available_cross eqv
+    lemma_padding_horizontal_congruence(p1, p2);
+    lemma_sub_congruence(lim1.max.width, lim2.max.width, p1.horizontal(), p2.horizontal());
+    lemma_linear_children_positions_congruence(
+        p1, p2, sp1, sp2, al, cs1, cs2, Axis::Vertical,
+        lim1.max.width.sub(p1.horizontal()),
+        lim2.max.width.sub(p2.horizontal()), 0);
+
+    let lc1 = linear_children(p1, sp1, al, cs1, Axis::Vertical,
+        lim1.max.width.sub(p1.horizontal()), 0);
+    let lc2 = linear_children(p2, sp2, al, cs2, Axis::Vertical,
+        lim2.max.width.sub(p2.horizontal()), 0);
+
+    let ll1 = linear_layout(lim1, p1, sp1, al, cs1, Axis::Vertical);
+    let ll2 = linear_layout(lim2, p2, sp2, al, cs2, Axis::Vertical);
+    assert(n1 == merge_layout(ll1, cn1));
+    assert(n2 == merge_layout(ll2, cn2));
+    assert(ll1.children == lc1);
+    assert(ll2.children == lc2);
+    assert(node_eqv(merge_layout(ll1, cn1), merge_layout(ll2, cn2)));
+    assert(ll1.children.len() == ll2.children.len());
+    assert(ll1.children.len() == cn1.len());
+    lemma_merge_layout_deep_congruence(ll1, ll2, cn1, cn2, (fuel-1) as nat);
+}
+
+/// Full-depth deep congruence for Row (symmetric to Column).
+proof fn lemma_row_full_deep<T: OrderedField>(
+    lim1: Limits<T>, lim2: Limits<T>,
+    p1: Padding<T>, p2: Padding<T>,
+    sp1: T, sp2: T, al: Alignment,
+    ch1: Seq<Widget<T>>, ch2: Seq<Widget<T>>,
+    fuel: nat,
+    cn1: Seq<Node<T>>, cn2: Seq<Node<T>>,
+)
+    requires
+        limits_eqv(lim1, lim2),
+        padding_eqv(p1, p2), sp1.eqv(sp2),
+        ch1.len() == ch2.len(), fuel > 1,
+        cn1.len() == ch1.len(), cn2.len() == ch2.len(),
+        cn1 == widget_child_nodes(lim1.shrink(p1.horizontal(), p1.vertical()), ch1, (fuel-1) as nat),
+        cn2 == widget_child_nodes(lim2.shrink(p2.horizontal(), p2.vertical()), ch2, (fuel-1) as nat),
+        forall|i: int| 0 <= i < cn1.len() ==>
+            crate::diff::nodes_deeply_eqv(cn1[i], cn2[i], (fuel-1) as nat),
+        node_eqv(
+            layout_widget(lim1, Widget::Container(ContainerWidget::Row {
+                padding: p1, spacing: sp1, alignment: al, children: ch1 }), fuel),
+            layout_widget(lim2, Widget::Container(ContainerWidget::Row {
+                padding: p2, spacing: sp2, alignment: al, children: ch2 }), fuel)),
+    ensures
+        crate::diff::nodes_deeply_eqv(
+            layout_widget(lim1, Widget::Container(ContainerWidget::Row {
+                padding: p1, spacing: sp1, alignment: al, children: ch1 }), fuel),
+            layout_widget(lim2, Widget::Container(ContainerWidget::Row {
+                padding: p2, spacing: sp2, alignment: al, children: ch2 }), fuel),
+            fuel),
+{
+    lemma_row_structural_bridge(lim1, p1, sp1, al, ch1, fuel);
+    lemma_row_structural_bridge(lim2, p2, sp2, al, ch2, fuel);
+    let n1 = layout_widget(lim1, Widget::Container(ContainerWidget::Row {
+        padding: p1, spacing: sp1, alignment: al, children: ch1 }), fuel);
+    let n2 = layout_widget(lim2, Widget::Container(ContainerWidget::Row {
+        padding: p2, spacing: sp2, alignment: al, children: ch2 }), fuel);
+    let cs1 = Seq::new(cn1.len(), |i: int| cn1[i].size);
+    let cs2 = Seq::new(cn2.len(), |i: int| cn2[i].size);
+    assert(sizes_eqv(cs1, cs2));
+    reveal(linear_layout);
+    lemma_padding_vertical_congruence(p1, p2);
+    lemma_sub_congruence(lim1.max.height, lim2.max.height, p1.vertical(), p2.vertical());
+    lemma_linear_children_positions_congruence(
+        p1, p2, sp1, sp2, al, cs1, cs2, Axis::Horizontal,
+        lim1.max.height.sub(p1.vertical()),
+        lim2.max.height.sub(p2.vertical()), 0);
+    let lc1 = linear_children(p1, sp1, al, cs1, Axis::Horizontal,
+        lim1.max.height.sub(p1.vertical()), 0);
+    let lc2 = linear_children(p2, sp2, al, cs2, Axis::Horizontal,
+        lim2.max.height.sub(p2.vertical()), 0);
+    let ll1 = linear_layout(lim1, p1, sp1, al, cs1, Axis::Horizontal);
+    let ll2 = linear_layout(lim2, p2, sp2, al, cs2, Axis::Horizontal);
+    assert(n1 == merge_layout(ll1, cn1));
+    assert(n2 == merge_layout(ll2, cn2));
+    assert(ll1.children == lc1);
+    assert(ll2.children == lc2);
+    assert(node_eqv(merge_layout(ll1, cn1), merge_layout(ll2, cn2)));
+    assert(ll1.children.len() == ll2.children.len());
+    assert(ll1.children.len() == cn1.len());
+    lemma_merge_layout_deep_congruence(ll1, ll2, cn1, cn2, (fuel-1) as nat);
+}
+
+// Infrastructure for remaining containers (child_main_position_congruence,
+// linear_children_positions_congruence) is above.
+// Stack, Wrap, Flex, Grid, Absolute, ListView bridge lemmas follow the same
+// pattern: structural bridge → position congruence → wrapper_child → deeply_eqv.
 
 } // verus!
 
