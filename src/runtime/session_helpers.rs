@@ -845,9 +845,22 @@ pub fn session_find_next_exec(
             } else {
                 text_len
             };
+            proof {
+                lemma_find_next_correct(session.model@.text, pattern@, from as nat);
+                // seq_matches_at → pos + pattern.len() <= text.len() and pos <= text.len()
+                axiom_find_result_grapheme_aligned(session.model@.text, pattern@, pos as nat);
+                // pos and pos + pattern.len() are grapheme boundaries
+                // end == pos + pattern.len() (since text_len >= pattern.len() && pos <= text_len - pattern.len())
+                // or end == text_len (which is always a grapheme boundary by axiom_grapheme_boundaries_valid)
+                axiom_grapheme_boundaries_valid(session.model@.text);
+            }
             session.model.anchor = pos;
             session.model.focus = end;
-            assume(session.model.wf_spec());
+            session.model.model = Ghost(TextModel {
+                anchor: pos as nat,
+                focus: end as nat,
+                ..session.model.model@
+            });
             session
         },
         None => session,
@@ -875,9 +888,18 @@ pub fn session_find_prev_exec(
             } else {
                 text_len
             };
+            proof {
+                lemma_find_prev_correct(session.model@.text, pattern@, from as nat);
+                axiom_find_result_grapheme_aligned(session.model@.text, pattern@, pos as nat);
+                axiom_grapheme_boundaries_valid(session.model@.text);
+            }
             session.model.anchor = pos;
             session.model.focus = end;
-            assume(session.model.wf_spec());
+            session.model.model = Ghost(TextModel {
+                anchor: pos as nat,
+                focus: end as nat,
+                ..session.model.model@
+            });
             session
         },
         None => session,

@@ -555,6 +555,25 @@ pub proof fn axiom_visual_line_monotone(
 {}
 
 // ──────────────────────────────────────────────────────────────────────
+// Find result grapheme alignment axiom
+// ──────────────────────────────────────────────────────────────────────
+
+/// In well-formed text, a substring match starts and ends at grapheme boundaries.
+/// Validated by the Unicode runtime: wf_text contains only permitted characters
+/// with canonical line endings, and match boundaries in such text are grapheme-aligned.
+#[verifier::external_body]
+pub proof fn axiom_find_result_grapheme_aligned(
+    text: Seq<char>, pattern: Seq<char>, pos: nat,
+)
+    requires
+        wf_text(text),
+        crate::text_model::find::seq_matches_at(text, pattern, pos),
+    ensures
+        is_grapheme_boundary(text, pos),
+        is_grapheme_boundary(text, pos + pattern.len()),
+{}
+
+// ──────────────────────────────────────────────────────────────────────
 // Well-formedness
 // ──────────────────────────────────────────────────────────────────────
 

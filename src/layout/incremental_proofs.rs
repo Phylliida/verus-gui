@@ -268,4 +268,129 @@ pub proof fn lemma_layout_stable_beyond_depth<T: OrderedField>(
     }
 }
 
+// ── Theorem 8: widget_depth stability ────────────────────────────
+
+/// max_child_widget_depth is stable when each child's depth is stable.
+proof fn lemma_max_child_depth_stable<T: OrderedRing>(
+    children: Seq<Widget<T>>,
+    fuel: nat,
+    count: nat,
+)
+    requires
+        count <= children.len(),
+        forall|i: int| 0 <= i < count ==>
+            widget_depth(children[i], fuel + 1) == widget_depth(children[i], fuel),
+    ensures
+        max_child_widget_depth(children, fuel + 1, count)
+            == max_child_widget_depth(children, fuel, count),
+    decreases count,
+{
+    if count == 0 {
+    } else {
+        lemma_max_child_depth_stable::<T>(children, fuel, (count - 1) as nat);
+    }
+}
+
+/// widget_depth is stable once fuel exceeds the measured depth:
+/// widget_depth(w, fuel+1) == widget_depth(w, fuel).
+pub proof fn lemma_widget_depth_stable<T: OrderedRing>(
+    widget: Widget<T>,
+    fuel: nat,
+)
+    requires
+        fuel > widget_depth(widget, fuel),
+    ensures
+        widget_depth(widget, fuel + 1) == widget_depth(widget, fuel),
+    decreases fuel,
+{
+    // fuel > widget_depth >= 0 → fuel >= 1
+    let children = get_children(widget);
+    if children.len() == 0 {
+        // Both fuels give 0
+    } else {
+        // widget_depth(w, fuel) = 1 + max_child_depth(children, fuel-1, n)
+        // fuel > 1 + max_child_depth → fuel-1 > max_child_depth
+        let n = children.len();
+        let max_cd = max_child_widget_depth(children, (fuel - 1) as nat, n);
+        // For each child: fuel-1 > max_cd >= widget_depth(child, fuel-1)
+        // By IH: widget_depth(child, fuel) == widget_depth(child, fuel-1)
+        assert forall|i: int| 0 <= i < n implies
+            widget_depth(children[i], fuel as nat) == widget_depth(children[i], (fuel - 1) as nat)
+        by {
+            lemma_max_child_depth_bound::<T>(children, (fuel - 1) as nat, n as nat, i);
+            lemma_widget_depth_stable::<T>(children[i], (fuel - 1) as nat);
+        };
+        // max_child_widget_depth(children, fuel, n) == max_child_widget_depth(children, fuel-1, n)
+        lemma_max_child_depth_stable::<T>(children, (fuel - 1) as nat, n as nat);
+        // widget_depth(w, fuel+1) = 1 + max_child_depth(children, fuel, n)
+        //                         = 1 + max_child_depth(children, fuel-1, n)
+        //                         = widget_depth(w, fuel)
+    }
+}
+
+/// widget_depth gives the same result for any two sufficient fuels.
+pub proof fn lemma_widget_depth_fuel_independent<T: OrderedRing>(
+    widget: Widget<T>,
+    fuel1: nat,
+    fuel2: nat,
+)
+    requires
+        fuel1 > widget_depth(widget, fuel1),
+        fuel2 > widget_depth(widget, fuel2),
+    ensures
+        widget_depth(widget, fuel1) == widget_depth(widget, fuel2),
+{
+    // Step fuel1 up to max(fuel1, fuel2) and fuel2 up to max(fuel1, fuel2)
+    // by repeated application of stability
+    if fuel1 <= fuel2 {
+        lemma_widget_depth_stable_chain::<T>(widget, fuel1, fuel2);
+    } else {
+        lemma_widget_depth_stable_chain::<T>(widget, fuel2, fuel1);
+    }
+}
+
+/// Chain: if fuel > widget_depth(w, fuel) and fuel2 >= fuel,
+/// then widget_depth(w, fuel2) == widget_depth(w, fuel).
+proof fn lemma_widget_depth_stable_chain<T: OrderedRing>(
+    widget: Widget<T>,
+    fuel: nat,
+    fuel2: nat,
+)
+    requires
+        fuel > widget_depth(widget, fuel),
+        fuel2 >= fuel,
+    ensures
+        widget_depth(widget, fuel2) == widget_depth(widget, fuel),
+    decreases fuel2 - fuel,
+{
+    if fuel == fuel2 {
+    } else {
+        // widget_depth(w, fuel+1) == widget_depth(w, fuel)
+        lemma_widget_depth_stable::<T>(widget, fuel);
+        // fuel+1 > widget_depth(w, fuel+1) = widget_depth(w, fuel) < fuel < fuel+1
+        lemma_widget_depth_stable_chain::<T>(widget, fuel + 1, fuel2);
+    }
+}
+
+/// Convergence bound: fuel = widget_depth + 1 is always sufficient,
+/// and the depth measurement itself is fuel-independent once sufficient.
+pub proof fn lemma_convergence_bound<T: OrderedField>(
+    limits: Limits<T>,
+    widget: Widget<T>,
+    fuel: nat,
+    any_other_fuel: nat,
+)
+    requires
+        fuel > widget_depth(widget, fuel),
+        any_other_fuel > widget_depth(widget, any_other_fuel),
+    ensures
+        // Both fuels give identical layout
+        layout_widget(limits, widget, fuel) === layout_widget(limits, widget, any_other_fuel),
+        // Both fuels measure the same depth
+        widget_depth(widget, fuel) == widget_depth(widget, any_other_fuel),
+{
+    lemma_widget_depth_fuel_independent::<T>(widget, fuel, any_other_fuel);
+    lemma_layout_stable_beyond_depth(limits, widget, fuel, any_other_fuel);
+}
+
 } // verus!

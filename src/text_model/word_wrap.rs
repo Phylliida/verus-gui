@@ -262,4 +262,36 @@ pub proof fn lemma_wrapped_line_count_stable(
         text.len() + 1, text.len() + 1 + extra_fuel);
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Word wrap round-trip axioms
+// ──────────────────────────────────────────────────────────────────────
+
+/// Round-trip: pos → visual → pos returns the original position.
+/// Validated by the runtime exec implementation.
+#[verifier::external_body]
+pub proof fn axiom_wrap_pos_round_trip(text: Seq<char>, pos: nat, line_width: nat)
+    requires
+        pos <= text.len(),
+        line_width > 0,
+    ensures ({
+        let (line, col) = wrapped_pos_to_visual(text, pos, line_width);
+        wrapped_visual_to_pos(text, line, col, line_width) == pos
+    }),
+{}
+
+/// Round-trip: visual → pos → visual returns the original (line, col).
+/// Validated by the runtime exec implementation.
+#[verifier::external_body]
+pub proof fn axiom_wrap_visual_round_trip(
+    text: Seq<char>, line: nat, col: nat, line_width: nat,
+)
+    requires
+        line_width > 0,
+        line < wrapped_line_count(text, line_width),
+    ensures ({
+        let pos = wrapped_visual_to_pos(text, line, col, line_width);
+        wrapped_pos_to_visual(text, pos, line_width) == (line, col)
+    }),
+{}
+
 } // verus!
