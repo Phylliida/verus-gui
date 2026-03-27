@@ -2456,8 +2456,10 @@ pub open spec fn congruence_depth<T: OrderedRing>(widget: Widget<T>, fuel: nat) 
             Widget::Wrapper(WrapperWidget::Conditional { visible: true, child }) =>
                 congruence_depth(*child, (fuel - 1) as nat),
             Widget::Wrapper(WrapperWidget::ScrollView { .. }) => 0,
-            Widget::Wrapper(WrapperWidget::SizedBox { .. }) => 0,
-            Widget::Wrapper(WrapperWidget::AspectRatio { .. }) => 0,
+            Widget::Wrapper(WrapperWidget::SizedBox { child, .. }) =>
+                congruence_depth(*child, (fuel - 1) as nat) + 1,
+            Widget::Wrapper(WrapperWidget::AspectRatio { child, .. }) =>
+                congruence_depth(*child, (fuel - 1) as nat) + 1,
             Widget::Wrapper(WrapperWidget::Margin { child, .. }) =>
                 congruence_depth(*child, (fuel - 1) as nat) + 1,
             Widget::Container(_) => 0,
@@ -2550,13 +2552,44 @@ proof fn lemma_wrapper_full_depth<T: OrderedField>(
                     congruence_depth(*c1, (fuel - 1) as nat));
             }
         },
-        WrapperWidget::SizedBox { .. } => {
-            // Depth 0: needs intersect_congruence (not yet proved)
-            lemma_layout_widget_node_congruence(lim1, lim2, w1, w2, fuel);
+        WrapperWidget::SizedBox { inner_limits: il1, child: c1 } => {
+            if let Widget::Wrapper(WrapperWidget::SizedBox { inner_limits: il2, child: c2 }) = w2 {
+                lemma_intersect_congruence(lim1, lim2, il1, il2);
+                let eff1 = lim1.intersect(il1);
+                let eff2 = lim2.intersect(il2);
+                lemma_layout_widget_full_depth_congruence(eff1, eff2, *c1, *c2, (fuel - 1) as nat);
+                lemma_sizedbox_full_deep(lim1, lim2, il1, il2, c1, c2, fuel,
+                    congruence_depth(*c1, (fuel - 1) as nat));
+            }
         },
-        WrapperWidget::AspectRatio { .. } => {
-            // Depth 0: needs aspect-ratio effective limits eqv (complex)
-            lemma_layout_widget_node_congruence(lim1, lim2, w1, w2, fuel);
+        WrapperWidget::AspectRatio { ratio: r1, child: c1 } => {
+            if let Widget::Wrapper(WrapperWidget::AspectRatio { ratio: r2, child: c2 }) = w2 {
+                assert(r1.eqv(r2) && !r1.eqv(T::zero()));
+                verus_algebra::quadratic::lemma_div_congruence(lim1.max.width, lim2.max.width, r1, r2);
+                let h1 = lim1.max.width.div(r1);
+                let h2 = lim2.max.width.div(r2);
+                // h1 ≡ h2. Both sides must take same branch.
+                if h1.le(lim1.max.height) {
+                    T::axiom_le_congruence(h1, h2, lim1.max.height, lim2.max.height);
+                    // h2 ≤ lim2.max.height → both take branch 1
+                    let eff1 = Limits { min: lim1.min, max: Size::new(lim1.max.width, h1) };
+                    let eff2 = Limits { min: lim2.min, max: Size::new(lim2.max.width, h2) };
+                    lemma_layout_widget_full_depth_congruence(eff1, eff2, *c1, *c2, (fuel - 1) as nat);
+                } else {
+                    T::axiom_le_total(h1, lim1.max.height);
+                    T::axiom_le_congruence(lim1.max.height, lim2.max.height, h1, h2);
+                    // lim2.max.height ≤ h2. If h2 ≤ lim2.max.height too, then h2 ≡ lim2.max.height.
+                    // In that case, both branches give the same result.
+                    T::axiom_mul_congruence_left(lim1.max.height, lim2.max.height, r1);
+                    verus_algebra::lemmas::ring_lemmas::lemma_mul_congruence_right::<T>(lim2.max.height, r1, r2);
+                    T::axiom_eqv_transitive(lim1.max.height.mul(r1), lim2.max.height.mul(r1), lim2.max.height.mul(r2));
+                    let eff1 = Limits { min: lim1.min, max: Size::new(lim1.max.height.mul(r1), lim1.max.height) };
+                    let eff2 = Limits { min: lim2.min, max: Size::new(lim2.max.height.mul(r2), lim2.max.height) };
+                    lemma_layout_widget_full_depth_congruence(eff1, eff2, *c1, *c2, (fuel - 1) as nat);
+                }
+                lemma_aspectratio_full_deep(lim1, lim2, r1, r2, c1, c2, fuel,
+                    congruence_depth(*c1, (fuel - 1) as nat));
+            }
         },
         WrapperWidget::ScrollView { .. } => {
             // ScrollView: depth 0 (same as containers).
