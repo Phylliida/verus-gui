@@ -3084,13 +3084,17 @@ proof fn lemma_stack_full_deep<T: OrderedField>(
     by {
         lemma_merge_layout_children_structure(sl1, cn1, i);
         lemma_merge_layout_children_structure(sl2, cn2, i);
-        // n.children[i].x/y comes from stack_children which uses align_offset
-        // Prove positions eqv inline for this i
+        // Use element access lemma to connect sl.children[i] to explicit positions
         let aw1 = lim1.max.width.sub(p1.horizontal());
         let aw2 = lim2.max.width.sub(p2.horizontal());
         let ah1 = lim1.max.height.sub(p1.vertical());
         let ah2 = lim2.max.height.sub(p2.vertical());
-        // x = pad.left + align_offset(ha, aw, child.width)
+        crate::layout::proofs::lemma_stack_children_element(p1, ha, va, cs1, aw1, ah1, i as nat);
+        crate::layout::proofs::lemma_stack_children_element(p2, ha, va, cs2, aw2, ah2, i as nat);
+        // Now: sl1.children[i].x == p1.left + align_offset(ha, aw1, cs1[i].width)
+        //      sl2.children[i].x == p2.left + align_offset(ha, aw2, cs2[i].width)
+        // And n.children[i].x == sl.children[i].x (from merge structure)
+        // Prove align_offset eqv
         lemma_align_offset_congruence(ha, aw1, aw2, cs1[i].width, cs2[i].width);
         T::axiom_add_congruence_left(p1.left, p2.left, align_offset(ha, aw1, cs1[i].width));
         verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(
@@ -3099,7 +3103,6 @@ proof fn lemma_stack_full_deep<T: OrderedField>(
             p1.left.add(align_offset(ha, aw1, cs1[i].width)),
             p2.left.add(align_offset(ha, aw1, cs1[i].width)),
             p2.left.add(align_offset(ha, aw2, cs2[i].width)));
-        // y = pad.top + align_offset(va, ah, child.height)
         lemma_align_offset_congruence(va, ah1, ah2, cs1[i].height, cs2[i].height);
         T::axiom_add_congruence_left(p1.top, p2.top, align_offset(va, ah1, cs1[i].height));
         verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(
@@ -3108,6 +3111,7 @@ proof fn lemma_stack_full_deep<T: OrderedField>(
             p1.top.add(align_offset(va, ah1, cs1[i].height)),
             p2.top.add(align_offset(va, ah1, cs1[i].height)),
             p2.top.add(align_offset(va, ah2, cs2[i].height)));
+        // Now Z3 can chain: n.children[i].x == sl.children[i].x == p.left + align_offset eqv
         lemma_wrapper_child_deep_congruence(
             cn1[i], cn2[i], n1.children[i].x, n2.children[i].x,
             n1.children[i].y, n2.children[i].y, (fuel-1) as nat);
@@ -3115,6 +3119,128 @@ proof fn lemma_stack_full_deep<T: OrderedField>(
 }
 
 // ── Absolute full-depth ────────────────────────────────────────
+
+/// Absolute structural bridge.
+proof fn lemma_absolute_structural_bridge<T: OrderedField>(
+    lim: Limits<T>, pad: Padding<T>,
+    children: Seq<AbsoluteChild<T>>, fuel: nat,
+)
+    requires fuel > 0,
+    ensures ({
+        let inner = lim.shrink(pad.horizontal(), pad.vertical());
+        let cn = absolute_widget_child_nodes(inner, children, (fuel-1) as nat);
+        let offsets = Seq::new(children.len(), |i: int| (children[i].x, children[i].y));
+        let cd = Seq::new(cn.len(), |i: int| (offsets[i].0, offsets[i].1, cn[i].size));
+        layout_widget(lim, Widget::Container(ContainerWidget::Absolute {
+            padding: pad, children,
+        }), fuel) == merge_layout(
+            crate::layout::absolute::absolute_layout(lim, pad, cd), cn)
+    }),
+{
+    reveal(crate::layout::absolute::absolute_layout);
+    let inner = lim.shrink(pad.horizontal(), pad.vertical());
+    let cn = absolute_widget_child_nodes(inner, children, (fuel-1) as nat);
+    let offsets = Seq::new(children.len(), |i: int| (children[i].x, children[i].y));
+    let abs = ContainerWidget::Absolute { padding: pad, children };
+    let w = Widget::Container(abs);
+    assert(layout_widget(lim, w, fuel) == layout_container(lim, abs, fuel));
+    assert(layout_container(lim, abs, fuel) == layout_absolute_body(lim, pad, cn, offsets));
+    let cd = Seq::new(cn.len(), |i: int| (offsets[i].0, offsets[i].1, cn[i].size));
+    assert(layout_absolute_body(lim, pad, cn, offsets)
+        == merge_layout(crate::layout::absolute::absolute_layout(lim, pad, cd), cn));
+}
+
+/// absolute_layout children length.
+proof fn lemma_absolute_layout_children_len<T: OrderedField>(
+    lim: Limits<T>, pad: Padding<T>, cd: Seq<(T, T, Size<T>)>,
+)
+    ensures crate::layout::absolute::absolute_layout(lim, pad, cd).children.len() == cd.len(),
+{
+    reveal(crate::layout::absolute::absolute_layout);
+    crate::layout::absolute_proofs::lemma_absolute_children_element(pad, cd, 0);
+    // absolute_children(pad, cd, 0).len() == cd.len() from element access ensures
+}
+
+/// Absolute full-depth deep congruence.
+proof fn lemma_absolute_full_deep<T: OrderedField>(
+    lim1: Limits<T>, lim2: Limits<T>,
+    p1: Padding<T>, p2: Padding<T>,
+    ch1: Seq<AbsoluteChild<T>>, ch2: Seq<AbsoluteChild<T>>,
+    fuel: nat,
+    cn1: Seq<Node<T>>, cn2: Seq<Node<T>>,
+)
+    requires
+        limits_eqv(lim1, lim2),
+        padding_eqv(p1, p2),
+        ch1.len() == ch2.len(), fuel > 1,
+        cn1.len() == ch1.len(), cn2.len() == ch2.len(),
+        forall|i: int| 0 <= i < ch1.len() ==> {
+            &&& ch1[i].x.eqv(ch2[i].x)
+            &&& ch1[i].y.eqv(ch2[i].y)
+        },
+        cn1 == absolute_widget_child_nodes(lim1.shrink(p1.horizontal(), p1.vertical()), ch1, (fuel-1) as nat),
+        cn2 == absolute_widget_child_nodes(lim2.shrink(p2.horizontal(), p2.vertical()), ch2, (fuel-1) as nat),
+        forall|i: int| 0 <= i < cn1.len() ==>
+            crate::diff::nodes_deeply_eqv(cn1[i], cn2[i], (fuel-1) as nat),
+        node_eqv(
+            layout_widget(lim1, Widget::Container(ContainerWidget::Absolute {
+                padding: p1, children: ch1 }), fuel),
+            layout_widget(lim2, Widget::Container(ContainerWidget::Absolute {
+                padding: p2, children: ch2 }), fuel)),
+    ensures
+        crate::diff::nodes_deeply_eqv(
+            layout_widget(lim1, Widget::Container(ContainerWidget::Absolute {
+                padding: p1, children: ch1 }), fuel),
+            layout_widget(lim2, Widget::Container(ContainerWidget::Absolute {
+                padding: p2, children: ch2 }), fuel),
+            fuel),
+{
+    lemma_absolute_structural_bridge(lim1, p1, ch1, fuel);
+    lemma_absolute_structural_bridge(lim2, p2, ch2, fuel);
+    let n1 = layout_widget(lim1, Widget::Container(ContainerWidget::Absolute {
+        padding: p1, children: ch1 }), fuel);
+    let n2 = layout_widget(lim2, Widget::Container(ContainerWidget::Absolute {
+        padding: p2, children: ch2 }), fuel);
+    let offsets1 = Seq::new(ch1.len(), |i: int| (ch1[i].x, ch1[i].y));
+    let offsets2 = Seq::new(ch2.len(), |i: int| (ch2[i].x, ch2[i].y));
+    let cd1 = Seq::new(cn1.len(), |i: int| (offsets1[i].0, offsets1[i].1, cn1[i].size));
+    let cd2 = Seq::new(cn2.len(), |i: int| (offsets2[i].0, offsets2[i].1, cn2[i].size));
+
+    reveal(crate::layout::absolute::absolute_layout);
+    let al1 = crate::layout::absolute::absolute_layout(lim1, p1, cd1);
+    let al2 = crate::layout::absolute::absolute_layout(lim2, p2, cd2);
+    assert(n1 == merge_layout(al1, cn1));
+    assert(n2 == merge_layout(al2, cn2));
+
+    // Children len
+    assert(al1.children.len() == cn1.len());
+    assert(al2.children.len() == cn2.len());
+
+    assert forall|i: int| 0 <= i < n1.children.len() implies
+        crate::diff::nodes_deeply_eqv(n1.children[i], n2.children[i], (fuel-1) as nat)
+    by {
+        lemma_merge_layout_children_structure(al1, cn1, i);
+        lemma_merge_layout_children_structure(al2, cn2, i);
+        // Use element access to get explicit positions
+        crate::layout::absolute_proofs::lemma_absolute_children_element(p1, cd1, i as nat);
+        crate::layout::absolute_proofs::lemma_absolute_children_element(p2, cd2, i as nat);
+        // n.children[i].x == p.left + ch[i].x (eqv)
+        T::axiom_add_congruence_left(p1.left, p2.left, ch1[i].x);
+        verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(
+            p2.left, ch1[i].x, ch2[i].x);
+        T::axiom_eqv_transitive(
+            p1.left.add(ch1[i].x), p2.left.add(ch1[i].x), p2.left.add(ch2[i].x));
+        // n.children[i].y == p.top + ch[i].y (eqv)
+        T::axiom_add_congruence_left(p1.top, p2.top, ch1[i].y);
+        verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(
+            p2.top, ch1[i].y, ch2[i].y);
+        T::axiom_eqv_transitive(
+            p1.top.add(ch1[i].y), p2.top.add(ch1[i].y), p2.top.add(ch2[i].y));
+        lemma_wrapper_child_deep_congruence(
+            cn1[i], cn2[i], n1.children[i].x, n2.children[i].x,
+            n1.children[i].y, n2.children[i].y, (fuel-1) as nat);
+    };
+}
 
 /// absolute_children positions congruence.
 proof fn lemma_absolute_children_positions_congruence<T: OrderedField>(
