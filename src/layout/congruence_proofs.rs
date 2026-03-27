@@ -2527,13 +2527,16 @@ pub open spec fn congruence_depth<T: OrderedRing>(widget: Widget<T>, fuel: nat) 
             Widget::Wrapper(WrapperWidget::Margin { child, .. }) =>
                 congruence_depth(*child, (fuel - 1) as nat) + 1,
             Widget::Container(container) => {
-                match container {
-                    ContainerWidget::Column { children, .. }
-                    | ContainerWidget::Row { children, .. } => {
-                        if children.len() == 0 { 0 }
-                        else { min_children_congruence_depth(children, (fuel - 1) as nat, 0) + 1 }
-                    },
-                    _ => 0,
+                if fuel <= 1 { 0 }
+                else {
+                    match container {
+                        ContainerWidget::Column { children, .. }
+                        | ContainerWidget::Row { children, .. } => {
+                            if children.len() == 0 { 0 }
+                            else { min_children_congruence_depth(children, (fuel - 1) as nat, 0) + 1 }
+                        },
+                        _ => 0,
+                    }
                 }
             },
         }
@@ -2702,15 +2705,21 @@ proof fn lemma_container_full_depth<T: OrderedField>(
             if ch1.len() > 0 && fuel > 1 {
                 lemma_container_full_depth_column_dispatch(lim1, lim2, p1, sp1, al, ch1, w2, fuel);
                 // Connect: congruence_depth(w1, fuel) == min_children + 1
+                // Now have: deeply_eqv at min_children+1. congruence_depth(w1, fuel) = min_children+1
+                // since w1 = Container(Column{ch1,...}), get_children returns ch1, ch1.len() > 0.
                 assert(congruence_depth(w1, fuel)
-                    == min_children_congruence_depth(ch1, (fuel - 1) as nat, 0) + 1);
+                    == min_children_congruence_depth(ch1, (fuel - 1) as nat, 0) + 1) by {
+                    assert(get_children(w1) =~= ch1);
+                };
             }
         },
         ContainerWidget::Row { padding: p1, spacing: sp1, alignment: al, children: ch1 } => {
             if ch1.len() > 0 && fuel > 1 {
                 lemma_container_full_depth_row_dispatch(lim1, lim2, p1, sp1, al, ch1, w2, fuel);
                 assert(congruence_depth(w1, fuel)
-                    == min_children_congruence_depth(ch1, (fuel - 1) as nat, 0) + 1);
+                    == min_children_congruence_depth(ch1, (fuel - 1) as nat, 0) + 1) by {
+                    assert(get_children(w1) =~= ch1);
+                };
             }
         },
         _ => {},
