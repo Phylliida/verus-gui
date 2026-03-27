@@ -369,4 +369,82 @@ pub proof fn theorem_full_draw_validity<T: OrderedField>(
     lemma_flatten_all_valid(node, T::zero(), T::zero(), 0, draw_fuel);
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// EXEC-SPEC BRIDGE
+// ══════════════════════════════════════════════════════════════════════
+//
+// All spec-level proofs carry to exec via the View trait pattern:
+//
+//   layout_widget_exec(limits, widget, fuel)
+//     ensures out@ == layout_widget::<RationalModel>(limits@, widget.model(), fuel as nat)
+//
+// There are 13 layout exec functions with spec-matching ensures clauses:
+//   - layout_widget_exec (master dispatch)
+//   - layout_widget_checked (with CWB guarantee)
+//   - layout_column_exec, layout_row_exec, layout_stack_exec
+//   - layout_wrap_exec, layout_flex_exec, layout_grid_exec
+//   - layout_absolute_exec, layout_listview_exec
+//   - layout_margin_exec, layout_sizedbox_exec, layout_scrollview_exec
+//
+// The bridge is: if `layout_widget_exec(limits, widget, fuel).out@ == layout_widget::<R>(limits@, widget.model(), fuel)`
+// then ALL spec proofs about `layout_widget::<R>(limits@, widget.model(), fuel)` apply to the exec result.
+//
+// Trusted assumptions:
+//   - 12 #[verifier::external_body] axioms in text_model.rs (Unicode/IME boundaries)
+//   - 1 #[verifier::external_body] axiom in text_model.rs (find_result_grapheme_aligned)
+//   - 15 #[verifier::external_body] exec functions in runtime/text_model.rs (runtime text ops)
+//   - 0 assume calls (eliminated in Step 3)
+//
+// The proof chain for any exec operation:
+//   1. Exec function has `ensures out@ == spec_fn(...)` — bridges runtime to spec
+//   2. Spec proof proves property about `spec_fn(...)` — e.g., the_fundamental_theorem
+//   3. Therefore the property holds for the exec result
+
+/// Exec-spec bridge for layout: the runtime layout result matches the spec.
+/// This is a documentation wrapper — the actual bridge is in the exec function's
+/// ensures clause. This theorem just demonstrates the pattern.
+pub proof fn theorem_exec_spec_bridge<T: OrderedField>(
+    limits: Limits<T>,
+    widget: Widget<T>,
+    fuel: nat,
+    draw_fuel: nat,
+)
+    requires
+        limits.wf(),
+        fuel > 0,
+    ensures
+        // The spec guarantees that apply to any layout result:
+        // 1. All draws are GPU-safe (from theorem_full_draw_validity)
+        all_draws_valid(
+            flatten_node_to_draws(
+                layout_widget(limits, widget, fuel),
+                T::zero(), T::zero(), 0, draw_fuel)),
+        // 2. Root draw is valid (from lemma_layout_root_draw_valid)
+        ({
+            let draws = flatten_node_to_draws(
+                layout_widget(limits, widget, fuel),
+                T::zero(), T::zero(), 0, draw_fuel);
+            draws.len() > 0 && draw_command_valid(draws[0])
+        }),
+        // 3. Output size within limits
+        limits.min.le(layout_widget(limits, widget, fuel).size),
+        layout_widget(limits, widget, fuel).size.le(limits.max),
+        // 4. Draw count is bounded
+        flatten_node_to_draws(
+            layout_widget(limits, widget, fuel),
+            T::zero(), T::zero(), 0, draw_fuel).len()
+            == node_count::<T>(layout_widget(limits, widget, fuel), draw_fuel),
+{
+    // 1. Full draw validity (composes all_sizes_nonneg + flatten_all_valid)
+    theorem_full_draw_validity(limits, widget, fuel, draw_fuel);
+    // 2. Root draw valid
+    lemma_layout_root_draw_valid(limits, widget, fuel, draw_fuel);
+    // 3. Size bounds
+    crate::layout::bounds_proofs::lemma_layout_widget_respects_limits(limits, widget, fuel);
+    // 4. Draw count
+    lemma_flatten_preserves_count(
+        layout_widget(limits, widget, fuel),
+        T::zero(), T::zero(), 0, draw_fuel);
+}
+
 } // verus!
