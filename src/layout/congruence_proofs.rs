@@ -2872,7 +2872,7 @@ proof fn lemma_container_full_depth_row_dispatch<T: OrderedField>(
 }
 
 /// min_children_congruence_depth <= congruence_depth(children[i]) for any i in [from, len).
-proof fn lemma_min_children_depth_le<T: OrderedRing>(
+pub proof fn lemma_min_children_depth_le<T: OrderedRing>(
     children: Seq<Widget<T>>, fuel: nat, from: nat, i: int,
 )
     requires from <= i, i < children.len() as int,
@@ -4450,7 +4450,7 @@ proof fn lemma_flex_main_sum_congruence<T: OrderedField>(
 }
 
 /// flex_column_child_y respects eqv.
-proof fn lemma_flex_column_child_y_congruence<T: OrderedField>(
+pub proof fn lemma_flex_column_child_y_congruence<T: OrderedField>(
     pt1: T, pt2: T,
     w1: Seq<T>, w2: Seq<T>,
     tw1: T, tw2: T,
