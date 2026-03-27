@@ -2455,7 +2455,8 @@ pub open spec fn congruence_depth<T: OrderedRing>(widget: Widget<T>, fuel: nat) 
             Widget::Wrapper(WrapperWidget::Conditional { visible: false, .. }) => fuel,
             Widget::Wrapper(WrapperWidget::Conditional { visible: true, child }) =>
                 congruence_depth(*child, (fuel - 1) as nat),
-            Widget::Wrapper(WrapperWidget::ScrollView { .. }) => 0,
+            Widget::Wrapper(WrapperWidget::ScrollView { child, .. }) =>
+                congruence_depth(*child, (fuel - 1) as nat) + 1,
             Widget::Wrapper(WrapperWidget::SizedBox { child, .. }) =>
                 congruence_depth(*child, (fuel - 1) as nat) + 1,
             Widget::Wrapper(WrapperWidget::AspectRatio { .. }) => 0,
@@ -2567,11 +2568,34 @@ proof fn lemma_wrapper_full_depth<T: OrderedField>(
             // Per-variant helper exists — call directly when variant is known.
             lemma_layout_widget_node_congruence(lim1, lim2, w1, w2, fuel);
         },
-        WrapperWidget::ScrollView { .. } => {
-            // ScrollView: depth 0 (same as containers).
-            // Full-depth possible via wrapper_child_deep_congruence but
-            // requires connecting through layout_wrapper unfolding.
-            lemma_layout_widget_node_congruence(lim1, lim2, w1, w2, fuel);
+        WrapperWidget::ScrollView { viewport: v1, scroll_x: sx1, scroll_y: sy1, child: c1 } => {
+            if let Widget::Wrapper(WrapperWidget::ScrollView { viewport: v2, scroll_x: sx2, scroll_y: sy2, child: c2 }) = w2 {
+                // Child limits: Limits { min: zero, max: viewport }
+                let cl1 = Limits { min: Size::zero_size(), max: v1 };
+                let cl2 = Limits { min: Size::zero_size(), max: v2 };
+                T::axiom_eqv_reflexive(T::zero());
+                lemma_layout_widget_full_depth_congruence(cl1, cl2, *c1, *c2, (fuel - 1) as nat);
+                let cn1 = layout_widget(cl1, *c1, (fuel - 1) as nat);
+                let cn2 = layout_widget(cl2, *c2, (fuel - 1) as nat);
+                let rd = congruence_depth(*c1, (fuel - 1) as nat);
+                // ScrollView child has x=neg(sx), y=neg(sy), same size/children as cn
+                verus_algebra::lemmas::additive_group_lemmas::lemma_neg_congruence::<T>(sx1, sx2);
+                verus_algebra::lemmas::additive_group_lemmas::lemma_neg_congruence::<T>(sy1, sy2);
+                lemma_wrapper_child_deep_congruence(cn1, cn2,
+                    sx1.neg(), sx2.neg(), sy1.neg(), sy2.neg(), rd);
+                // Output: Node { x:0, y:0, size: resolve(viewport), children: [child_with_scroll] }
+                // output deeply eqv at rd + 1
+                lemma_layout_widget_node_congruence(lim1, lim2, w1, w2, fuel);
+                // Need to connect: output.children = [scroll_child] and scroll_child deeply eqv at rd
+                // Then merge_layout_deep_congruence gives depth rd + 1
+                // Actually, the output is NOT merge_layout — it's direct construction in layout_wrapper.
+                // The output children are Seq::empty().push(Node{x:neg(sx), y:neg(sy), size:cn.size, children:cn.children})
+                // With wrapper_child_deep_congruence, we have nodes_deeply_eqv for this child at rd.
+                // We need nodes_deeply_eqv for the full output at rd + 1.
+                // nodes_deeply_eqv at d+1 requires: top eqv (from node_congruence) + children pairwise eqv at d.
+                // Output has 1 child: the scroll child. And we proved it deeply eqv at rd.
+                // So output deeply eqv at rd + 1. Z3 should see this from the definitions.
+            }
         },
     }
 }
