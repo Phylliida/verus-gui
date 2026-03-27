@@ -2694,8 +2694,27 @@ proof fn lemma_container_full_depth<T: OrderedField>(
     decreases fuel, 2nat,
 {
     lemma_layout_widget_node_congruence(lim1, lim2, w1, w2, fuel);
-    lemma_container_full_depth_column_dispatch(lim1, lim2, w1, w2, container, fuel);
-    lemma_container_full_depth_row_dispatch(lim1, lim2, w1, w2, container, fuel);
+    // For Column/Row: dispatch gives concrete depth = min_children + 1.
+    // congruence_depth(Container(Column{ch1,...}), fuel) = min_children(ch1, fuel-1, 0) + 1
+    // when ch1.len() > 0 and fuel > 0. Z3 needs help connecting these.
+    match container {
+        ContainerWidget::Column { padding: p1, spacing: sp1, alignment: al, children: ch1 } => {
+            if ch1.len() > 0 && fuel > 1 {
+                lemma_container_full_depth_column_dispatch(lim1, lim2, p1, sp1, al, ch1, w2, fuel);
+                // Connect: congruence_depth(w1, fuel) == min_children + 1
+                assert(congruence_depth(w1, fuel)
+                    == min_children_congruence_depth(ch1, (fuel - 1) as nat, 0) + 1);
+            }
+        },
+        ContainerWidget::Row { padding: p1, spacing: sp1, alignment: al, children: ch1 } => {
+            if ch1.len() > 0 && fuel > 1 {
+                lemma_container_full_depth_row_dispatch(lim1, lim2, p1, sp1, al, ch1, w2, fuel);
+                assert(congruence_depth(w1, fuel)
+                    == min_children_congruence_depth(ch1, (fuel - 1) as nat, 0) + 1);
+            }
+        },
+        _ => {},
+    }
 }
 
 /// Column full-depth dispatch — uses concrete depth to avoid congruence_depth evaluation cost.
