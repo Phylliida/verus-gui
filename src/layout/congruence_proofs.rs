@@ -2438,9 +2438,25 @@ pub proof fn lemma_layout_widget_deep_congruence<T: OrderedField>(
     lemma_layout_widget_node_congruence(lim1, lim2, w1, w2, fuel);
 }
 
-// min_children_congruence_depth removed — mutual recursion with congruence_depth
-// causes termination issues. Container depth uses 0 for now; per-variant
-// full-depth helpers can be called directly when the variant is known.
+/// Minimum congruence_depth over children[from..]. Mutually recursive with congruence_depth.
+/// Termination: decreases (fuel, 1, children.len() - from). Component 1 > 0 allows
+/// congruence_depth (component 0) to call this at fuel-1, and this calls congruence_depth
+/// at same fuel but component 0 < 1 (second component decreases).
+pub open spec fn min_children_congruence_depth<T: OrderedRing>(
+    children: Seq<Widget<T>>, fuel: nat, from: nat,
+) -> nat
+    decreases fuel, 1nat, children.len() - from,
+{
+    if from >= children.len() {
+        fuel
+    } else if from + 1 >= children.len() {
+        congruence_depth(children[from as int], fuel)
+    } else {
+        let cur = congruence_depth(children[from as int], fuel);
+        let rest = min_children_congruence_depth(children, fuel, from + 1);
+        if cur <= rest { cur } else { rest }
+    }
+}
 
 /// Strengthened merge_layout congruence: children at depth rd → output at rd + 1.
 /// The standard merge_layout_deep_congruence gives rd; this adds +1 since merge
@@ -2493,7 +2509,7 @@ pub proof fn lemma_merge_layout_deep_congruence_plus_one<T: OrderedField>(
 /// Containers: per-variant full-depth helpers exist but aren't composed
 /// into the master; use 0 here. Call per-variant helpers directly for deeper.
 pub open spec fn congruence_depth<T: OrderedRing>(widget: Widget<T>, fuel: nat) -> nat
-    decreases fuel,
+    decreases fuel, 0nat, 0nat,
 {
     if fuel == 0 {
         0
@@ -2510,7 +2526,11 @@ pub open spec fn congruence_depth<T: OrderedRing>(widget: Widget<T>, fuel: nat) 
             Widget::Wrapper(WrapperWidget::AspectRatio { .. }) => 0,
             Widget::Wrapper(WrapperWidget::Margin { child, .. }) =>
                 congruence_depth(*child, (fuel - 1) as nat) + 1,
-            Widget::Container(_) => 0,
+            Widget::Container(container) => {
+                let children = get_children(Widget::Container(container));
+                if children.len() == 0 { fuel }
+                else { min_children_congruence_depth(children, (fuel - 1) as nat, 0) + 1 }
+            },
         }
     }
 }
@@ -2532,7 +2552,7 @@ pub proof fn lemma_layout_widget_full_depth_congruence<T: OrderedField>(
             layout_widget(lim2, w2, fuel),
             congruence_depth(w1, fuel),
         ),
-    decreases fuel, 1nat,
+    decreases fuel, 2nat,
 {
     if fuel == 0 {
         lemma_layout_widget_node_congruence(lim1, lim2, w1, w2, fuel);
@@ -2666,7 +2686,7 @@ proof fn lemma_container_full_depth<T: OrderedField>(
             layout_widget(lim2, w2, fuel),
             congruence_depth(w1, fuel),
         ),
-    decreases fuel, 0nat,
+    decreases fuel, 1nat,
 {
     // For all container variants:
     // 1. Compute inner limits (shrink for most, special for flex/grid/listview)
@@ -2686,21 +2706,120 @@ proof fn lemma_container_full_depth<T: OrderedField>(
     //
     // For now: prove depth based on the first child's congruence_depth.
     // This is conservative (min over all children would be more precise).
-    // congruence_depth for containers = 0. Depth 0 from node_congruence.
-    // Full depth for containers: use the per-variant helpers directly
-    // (Column/Row/Stack/Wrap/Flex/Grid/Absolute full_deep lemmas exist,
-    // each taking children deeply eqv at fuel-1 and producing output at fuel).
-    // Composing these into the master requires min_children_congruence_depth
-    // which has mutual recursion issues with congruence_depth.
-    // The merge_layout_deep_congruence_plus_one lemma provides the building block.
-    lemma_layout_widget_node_congruence(lim1, lim2, w1, w2, fuel);
+    // Use per-variant position congruence + merge+1 for the shrink-pattern variants.
+    // Each variant: shrink → IH on children → position congruence → merge+1.
+    let children = get_children(w1);
+    if children.len() == 0 {
+        // No children → any depth trivially
+    } else {
+        match container {
+            ContainerWidget::Column { padding: p1, spacing: sp1, alignment: al, children: ch1 } => {
+                if let Widget::Container(ContainerWidget::Column { padding: p2, spacing: sp2, children: ch2, .. }) = w2 {
+                    lemma_container_full_depth_linear(lim1, lim2, p1, p2, sp1, sp2, al,
+                        ch1, ch2, fuel, crate::layout::Axis::Vertical);
+                }
+            },
+            ContainerWidget::Row { padding: p1, spacing: sp1, alignment: al, children: ch1 } => {
+                if let Widget::Container(ContainerWidget::Row { padding: p2, spacing: sp2, children: ch2, .. }) = w2 {
+                    lemma_container_full_depth_linear(lim1, lim2, p1, p2, sp1, sp2, al,
+                        ch1, ch2, fuel, crate::layout::Axis::Horizontal);
+                }
+            },
+            _ => {
+                // Stack/Wrap/Flex/Grid/Absolute/ListView: depth 0 baseline.
+                // Same pattern applies — need per-variant position congruence.
+            },
+        }
+    }
 }
 
-// Container full-depth helpers (Column, Row, etc.) removed from master.
-// They exist as individual per-variant lemmas below (lemma_column_full_deep etc.)
-// and can be called directly when the container variant is statically known.
-// The lemma_merge_layout_deep_congruence_plus_one provides the key building block
-// for composing these: children at depth rd + position eqv → output at rd + 1.
+/// min_children_congruence_depth <= congruence_depth(children[i]) for any i in [from, len).
+proof fn lemma_min_children_depth_le<T: OrderedRing>(
+    children: Seq<Widget<T>>, fuel: nat, from: nat, i: int,
+)
+    requires from <= i, i < children.len() as int,
+    ensures min_children_congruence_depth(children, fuel, from)
+        <= congruence_depth(children[i], fuel),
+    decreases children.len() - from,
+{
+    if from + 1 >= children.len() {
+        // Single element: i == from
+    } else if i == from as int {
+        // cur = congruence_depth(children[from], fuel)
+        // result = min(cur, rest) <= cur
+    } else {
+        lemma_min_children_depth_le::<T>(children, fuel, from + 1, i);
+        // rest <= congruence_depth(children[i], fuel)
+        // result = min(cur, rest) <= rest <= congruence_depth(children[i], fuel)
+    }
+}
+
+/// Container full-depth for Column/Row (linear layout).
+proof fn lemma_container_full_depth_linear<T: OrderedField>(
+    lim1: Limits<T>, lim2: Limits<T>,
+    p1: Padding<T>, p2: Padding<T>,
+    sp1: T, sp2: T, al: Alignment,
+    ch1: Seq<Widget<T>>, ch2: Seq<Widget<T>>,
+    fuel: nat, axis: crate::layout::Axis,
+)
+    requires
+        limits_eqv(lim1, lim2),
+        padding_eqv(p1, p2),
+        sp1.eqv(sp2),
+        ch1.len() == ch2.len(),
+        ch1.len() > 0,
+        fuel > 1,
+        forall|i: int| 0 <= i < ch1.len() ==>
+            widget_eqv(ch1[i], ch2[i], (fuel - 1) as nat),
+        node_eqv(
+            layout_linear_body(lim1, p1, sp1, al,
+                widget_child_nodes(lim1.shrink(p1.horizontal(), p1.vertical()), ch1, (fuel - 1) as nat), axis),
+            layout_linear_body(lim2, p2, sp2, al,
+                widget_child_nodes(lim2.shrink(p2.horizontal(), p2.vertical()), ch2, (fuel - 1) as nat), axis)),
+    ensures
+        crate::diff::nodes_deeply_eqv(
+            layout_linear_body(lim1, p1, sp1, al,
+                widget_child_nodes(lim1.shrink(p1.horizontal(), p1.vertical()), ch1, (fuel - 1) as nat), axis),
+            layout_linear_body(lim2, p2, sp2, al,
+                widget_child_nodes(lim2.shrink(p2.horizontal(), p2.vertical()), ch2, (fuel - 1) as nat), axis),
+            min_children_congruence_depth(ch1, (fuel - 1) as nat, 0) + 1),
+    decreases fuel, 0nat,
+{
+    lemma_padding_horizontal_congruence(p1, p2);
+    lemma_padding_vertical_congruence(p1, p2);
+    lemma_shrink_congruence(lim1, lim2, p1.horizontal(), p2.horizontal(), p1.vertical(), p2.vertical());
+    let inner1 = lim1.shrink(p1.horizontal(), p1.vertical());
+    let inner2 = lim2.shrink(p2.horizontal(), p2.vertical());
+    let cn1 = widget_child_nodes(inner1, ch1, (fuel - 1) as nat);
+    let cn2 = widget_child_nodes(inner2, ch2, (fuel - 1) as nat);
+    let rd = min_children_congruence_depth(ch1, (fuel - 1) as nat, 0);
+    // IH: each child deeply eqv at rd
+    assert forall|i: int| 0 <= i < cn1.len() implies
+        crate::diff::nodes_deeply_eqv(#[trigger] cn1[i], cn2[i], rd)
+    by {
+        lemma_layout_widget_full_depth_congruence(inner1, inner2, ch1[i], ch2[i], (fuel - 1) as nat);
+        lemma_min_children_depth_le::<T>(ch1, (fuel - 1) as nat, 0, i);
+        crate::diff::lemma_deeply_eqv_depth_monotone(cn1[i], cn2[i],
+            congruence_depth(ch1[i], (fuel - 1) as nat), rd);
+    };
+    // Size eqv for position congruence
+    lemma_sizes_eqv_from_deeply_eqv(cn1, cn2, rd);
+    let s1 = Seq::new(cn1.len(), |i: int| cn1[i].size);
+    let s2 = Seq::new(cn2.len(), |i: int| cn2[i].size);
+    let avail1 = lim1.max.cross_dim(axis).sub(p1.cross_padding(axis));
+    let avail2 = lim2.max.cross_dim(axis).sub(p2.cross_padding(axis));
+    // avail eqv: cross_dim eqv (from limits_eqv) - cross_padding eqv (from padding_eqv)
+    lemma_sub_congruence(lim1.max.cross_dim(axis), lim2.max.cross_dim(axis),
+        p1.cross_padding(axis), p2.cross_padding(axis));
+    // Position congruence
+    lemma_linear_children_positions_congruence(p1, p2, sp1, sp2, al, s1, s2, axis, avail1, avail2, 0);
+    // Layout nodes
+    reveal(crate::layout::linear_layout);
+    let layout1 = crate::layout::linear_layout(lim1, p1, sp1, al, s1, axis);
+    let layout2 = crate::layout::linear_layout(lim2, p2, sp2, al, s2, axis);
+    // merge+1
+    lemma_merge_layout_deep_congruence_plus_one(layout1, layout2, cn1, cn2, rd);
+}
 
 /// REMOVED: lemma_container_full_depth_column/row/other and lemma_min_children_depth_le
 /// were here but removed due to mutual recursion termination issues with
