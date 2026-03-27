@@ -2537,6 +2537,11 @@ pub open spec fn congruence_depth<T: OrderedRing>(widget: Widget<T>, fuel: nat) 
                             if children.len() == 0 { 0 }
                             else { min_children_congruence_depth(children, (fuel - 1) as nat, 0) + 1 }
                         },
+                        ContainerWidget::Flex { children, .. } => {
+                            let wc = Seq::new(children.len(), |i: int| children[i].child);
+                            if wc.len() == 0 { 0 }
+                            else { min_children_congruence_depth(wc, (fuel - 1) as nat, 0) + 1 }
+                        },
                         ContainerWidget::Absolute { .. } => 0,
                         _ => 0,
                     }
