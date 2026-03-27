@@ -2729,6 +2729,29 @@ proof fn lemma_container_full_depth<T: OrderedField>(
                 };
             }
         },
+        ContainerWidget::Stack { padding: p1, h_align: ha, v_align: va, children: ch1 } => {
+            if ch1.len() > 0 && fuel > 1 {
+                lemma_container_full_depth_stack_dispatch(lim1, lim2, p1, ha, va, ch1, w2, fuel);
+                assert(congruence_depth(w1, fuel)
+                    == min_children_congruence_depth(ch1, (fuel - 1) as nat, 0) + 1) by {
+                    assert(get_children(w1) =~= ch1);
+                };
+            }
+        },
+        ContainerWidget::Wrap { padding: p1, h_spacing: hs1, v_spacing: vs1, children: ch1 } => {
+            if ch1.len() > 0 && fuel > 1 {
+                lemma_container_full_depth_wrap_dispatch(lim1, lim2, p1, hs1, vs1, ch1, w2, fuel);
+                assert(congruence_depth(w1, fuel)
+                    == min_children_congruence_depth(ch1, (fuel - 1) as nat, 0) + 1) by {
+                    assert(get_children(w1) =~= ch1);
+                };
+            }
+        },
+        ContainerWidget::Absolute { padding: p1, children: ch1 } => {
+            if ch1.len() > 0 && fuel > 1 {
+                lemma_container_full_depth_absolute_dispatch(lim1, lim2, p1, ch1, w2, fuel);
+            }
+        },
         _ => {},
     }
 }
