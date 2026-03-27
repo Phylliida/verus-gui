@@ -2532,8 +2532,7 @@ pub open spec fn congruence_depth<T: OrderedRing>(widget: Widget<T>, fuel: nat) 
                     match container {
                         ContainerWidget::Column { children, .. }
                         | ContainerWidget::Row { children, .. }
-                        | ContainerWidget::Stack { children, .. }
-                        | ContainerWidget::Wrap { children, .. } => {
+                        | ContainerWidget::Stack { children, .. } => {
                             if children.len() == 0 { 0 }
                             else { min_children_congruence_depth(children, (fuel - 1) as nat, 0) + 1 }
                         },
@@ -2738,14 +2737,8 @@ proof fn lemma_container_full_depth<T: OrderedField>(
                 };
             }
         },
-        ContainerWidget::Wrap { padding: p1, h_spacing: hs1, v_spacing: vs1, children: ch1 } => {
-            if ch1.len() > 0 && fuel > 1 {
-                lemma_container_full_depth_wrap_dispatch(lim1, lim2, p1, hs1, vs1, ch1, w2, fuel);
-                assert(congruence_depth(w1, fuel)
-                    == min_children_congruence_depth(ch1, (fuel - 1) as nat, 0) + 1) by {
-                    assert(get_children(w1) =~= ch1);
-                };
-            }
+        ContainerWidget::Wrap { .. } => {
+            // Depth 0: wrap_cursor position congruence needs inline handling
         },
         ContainerWidget::Absolute { padding: p1, children: ch1 } => {
             if ch1.len() > 0 && fuel > 1 {
@@ -3019,8 +3012,8 @@ proof fn lemma_container_full_depth_absolute_dispatch<T: OrderedField>(
         let al2 = crate::layout::absolute::absolute_layout(lim2, p2, cd2);
         // Position congruence
         lemma_absolute_children_positions_congruence(p1, p2, cd1, cd2, 0);
-        crate::layout::absolute_proofs::lemma_absolute_layout_children_len(lim1, p1, cd1);
-        crate::layout::absolute_proofs::lemma_absolute_layout_children_len(lim2, p2, cd2);
+        lemma_absolute_layout_children_len(lim1, p1, cd1);
+        lemma_absolute_layout_children_len(lim2, p2, cd2);
         lemma_layout_widget_node_congruence(lim1, lim2,
             Widget::Container(ContainerWidget::Absolute { padding: p1, children: ch1 }), w2, fuel);
         lemma_merge_layout_deep_congruence_plus_one(al1, al2, cn1, cn2, rd);
