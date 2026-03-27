@@ -813,4 +813,18 @@ pub proof fn lemma_max_height_le_inputs<T: OrderedRing>(
     }
 }
 
+/// stack_layout.children has length cs.len().
+pub proof fn lemma_stack_layout_children_len<T: OrderedField>(
+    lim: Limits<T>, pad: Padding<T>, ha: Alignment, va: Alignment,
+    cs: Seq<Size<T>>,
+)
+    ensures stack_layout(lim, pad, ha, va, cs).children.len() == cs.len(),
+{
+    reveal(stack_layout);
+    reveal(stack_content_size);
+    lemma_stack_children_len(pad, ha, va, cs,
+        lim.max.width.sub(pad.horizontal()),
+        lim.max.height.sub(pad.vertical()), 0);
+}
+
 } // verus!

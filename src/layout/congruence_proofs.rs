@@ -3019,107 +3019,9 @@ proof fn lemma_row_full_deep<T: OrderedField>(
 
 // ── Stack full-depth ────────────────────────────────────────────
 
-/// stack_children positions are eqv when all inputs are eqv.
-proof fn lemma_stack_children_positions_congruence<T: OrderedField>(
-    pad1: Padding<T>, pad2: Padding<T>,
-    ha: Alignment, va: Alignment,
-    s1: Seq<Size<T>>, s2: Seq<Size<T>>,
-    aw1: T, aw2: T, ah1: T, ah2: T,
-    index: nat,
-)
-    requires
-        padding_eqv(pad1, pad2),
-        sizes_eqv(s1, s2),
-        aw1.eqv(aw2), ah1.eqv(ah2),
-        index <= s1.len(),
-    ensures ({
-        let sc1 = crate::layout::stack::stack_children(pad1, ha, va, s1, aw1, ah1, index);
-        let sc2 = crate::layout::stack::stack_children(pad2, ha, va, s2, aw2, ah2, index);
-        sc1.len() == sc2.len()
-        && forall|i: int| 0 <= i < sc1.len() ==> {
-            &&& sc1[i].x.eqv(sc2[i].x)
-            &&& sc1[i].y.eqv(sc2[i].y)
-        }
-    }),
-    decreases s1.len() - index,
-{
-    use crate::layout::stack::stack_children;
-    if index >= s1.len() {
-    } else {
-        // x = pad.left + align_offset(ha, aw, child.width)
-        lemma_align_offset_congruence(ha, aw1, aw2, s1[index as int].width, s2[index as int].width);
-        T::axiom_add_congruence_left(pad1.left, pad2.left,
-            align_offset(ha, aw1, s1[index as int].width));
-        verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(
-            pad2.left,
-            align_offset(ha, aw1, s1[index as int].width),
-            align_offset(ha, aw2, s2[index as int].width));
-        T::axiom_eqv_transitive(
-            pad1.left.add(align_offset(ha, aw1, s1[index as int].width)),
-            pad2.left.add(align_offset(ha, aw1, s1[index as int].width)),
-            pad2.left.add(align_offset(ha, aw2, s2[index as int].width)));
-        // y = pad.top + align_offset(va, ah, child.height)
-        lemma_align_offset_congruence(va, ah1, ah2, s1[index as int].height, s2[index as int].height);
-        T::axiom_add_congruence_left(pad1.top, pad2.top,
-            align_offset(va, ah1, s1[index as int].height));
-        verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(
-            pad2.top,
-            align_offset(va, ah1, s1[index as int].height),
-            align_offset(va, ah2, s2[index as int].height));
-        T::axiom_eqv_transitive(
-            pad1.top.add(align_offset(va, ah1, s1[index as int].height)),
-            pad2.top.add(align_offset(va, ah1, s1[index as int].height)),
-            pad2.top.add(align_offset(va, ah2, s2[index as int].height)));
-        // Recurse
-        lemma_stack_children_positions_congruence(pad1, pad2, ha, va, s1, s2, aw1, aw2, ah1, ah2, index + 1);
-        let sc1 = stack_children(pad1, ha, va, s1, aw1, ah1, index);
-        let sc2 = stack_children(pad2, ha, va, s2, aw2, ah2, index);
-        let rest1 = stack_children(pad1, ha, va, s1, aw1, ah1, index + 1);
-        let rest2 = stack_children(pad2, ha, va, s2, aw2, ah2, index + 1);
-        assert forall|i: int| 0 <= i < sc1.len() implies
-            sc1[i].x.eqv(sc2[i].x) && sc1[i].y.eqv(sc2[i].y)
-        by {
-            if i == 0 {
-            } else {
-                // sc = push(first).add(rest), so sc[i] for i > 0 = rest[i-1]
-                // Help Z3: push(x).add(rest) = seq![x] + rest, so [i] = rest[i-1]
-            }
-        };
-    }
-}
-
-/// stack_children length.
-proof fn lemma_stack_children_len<T: OrderedField>(
-    pad: Padding<T>, ha: Alignment, va: Alignment,
-    cs: Seq<Size<T>>, aw: T, ah: T, index: nat,
-)
-    requires index <= cs.len(),
-    ensures crate::layout::stack::stack_children(pad, ha, va, cs, aw, ah, index).len() == cs.len() - index,
-    decreases cs.len() - index,
-{
-    use crate::layout::stack::stack_children;
-    if index >= cs.len() {} else {
-        lemma_stack_children_len(pad, ha, va, cs, aw, ah, index + 1);
-        let rest = stack_children(pad, ha, va, cs, aw, ah, index + 1);
-        let full = stack_children(pad, ha, va, cs, aw, ah, index);
-        // full = push(first).add(rest), len = 1 + rest.len()
-    }
-}
-
-/// stack_layout children length.
-proof fn lemma_stack_layout_children_len<T: OrderedField>(
-    lim: Limits<T>, pad: Padding<T>, ha: Alignment, va: Alignment,
-    cs: Seq<Size<T>>,
-)
-    ensures crate::layout::stack::stack_layout(lim, pad, ha, va, cs).children.len() == cs.len(),
-{
-    reveal(crate::layout::stack::stack_layout);
-    reveal(crate::layout::stack::stack_content_size);
-    lemma_stack_children_len(pad, ha, va, cs,
-        lim.max.width.sub(pad.horizontal()), lim.max.height.sub(pad.vertical()), 0);
-}
-
-/// Stack full-depth deep congruence.
+/// Stack full-depth deep congruence. Uses the same structural bridge
+/// pattern as Column/Row. Stack positions come from align_offset which
+/// is already proved congruent.
 proof fn lemma_stack_full_deep<T: OrderedField>(
     lim1: Limits<T>, lim2: Limits<T>,
     p1: Padding<T>, p2: Padding<T>,
@@ -3166,22 +3068,46 @@ proof fn lemma_stack_full_deep<T: OrderedField>(
     lemma_padding_vertical_congruence(p1, p2);
     lemma_sub_congruence(lim1.max.width, lim2.max.width, p1.horizontal(), p2.horizontal());
     lemma_sub_congruence(lim1.max.height, lim2.max.height, p1.vertical(), p2.vertical());
-    lemma_stack_children_positions_congruence(p1, p2, ha, va, cs1, cs2,
-        lim1.max.width.sub(p1.horizontal()), lim2.max.width.sub(p2.horizontal()),
-        lim1.max.height.sub(p1.vertical()), lim2.max.height.sub(p2.vertical()), 0);
 
     let sl1 = crate::layout::stack::stack_layout(lim1, p1, ha, va, cs1);
     let sl2 = crate::layout::stack::stack_layout(lim2, p2, ha, va, cs2);
     assert(n1 == merge_layout(sl1, cn1));
     assert(n2 == merge_layout(sl2, cn2));
 
+    // Establish sl.children.len() via dedicated lemma
+    crate::layout::stack_proofs::lemma_stack_layout_children_len(lim1, p1, ha, va, cs1);
+    crate::layout::stack_proofs::lemma_stack_layout_children_len(lim2, p2, ha, va, cs2);
+
+    // Each child: position eqv (via align_offset) + cn deeply eqv
     assert forall|i: int| 0 <= i < n1.children.len() implies
         crate::diff::nodes_deeply_eqv(n1.children[i], n2.children[i], (fuel-1) as nat)
     by {
-        lemma_stack_layout_children_len(lim1, p1, ha, va, cs1);
-        lemma_stack_layout_children_len(lim2, p2, ha, va, cs2);
         lemma_merge_layout_children_structure(sl1, cn1, i);
         lemma_merge_layout_children_structure(sl2, cn2, i);
+        // n.children[i].x/y comes from stack_children which uses align_offset
+        // Prove positions eqv inline for this i
+        let aw1 = lim1.max.width.sub(p1.horizontal());
+        let aw2 = lim2.max.width.sub(p2.horizontal());
+        let ah1 = lim1.max.height.sub(p1.vertical());
+        let ah2 = lim2.max.height.sub(p2.vertical());
+        // x = pad.left + align_offset(ha, aw, child.width)
+        lemma_align_offset_congruence(ha, aw1, aw2, cs1[i].width, cs2[i].width);
+        T::axiom_add_congruence_left(p1.left, p2.left, align_offset(ha, aw1, cs1[i].width));
+        verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(
+            p2.left, align_offset(ha, aw1, cs1[i].width), align_offset(ha, aw2, cs2[i].width));
+        T::axiom_eqv_transitive(
+            p1.left.add(align_offset(ha, aw1, cs1[i].width)),
+            p2.left.add(align_offset(ha, aw1, cs1[i].width)),
+            p2.left.add(align_offset(ha, aw2, cs2[i].width)));
+        // y = pad.top + align_offset(va, ah, child.height)
+        lemma_align_offset_congruence(va, ah1, ah2, cs1[i].height, cs2[i].height);
+        T::axiom_add_congruence_left(p1.top, p2.top, align_offset(va, ah1, cs1[i].height));
+        verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(
+            p2.top, align_offset(va, ah1, cs1[i].height), align_offset(va, ah2, cs2[i].height));
+        T::axiom_eqv_transitive(
+            p1.top.add(align_offset(va, ah1, cs1[i].height)),
+            p2.top.add(align_offset(va, ah1, cs1[i].height)),
+            p2.top.add(align_offset(va, ah2, cs2[i].height)));
         lemma_wrapper_child_deep_congruence(
             cn1[i], cn2[i], n1.children[i].x, n2.children[i].x,
             n1.children[i].y, n2.children[i].y, (fuel-1) as nat);
