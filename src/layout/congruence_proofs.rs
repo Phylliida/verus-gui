@@ -4154,511 +4154,108 @@ proof fn lemma_grid_structural_bridge<T: OrderedField>(
         == merge_layout(crate::layout::grid::grid_layout(lim, pad, hs, vs, ha, va, cw, rh, cs2d), cn));
 }
 
-/// Grid full-depth deep congruence (helper — uses grid_child_position_congruence + structural bridge).
-proof fn lemma_grid_full_deep<T: OrderedField>(
-    lim1: Limits<T>, lim2: Limits<T>,
+// ── Grid full-depth (per-index split) ───────────────────────────
+
+/// Grid: per-index proof that output child i is deeply eqv.
+proof fn lemma_grid_child_i_deep<T: OrderedField>(
+    n1: Node<T>, n2: Node<T>,
+    gl1: Node<T>, gl2: Node<T>,
+    cn1: Seq<Node<T>>, cn2: Seq<Node<T>>,
     p1: Padding<T>, p2: Padding<T>,
-    hs1: T, hs2: T, vs1: T, vs2: T,
-    ha: Alignment, va: Alignment,
     cw1: Seq<Size<T>>, cw2: Seq<Size<T>>,
     rh1: Seq<Size<T>>, rh2: Seq<Size<T>>,
-    ch1: Seq<Widget<T>>, ch2: Seq<Widget<T>>,
-    fuel: nat,
-    cn1: Seq<Node<T>>, cn2: Seq<Node<T>>,
+    hs1: T, hs2: T, vs1: T, vs2: T,
+    ha: Alignment, va: Alignment,
+    cs2d1: Seq<Seq<Size<T>>>, cs2d2: Seq<Seq<Size<T>>>,
+    i: int, depth: nat,
 )
     requires
-        limits_eqv(lim1, lim2),
         padding_eqv(p1, p2),
-        hs1.eqv(hs2), vs1.eqv(vs2),
         sizes_eqv(cw1, cw2), sizes_eqv(rh1, rh2),
-        ch1.len() == ch2.len(), fuel > 1,
-        cn1.len() == ch1.len(), cn2.len() == ch2.len(),
-        ch1.len() == rh1.len() * cw1.len(),
-        forall|i: int| 0 <= i < cn1.len() ==>
-            crate::diff::nodes_deeply_eqv(cn1[i], cn2[i], (fuel-1) as nat),
-        node_eqv(
-            layout_widget(lim1, Widget::Container(ContainerWidget::Grid {
-                padding: p1, h_spacing: hs1, v_spacing: vs1, h_align: ha, v_align: va,
-                col_widths: cw1, row_heights: rh1, children: ch1 }), fuel),
-            layout_widget(lim2, Widget::Container(ContainerWidget::Grid {
-                padding: p2, h_spacing: hs2, v_spacing: vs2, h_align: ha, v_align: va,
-                col_widths: cw2, row_heights: rh2, children: ch2 }), fuel)),
+        hs1.eqv(hs2), vs1.eqv(vs2),
+        cn1.len() == cn2.len(),
+        cn1.len() == rh1.len() * cw1.len(),
+        cw1.len() > 0, rh1.len() > 0,
+        0 <= i < cn1.len(),
+        n1 == merge_layout(gl1, cn1),
+        n2 == merge_layout(gl2, cn2),
+        gl1.children.len() == cn1.len(),
+        gl2.children.len() == cn2.len(),
+        cs2d1.len() >= rh1.len(), cs2d2.len() >= rh2.len(),
+        forall|r: int| 0 <= r < cs2d1.len() ==> (#[trigger] cs2d1[r]).len() >= cw1.len(),
+        forall|r: int| 0 <= r < cs2d2.len() ==> (#[trigger] cs2d2[r]).len() >= cw2.len(),
+        crate::diff::nodes_deeply_eqv(cn1[i], cn2[i], depth),
+        ({
+            let ncols = cw1.len();
+            let row = (i / ncols as int) as nat;
+            let col = (i % ncols as int) as nat;
+            &&& row < rh1.len() && col < cw1.len()
+            &&& size_eqv(cs2d1[row as int][col as int], cs2d2[row as int][col as int])
+            &&& gl1.children[i] == crate::layout::grid::grid_child(
+                p1, cw1, rh1, hs1, vs1, ha, va, row, col, cs2d1[row as int][col as int])
+            &&& gl2.children[i] == crate::layout::grid::grid_child(
+                p2, cw2, rh2, hs2, vs2, ha, va, row, col, cs2d2[row as int][col as int])
+        }),
     ensures
-        crate::diff::nodes_deeply_eqv(
-            layout_widget(lim1, Widget::Container(ContainerWidget::Grid {
-                padding: p1, h_spacing: hs1, v_spacing: vs1, h_align: ha, v_align: va,
-                col_widths: cw1, row_heights: rh1, children: ch1 }), fuel),
-            layout_widget(lim2, Widget::Container(ContainerWidget::Grid {
-                padding: p2, h_spacing: hs2, v_spacing: vs2, h_align: ha, v_align: va,
-                col_widths: cw2, row_heights: rh2, children: ch2 }), fuel),
-            fuel),
+        crate::diff::nodes_deeply_eqv(n1.children[i], n2.children[i], depth),
 {
-    let w1 = Widget::Container(ContainerWidget::Grid {
-        padding: p1, h_spacing: hs1, v_spacing: vs1, h_align: ha, v_align: va,
-        col_widths: cw1, row_heights: rh1, children: ch1 });
-    let w2 = Widget::Container(ContainerWidget::Grid {
-        padding: p2, h_spacing: hs2, v_spacing: vs2, h_align: ha, v_align: va,
-        col_widths: cw2, row_heights: rh2, children: ch2 });
-    let n1 = layout_widget(lim1, w1, fuel);
-    let n2 = layout_widget(lim2, w2, fuel);
-
-    // Build child_sizes_2d
+    lemma_merge_layout_children_structure(gl1, cn1, i);
+    lemma_merge_layout_children_structure(gl2, cn2, i);
     let ncols = cw1.len();
-    let nrows = rh1.len();
-    let cs2d1 = Seq::new(nrows, |r: int| Seq::new(ncols, |c: int| cn1[(r * ncols as int + c)].size));
-    let cs2d2 = Seq::new(nrows, |r: int| Seq::new(ncols, |c: int| cn2[(r * ncols as int + c)].size));
-
-    reveal(crate::layout::grid::grid_layout);
-    let gl1 = crate::layout::grid::grid_layout(lim1, p1, hs1, vs1, ha, va, cw1, rh1, cs2d1);
-    let gl2 = crate::layout::grid::grid_layout(lim2, p2, hs2, vs2, ha, va, cw2, rh2, cs2d2);
-
-    // n == merge_layout(gl, cn) via structural bridge
-    lemma_grid_structural_bridge(lim1, p1, hs1, vs1, ha, va, cw1, rh1, ch1, fuel);
-    lemma_grid_structural_bridge(lim2, p2, hs2, vs2, ha, va, cw2, rh2, ch2, fuel);
-
-    // Grid children length
-    crate::layout::grid_proofs::lemma_grid_all_children_len(
-        p1, cw1, rh1, hs1, vs1, ha, va, cs2d1, 0, ncols as nat);
-    crate::layout::grid_proofs::lemma_grid_all_children_len(
-        p2, cw2, rh2, hs2, vs2, ha, va, cs2d2, 0, ncols as nat);
-
-    assert forall|i: int| 0 <= i < n1.children.len() implies
-        crate::diff::nodes_deeply_eqv(n1.children[i], n2.children[i], (fuel-1) as nat)
-    by {
-        lemma_merge_layout_children_structure(gl1, cn1, i);
-        lemma_merge_layout_children_structure(gl2, cn2, i);
-        // Position: grid_child(row, col, child_size) where row = i / ncols, col = i % ncols
-        // grid_all_children_element gives the exact position
-        let row = (i / ncols as int) as nat;
-        let col = (i % ncols as int) as nat;
-        if ncols > 0 && nrows > 0 && row < nrows && col < ncols {
-            crate::layout::grid_proofs::lemma_grid_all_children_element(
-                p1, cw1, rh1, hs1, vs1, ha, va, cs2d1, row, col);
-            crate::layout::grid_proofs::lemma_grid_all_children_element(
-                p2, cw2, rh2, hs2, vs2, ha, va, cs2d2, row, col);
-            lemma_grid_child_position_congruence(
-                p1, p2, cw1, cw2, rh1, rh2, hs1, hs2, vs1, vs2,
-                ha, va, row, col, cn1[i].size, cn2[i].size);
-        }
-        lemma_wrapper_child_deep_congruence(
-            cn1[i], cn2[i], n1.children[i].x, n2.children[i].x,
-            n1.children[i].y, n2.children[i].y, (fuel-1) as nat);
-    };
+    let row = (i / ncols as int) as nat;
+    let col = (i % ncols as int) as nat;
+    lemma_grid_child_position_congruence(
+        p1, p2, cw1, cw2, rh1, rh2, hs1, hs2, vs1, vs2,
+        ha, va, row, col, cs2d1[row as int][col as int], cs2d2[row as int][col as int]);
+    lemma_wrapper_child_deep_congruence(
+        cn1[i], cn2[i], n1.children[i].x, n2.children[i].x,
+        n1.children[i].y, n2.children[i].y, depth);
 }
 
-/// ListView full-depth deep congruence.
-/// ListView constructs children directly (not via merge_layout),
-/// with y = listview_child_y(child_sizes, sp, first+i) - scroll_y.
-proof fn lemma_listview_full_deep<T: OrderedField>(
-    lim1: Limits<T>, lim2: Limits<T>,
-    sp1: T, sp2: T,
-    sy1: T, sy2: T,
-    v1: Size<T>, v2: Size<T>,
+// ── ListView full-depth (per-index split) ───────────────────────
+
+/// ListView: per-index proof that output child i is deeply eqv.
+proof fn lemma_listview_child_i_deep<T: OrderedField>(
+    ms1: Seq<Size<T>>, ms2: Seq<Size<T>>,
+    sp1: T, sp2: T, sy1: T, sy2: T,
+    cl1: Limits<T>, cl2: Limits<T>,
     ch1: Seq<Widget<T>>, ch2: Seq<Widget<T>>,
-    fuel: nat,
+    first: nat, i: nat, fuel: nat,
+    n1_child: Node<T>, n2_child: Node<T>,
+    cn1_i: Node<T>, cn2_i: Node<T>,
 )
     requires
-        limits_eqv(lim1, lim2),
-        sp1.eqv(sp2), sy1.eqv(sy2), size_eqv(v1, v2),
-        ch1.len() == ch2.len(), fuel > 1,
-        forall|i: int| 0 <= i < ch1.len() ==>
-            widget_eqv(ch1[i], ch2[i], (fuel - 1) as nat),
-        node_eqv(
-            layout_widget(lim1, Widget::Container(ContainerWidget::ListView {
-                spacing: sp1, scroll_y: sy1, viewport: v1, children: ch1 }), fuel),
-            layout_widget(lim2, Widget::Container(ContainerWidget::ListView {
-                spacing: sp2, scroll_y: sy2, viewport: v2, children: ch2 }), fuel)),
+        sizes_eqv(ms1, ms2),
+        sp1.eqv(sp2), sy1.eqv(sy2),
+        limits_eqv(cl1, cl2),
+        first + i < ch1.len(),
+        (first + i) as nat <= ms1.len(),
+        widget_eqv(ch1[(first + i) as int], ch2[(first + i) as int], fuel),
+        fuel > 0,
+        crate::diff::nodes_deeply_eqv(cn1_i, cn2_i, fuel),
+        n1_child.x == T::zero(),
+        n2_child.x == T::zero(),
+        n1_child.y == crate::layout::listview::listview_child_y(ms1, sp1, (first + i) as nat).sub(sy1),
+        n2_child.y == crate::layout::listview::listview_child_y(ms2, sp2, (first + i) as nat).sub(sy2),
+        n1_child.size == cn1_i.size,
+        n1_child.children == cn1_i.children,
+        n2_child.size == cn2_i.size,
+        n2_child.children == cn2_i.children,
     ensures
-        crate::diff::nodes_deeply_eqv(
-            layout_widget(lim1, Widget::Container(ContainerWidget::ListView {
-                spacing: sp1, scroll_y: sy1, viewport: v1, children: ch1 }), fuel),
-            layout_widget(lim2, Widget::Container(ContainerWidget::ListView {
-                spacing: sp2, scroll_y: sy2, viewport: v2, children: ch2 }), fuel),
-            fuel),
+        crate::diff::nodes_deeply_eqv(n1_child, n2_child, fuel),
 {
-    let w1 = Widget::Container(ContainerWidget::ListView {
-        spacing: sp1, scroll_y: sy1, viewport: v1, children: ch1 });
-    let w2 = Widget::Container(ContainerWidget::ListView {
-        spacing: sp2, scroll_y: sy2, viewport: v2, children: ch2 });
-    let n1 = layout_widget(lim1, w1, fuel);
-    let n2 = layout_widget(lim2, w2, fuel);
-
-    reveal(crate::layout::listview::layout_listview_body);
-
-    // child_limits eqv
+    // y position eqv
+    lemma_listview_child_y_congruence(ms1, ms2, sp1, sp2, (first + i) as nat);
+    lemma_sub_congruence(
+        crate::layout::listview::listview_child_y(ms1, sp1, (first + i) as nat),
+        crate::layout::listview::listview_child_y(ms2, sp2, (first + i) as nat),
+        sy1, sy2);
+    // x = 0 eqv
     T::axiom_eqv_reflexive(T::zero());
-    let cl1 = Limits { min: Size::zero_size(), max: Size::new(v1.width, v1.height) };
-    let cl2 = Limits { min: Size::zero_size(), max: Size::new(v2.width, v2.height) };
-    assert(limits_eqv(cl1, cl2));
-
-    // measure_children sizes eqv
-    assert forall|i: int| 0 <= i < ch1.len() implies
-        size_eqv(
-            crate::measure::measure_widget(cl1, ch1[i], (fuel-1) as nat),
-            crate::measure::measure_widget(cl2, ch2[i], (fuel-1) as nat))
-    by {
-        lemma_measure_widget_congruence(cl1, cl2, ch1[i], ch2[i], (fuel-1) as nat);
-    };
-    let ms1 = Seq::new(ch1.len(), |i: int|
-        crate::measure::measure_widget(cl1, ch1[i], (fuel-1) as nat));
-    let ms2 = Seq::new(ch2.len(), |i: int|
-        crate::measure::measure_widget(cl2, ch2[i], (fuel-1) as nat));
-    assert(sizes_eqv(ms1, ms2));
-
-    // first/end visible are equal
-    lemma_listview_first_visible_congruence(ms1, ms2, sp1, sp2, sy1, sy2, 0);
-    lemma_listview_end_visible_congruence(ms1, ms2, sp1, sp2, sy1, sy2, v1.height, v2.height, 0);
-    let first1 = crate::layout::listview::listview_first_visible(ms1, sp1, sy1);
-    let first2 = crate::layout::listview::listview_first_visible(ms2, sp2, sy2);
-    let end1 = crate::layout::listview::listview_end_visible(ms1, sp1, sy1, v1.height);
-    let end2 = crate::layout::listview::listview_end_visible(ms2, sp2, sy2, v2.height);
-    // first1 == first2 and end1 == end2
-
-    // Visible child nodes deeply eqv
-    // cn1[i] = layout_widget(cl1, ch1[first1 + i], fuel-1)
-    // cn2[i] = layout_widget(cl2, ch2[first2 + i], fuel-1)
-    // Since first1 == first2 and widget_eqv(ch1[j], ch2[j], fuel-1) for all j:
-    // layout_widget(cl1, ch1[first+i], fuel-1) deeply_eqv layout_widget(cl2, ch2[first+i], fuel-1)
-
-    // Position: x = 0 (eqv), y = listview_child_y(ms, sp, first+i) - scroll_y (eqv)
-    // listview_child_y congruence + sub congruence → y eqv
-
-    // The layout_listview_body constructs children directly:
-    // children[i] = Node { x: 0, y: child_y(first+i) - scroll_y, size: cn[i].size, children: cn[i].children }
-    // This is the same as wrapper_child with x=0, y=child_y-scroll_y
-
-    assert forall|i: int| 0 <= i < n1.children.len() implies
-        crate::diff::nodes_deeply_eqv(n1.children[i], n2.children[i], (fuel-1) as nat)
-    by {
-        // y position congruence: listview_child_y(ms, sp, first+i) - scroll_y
-        if first1 + (i as nat) <= ms1.len() {
-            lemma_listview_child_y_congruence(ms1, ms2, sp1, sp2, (first1 + i) as nat);
-            lemma_sub_congruence(
-                crate::layout::listview::listview_child_y(ms1, sp1, (first1 + i) as nat),
-                crate::layout::listview::listview_child_y(ms2, sp2, (first2 + i) as nat),
-                sy1, sy2);
-        }
-        // cn[i] = layout_widget(cl, ch[first+i], fuel-1)
-        // deeply eqv by IH (widget_eqv + limits_eqv → deeply_eqv)
-        // For now, use the depth-0 version from existing lemma
-        lemma_layout_widget_deep_congruence(cl1, cl2,
-            ch1[(first1 + i) as int], ch2[(first2 + i) as int], (fuel-1) as nat);
-        // wrapper_child for the direct construction
-        // n.children[i] = Node { x: 0, y: cy-sy, size: cn[i].size, children: cn[i].children }
-    };
+    // wrapper_child combines all
+    lemma_wrapper_child_deep_congruence(cn1_i, cn2_i,
+        n1_child.x, n2_child.x, n1_child.y, n2_child.y, fuel);
 }
+
 
 } // verus!
-
-// Infrastructure for container full-depth (proved but not yet connected
-// through the opaque layout_widget → merge_layout chain):
-// - lemma_child_main_position_congruence: axis-parameterized position eqv
-// - lemma_linear_children_positions_congruence: all linear children have eqv x/y
-// - lemma_merge_layout_deep_congruence: merge_layout preserves deep eqv
-// - lemma_wrapper_child_deep_congruence: single child with eqv pos → deeply eqv
-//
-// To extend full-depth to Column/Row/Stack/etc: write a structural bridge
-// showing layout_widget output === merge_layout(variant_layout, child_nodes),
-// then chain the position congruence + recursive IH + merge combinator.
-
-// Dead code below kept as reference for the bridge pattern:
-#[cfg(any())]
-mod _container_full_deep_reference {
-use super::*;
-verus! {
-/// Column full-depth helper (requires merge_layout bridge).
-proof fn lemma_column_full_deep_helper<T: OrderedField>(
-    lim1: Limits<T>, lim2: Limits<T>,
-    p1: Padding<T>, p2: Padding<T>,
-    sp1: T, sp2: T, al: Alignment,
-    ch1: Seq<Widget<T>>, ch2: Seq<Widget<T>>,
-    fuel: nat,
-)
-    requires
-        limits_eqv(lim1, lim2),
-        fuel > 1,
-        widget_eqv(Widget::Container(ContainerWidget::Column {
-            padding: p1, spacing: sp1, alignment: al, children: ch1 }),
-            Widget::Container(ContainerWidget::Column {
-            padding: p2, spacing: sp2, alignment: al, children: ch2 }), fuel),
-    ensures
-        crate::diff::nodes_deeply_eqv(
-            layout_widget(lim1, Widget::Container(ContainerWidget::Column {
-                padding: p1, spacing: sp1, alignment: al, children: ch1 }), fuel),
-            layout_widget(lim2, Widget::Container(ContainerWidget::Column {
-                padding: p2, spacing: sp2, alignment: al, children: ch2 }), fuel),
-            fuel),
-    decreases fuel, 0nat,
-{
-    let w1 = Widget::Container(ContainerWidget::Column {
-        padding: p1, spacing: sp1, alignment: al, children: ch1 });
-    let w2 = Widget::Container(ContainerWidget::Column {
-        padding: p2, spacing: sp2, alignment: al, children: ch2 });
-    lemma_layout_widget_node_congruence(lim1, lim2, w1, w2, fuel);
-    let n1 = layout_widget(lim1, w1, fuel);
-    let n2 = layout_widget(lim2, w2, fuel);
-
-    lemma_padding_horizontal_congruence(p1, p2);
-    lemma_padding_vertical_congruence(p1, p2);
-    lemma_shrink_congruence(lim1, lim2,
-        p1.horizontal(), p2.horizontal(), p1.vertical(), p2.vertical());
-    let inner1 = lim1.shrink(p1.horizontal(), p1.vertical());
-    let inner2 = lim2.shrink(p2.horizontal(), p2.vertical());
-
-    // IH: each child layout is deeply eqv at fuel-1
-    assert forall|i: int| 0 <= i < ch1.len() implies
-        crate::diff::nodes_deeply_eqv(
-            layout_widget(inner1, ch1[i], (fuel-1) as nat),
-            layout_widget(inner2, ch2[i], (fuel-1) as nat),
-            (fuel-1) as nat)
-    by {
-        lemma_layout_widget_full_deep_congruence(
-            inner1, inner2, ch1[i], ch2[i], (fuel-1) as nat);
-    };
-
-    // Child sizes eqv
-    let cs1 = Seq::new(ch1.len(), |i: int|
-        layout_widget(inner1, ch1[i], (fuel-1) as nat).size);
-    let cs2 = Seq::new(ch2.len(), |i: int|
-        layout_widget(inner2, ch2[i], (fuel-1) as nat).size);
-    assert(sizes_eqv(cs1, cs2));
-
-    // Layout positions eqv
-    lemma_sub_congruence(lim1.max.width, lim2.max.width,
-        p1.horizontal(), p2.horizontal());
-    reveal(linear_layout);
-    lemma_linear_children_positions_congruence(
-        p1, p2, sp1, sp2, al, cs1, cs2, Axis::Vertical,
-        lim1.max.width.sub(p1.horizontal()),
-        lim2.max.width.sub(p2.horizontal()), 0);
-
-    let ll1 = linear_layout(lim1, p1, sp1, al, cs1, Axis::Vertical);
-    let ll2 = linear_layout(lim2, p2, sp2, al, cs2, Axis::Vertical);
-    let cn1 = widget_child_nodes(inner1, ch1, (fuel-1) as nat);
-    let cn2 = widget_child_nodes(inner2, ch2, (fuel-1) as nat);
-
-    // Each output child is deeply eqv:
-    // n.children[i] = merge_layout(ll, cn).children[i]
-    //               = Node { x: ll.children[i].x, y: ll.children[i].y, size: cn[i].size, children: cn[i].children }
-    // ll.children[i].x/y eqv by position congruence
-    // cn[i] deeply eqv by IH
-    // → output children deeply eqv via wrapper_child_deep_congruence
-    assert forall|i: int| 0 <= i < n1.children.len() implies
-        crate::diff::nodes_deeply_eqv(n1.children[i], n2.children[i], (fuel-1) as nat)
-    by {
-        let lc1 = linear_children(p1, sp1, al, cs1, Axis::Vertical,
-            lim1.max.width.sub(p1.horizontal()), 0);
-        let lc2 = linear_children(p2, sp2, al, cs2, Axis::Vertical,
-            lim2.max.width.sub(p2.horizontal()), 0);
-        // ll.children == lc (from reveal)
-        // n.children[i] has x = lc[i].x, y = lc[i].y, size = cn[i].size, children = cn[i].children
-        lemma_wrapper_child_deep_congruence(
-            cn1[i], cn2[i], lc1[i].x, lc2[i].x, lc1[i].y, lc2[i].y, (fuel-1) as nat);
-    };
-}
-
-/// Row full-depth helper.
-proof fn lemma_row_full_deep_helper<T: OrderedField>(
-    lim1: Limits<T>, lim2: Limits<T>,
-    p1: Padding<T>, p2: Padding<T>,
-    sp1: T, sp2: T, al: Alignment,
-    ch1: Seq<Widget<T>>, ch2: Seq<Widget<T>>,
-    fuel: nat,
-)
-    requires
-        limits_eqv(lim1, lim2),
-        fuel > 1,
-        widget_eqv(Widget::Container(ContainerWidget::Row {
-            padding: p1, spacing: sp1, alignment: al, children: ch1 }),
-            Widget::Container(ContainerWidget::Row {
-            padding: p2, spacing: sp2, alignment: al, children: ch2 }), fuel),
-    ensures
-        crate::diff::nodes_deeply_eqv(
-            layout_widget(lim1, Widget::Container(ContainerWidget::Row {
-                padding: p1, spacing: sp1, alignment: al, children: ch1 }), fuel),
-            layout_widget(lim2, Widget::Container(ContainerWidget::Row {
-                padding: p2, spacing: sp2, alignment: al, children: ch2 }), fuel),
-            fuel),
-    decreases fuel, 0nat,
-{
-    let w1 = Widget::Container(ContainerWidget::Row {
-        padding: p1, spacing: sp1, alignment: al, children: ch1 });
-    let w2 = Widget::Container(ContainerWidget::Row {
-        padding: p2, spacing: sp2, alignment: al, children: ch2 });
-    lemma_layout_widget_node_congruence(lim1, lim2, w1, w2, fuel);
-    let n1 = layout_widget(lim1, w1, fuel);
-    let n2 = layout_widget(lim2, w2, fuel);
-
-    lemma_padding_horizontal_congruence(p1, p2);
-    lemma_padding_vertical_congruence(p1, p2);
-    lemma_shrink_congruence(lim1, lim2,
-        p1.horizontal(), p2.horizontal(), p1.vertical(), p2.vertical());
-    let inner1 = lim1.shrink(p1.horizontal(), p1.vertical());
-    let inner2 = lim2.shrink(p2.horizontal(), p2.vertical());
-
-    assert forall|i: int| 0 <= i < ch1.len() implies
-        crate::diff::nodes_deeply_eqv(
-            layout_widget(inner1, ch1[i], (fuel-1) as nat),
-            layout_widget(inner2, ch2[i], (fuel-1) as nat),
-            (fuel-1) as nat)
-    by {
-        lemma_layout_widget_full_deep_congruence(
-            inner1, inner2, ch1[i], ch2[i], (fuel-1) as nat);
-    };
-
-    let cs1 = Seq::new(ch1.len(), |i: int|
-        layout_widget(inner1, ch1[i], (fuel-1) as nat).size);
-    let cs2 = Seq::new(ch2.len(), |i: int|
-        layout_widget(inner2, ch2[i], (fuel-1) as nat).size);
-    assert(sizes_eqv(cs1, cs2));
-
-    lemma_sub_congruence(lim1.max.height, lim2.max.height,
-        p1.vertical(), p2.vertical());
-    reveal(linear_layout);
-    lemma_linear_children_positions_congruence(
-        p1, p2, sp1, sp2, al, cs1, cs2, Axis::Horizontal,
-        lim1.max.height.sub(p1.vertical()),
-        lim2.max.height.sub(p2.vertical()), 0);
-
-    let ll1 = linear_layout(lim1, p1, sp1, al, cs1, Axis::Horizontal);
-    let ll2 = linear_layout(lim2, p2, sp2, al, cs2, Axis::Horizontal);
-    let cn1 = widget_child_nodes(inner1, ch1, (fuel-1) as nat);
-    let cn2 = widget_child_nodes(inner2, ch2, (fuel-1) as nat);
-
-    assert forall|i: int| 0 <= i < n1.children.len() implies
-        crate::diff::nodes_deeply_eqv(n1.children[i], n2.children[i], (fuel-1) as nat)
-    by {
-        let lc1 = linear_children(p1, sp1, al, cs1, Axis::Horizontal,
-            lim1.max.height.sub(p1.vertical()), 0);
-        let lc2 = linear_children(p2, sp2, al, cs2, Axis::Horizontal,
-            lim2.max.height.sub(p2.vertical()), 0);
-        lemma_wrapper_child_deep_congruence(
-            cn1[i], cn2[i], lc1[i].x, lc2[i].x, lc1[i].y, lc2[i].y, (fuel-1) as nat);
-    };
-}
-
-/// Full-depth deep congruence: eqv widgets produce deeply eqv layout
-/// nodes at depth = fuel for ALL widget variants.
-///
-/// This is the strongest possible congruence theorem: equivalent rational
-/// representations produce equivalent layout trees at every level.
-pub proof fn lemma_layout_widget_full_deep_congruence<T: OrderedField>(
-    lim1: Limits<T>, lim2: Limits<T>,
-    w1: Widget<T>, w2: Widget<T>,
-    fuel: nat,
-)
-    requires
-        limits_eqv(lim1, lim2),
-        widget_eqv(w1, w2, fuel),
-    ensures
-        crate::diff::nodes_deeply_eqv(
-            layout_widget(lim1, w1, fuel),
-            layout_widget(lim2, w2, fuel),
-            fuel),
-    decreases fuel, 1nat,
-{
-    assert(fuel > 0);
-    lemma_layout_widget_node_congruence(lim1, lim2, w1, w2, fuel);
-    let n1 = layout_widget(lim1, w1, fuel);
-    let n2 = layout_widget(lim2, w2, fuel);
-
-    // Need children deeply_eqv at fuel-1
-    if fuel == 1 {
-        // At fuel=1, recursive layout at fuel=0 produces trivial nodes
-        // (x=0, y=0, size=0, children=empty). All such nodes are identical (===).
-        // So children are trivially deeply_eqv at any depth.
-        // But we need to show n1.children[i] deeply_eqv n2.children[i] at 0.
-        // At fuel=1, n1.children and n2.children come from fuel=0 recursive calls
-        // which produce Node { x: 0, y: 0, size: (0,0), children: empty }.
-        // Actually, the output children come from the layout body functions,
-        // which at fuel=1 call layout_widget at fuel=0 (trivial node) for child widgets.
-        // The merge_layout then uses those trivial sizes + the layout positions.
-        // The positions may differ (they depend on trivial sizes), but eqv (both use 0-size).
-        // Hmm, this is complex. Let me just handle it as depth 0 for fuel=1.
-        // Actually, `nodes_deeply_eqv` at depth fuel=1 means: fields eqv (✓) AND
-        // at depth > 0: children deeply_eqv at depth 0.
-        // Children deeply_eqv at depth 0 = fields eqv. This follows from the fact that
-        // both sides use the same position computation on the same (eqv) inputs.
-        // For Z3, this should be trivial at fuel=1 since everything unfolds.
-        // Let me just rely on the depth-0 proof + depth monotonicity.
-        lemma_layout_widget_deep_congruence(lim1, lim2, w1, w2, fuel);
-        // depth 0 ≤ fuel = 1
-    } else {
-        // fuel > 1: establish IH and prove children deeply_eqv at fuel-1
-        match (w1, w2) {
-            (Widget::Leaf(l1), Widget::Leaf(l2)) => {
-                lemma_layout_leaf_deep_congruence_any(lim1, lim2, l1, l2, fuel, fuel);
-            },
-            (Widget::Wrapper(WrapperWidget::Conditional { visible: false, child: c1 }),
-             Widget::Wrapper(WrapperWidget::Conditional { visible: false, child: c2 })) => {
-                lemma_layout_conditional_false_deep_any(lim1, lim2, c1, c2, fuel, fuel);
-            },
-            (Widget::Wrapper(WrapperWidget::Conditional { visible: true, child: c1 }),
-             Widget::Wrapper(WrapperWidget::Conditional { visible: true, child: c2 })) => {
-                // Children = recursive.children (passthrough). Need recursive deeply_eqv at fuel.
-                // But IH gives recursive deeply_eqv at fuel-1. And output.children = recursive.children.
-                // output deeply_eqv at fuel means children deeply_eqv at fuel-1 ✓ (IH gives this)
-                // BUT output.children[i] = recursive.children[i], not recursive itself.
-                // recursive deeply_eqv at fuel-1 means: fields eqv AND children eqv at fuel-2.
-                // So recursive.children[i] eqv at fuel-2. We need output.children[i] eqv at fuel-1.
-                // This is the level mismatch. Need recursive deeply_eqv at fuel (not fuel-1).
-                // Impossible with standard IH since recursive uses fuel-1.
-                // Fix: use lemma_layout_widget_full_deep_congruence at fuel-1 (gives depth fuel-1)
-                // Output depth is fuel → children at fuel-1 → need recursive.children at fuel-1.
-                // recursive deeply_eqv(fuel-1) → recursive.children deeply_eqv(fuel-2). Not enough.
-                // The Conditional passthrough skips a level. This is fundamentally tricky.
-                // Use depth 0 fallback for this variant.
-                lemma_layout_widget_deep_congruence(lim1, lim2, w1, w2, fuel);
-            },
-            (Widget::Wrapper(WrapperWidget::Margin { margin: m1, child: c1 }),
-             Widget::Wrapper(WrapperWidget::Margin { margin: m2, child: c2 })) => {
-                lemma_padding_horizontal_congruence(m1, m2);
-                lemma_padding_vertical_congruence(m1, m2);
-                lemma_shrink_congruence(lim1, lim2,
-                    m1.horizontal(), m2.horizontal(), m1.vertical(), m2.vertical());
-                lemma_layout_widget_full_deep_congruence(
-                    lim1.shrink(m1.horizontal(), m1.vertical()),
-                    lim2.shrink(m2.horizontal(), m2.vertical()),
-                    *c1, *c2, (fuel-1) as nat);
-                lemma_margin_full_deep(lim1, lim2, m1, m2, c1, c2, fuel, (fuel-1) as nat);
-            },
-            (Widget::Wrapper(WrapperWidget::ScrollView { viewport: v1, scroll_x: sx1, scroll_y: sy1, child: c1 }),
-             Widget::Wrapper(WrapperWidget::ScrollView { viewport: v2, scroll_x: sx2, scroll_y: sy2, child: c2 })) => {
-                verus_algebra::lemmas::additive_group_lemmas::lemma_neg_congruence::<T>(sx1, sx2);
-                verus_algebra::lemmas::additive_group_lemmas::lemma_neg_congruence::<T>(sy1, sy2);
-                T::axiom_eqv_reflexive(T::zero());
-                let cl1 = Limits { min: Size::zero_size(), max: v1 };
-                let cl2 = Limits { min: Size::zero_size(), max: v2 };
-                assert(limits_eqv(cl1, cl2));
-                lemma_layout_widget_full_deep_congruence(cl1, cl2, *c1, *c2, (fuel-1) as nat);
-                let rec1 = layout_widget(cl1, *c1, (fuel-1) as nat);
-                let rec2 = layout_widget(cl2, *c2, (fuel-1) as nat);
-                lemma_wrapper_child_deep_congruence(rec1, rec2,
-                    sx1.neg(), sx2.neg(), sy1.neg(), sy2.neg(), (fuel-1) as nat);
-                assert forall|i: int| 0 <= i < n1.children.len() implies
-                    crate::diff::nodes_deeply_eqv(n1.children[i], n2.children[i], (fuel-1) as nat)
-                by { assert(i == 0); };
-            },
-            // Column/Row: children from merge_layout(linear_layout, child_nodes)
-            // Full deep: positions congruent via lemma_linear_children_positions_congruence,
-            // child nodes deeply eqv via IH, combined via wrapper_child helper.
-            (Widget::Container(ContainerWidget::Column { padding: p1, spacing: sp1, alignment: al, children: ch1 }),
-             Widget::Container(ContainerWidget::Column { padding: p2, spacing: sp2, alignment: _, children: ch2 })) => {
-                lemma_column_full_deep_helper(lim1, lim2, p1, p2, sp1, sp2, al, ch1, ch2, fuel);
-            },
-            (Widget::Container(ContainerWidget::Row { padding: p1, spacing: sp1, alignment: al, children: ch1 }),
-             Widget::Container(ContainerWidget::Row { padding: p2, spacing: sp2, alignment: _, children: ch2 })) => {
-                lemma_row_full_deep_helper(lim1, lim2, p1, p2, sp1, sp2, al, ch1, ch2, fuel);
-            },
-            _ => {
-                // Remaining variants (Stack, Wrap, Flex, Grid, Absolute, ListView,
-                // SizedBox, AspectRatio, Conditional(true)):
-                // depth 0 fallback
-                lemma_layout_widget_deep_congruence(lim1, lim2, w1, w2, fuel);
-            },
-        }
-    }
-}
-
-} // verus! (dead reference)
-} // mod
