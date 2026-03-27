@@ -743,6 +743,33 @@ pub proof fn lemma_shrink_congruence<T: OrderedField>(
     );
 }
 
+/// Limits::intersect respects eqv.
+pub proof fn lemma_intersect_congruence<T: OrderedField>(
+    lim1: Limits<T>, lim2: Limits<T>,
+    other1: Limits<T>, other2: Limits<T>,
+)
+    requires limits_eqv(lim1, lim2), limits_eqv(other1, other2),
+    ensures limits_eqv(lim1.intersect(other1), lim2.intersect(other2)),
+{
+    // intersect.min.w = max(lim.min.w, other.min.w)
+    lemma_max_congruence(lim1.min.width, lim2.min.width, other1.min.width, other2.min.width);
+    lemma_max_congruence(lim1.min.height, lim2.min.height, other1.min.height, other2.min.height);
+    // intersect.max.w = max(new_min_w, min(lim.max.w, other.max.w))
+    lemma_min_congruence(lim1.max.width, lim2.max.width, other1.max.width, other2.max.width);
+    let new_min_w1 = max::<T>(lim1.min.width, other1.min.width);
+    let new_min_w2 = max::<T>(lim2.min.width, other2.min.width);
+    let inner_w1 = min::<T>(lim1.max.width, other1.max.width);
+    let inner_w2 = min::<T>(lim2.max.width, other2.max.width);
+    lemma_max_congruence(new_min_w1, new_min_w2, inner_w1, inner_w2);
+    // height
+    lemma_min_congruence(lim1.max.height, lim2.max.height, other1.max.height, other2.max.height);
+    let new_min_h1 = max::<T>(lim1.min.height, other1.min.height);
+    let new_min_h2 = max::<T>(lim2.min.height, other2.min.height);
+    let inner_h1 = min::<T>(lim1.max.height, other1.max.height);
+    let inner_h2 = min::<T>(lim2.max.height, other2.max.height);
+    lemma_max_congruence(new_min_h1, new_min_h2, inner_h1, inner_h2);
+}
+
 // ══════════════════════════════════════════════════════════════════════
 // Master layout congruence theorem
 // ══════════════════════════════════════════════════════════════════════
