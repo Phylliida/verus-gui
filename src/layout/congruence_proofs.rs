@@ -2557,7 +2557,7 @@ pub proof fn lemma_layout_widget_full_depth_congruence<T: OrderedField>(
             layout_widget(lim2, w2, fuel),
             congruence_depth(w1, fuel),
         ),
-    decreases fuel, 2nat,
+    decreases fuel, 3nat,
 {
     if fuel == 0 {
         lemma_layout_widget_node_congruence(lim1, lim2, w1, w2, fuel);
@@ -2691,27 +2691,100 @@ proof fn lemma_container_full_depth<T: OrderedField>(
             layout_widget(lim2, w2, fuel),
             congruence_depth(w1, fuel),
         ),
-    decreases fuel, 1nat,
+    decreases fuel, 2nat,
 {
     lemma_layout_widget_node_congruence(lim1, lim2, w1, w2, fuel);
-    match container {
-        ContainerWidget::Column { padding: p1, spacing: sp1, alignment: al, children: ch1 } => {
-            if let Widget::Container(ContainerWidget::Column { padding: p2, spacing: sp2, children: ch2, .. }) = w2 {
-                if ch1.len() > 0 && fuel > 1 {
-                    lemma_container_full_depth_linear(lim1, lim2, p1, p2, sp1, sp2, al,
-                        ch1, ch2, fuel, crate::layout::Axis::Vertical);
-                }
+    lemma_container_full_depth_column_dispatch(lim1, lim2, w1, w2, container, fuel);
+    lemma_container_full_depth_row_dispatch(lim1, lim2, w1, w2, container, fuel);
+}
+
+/// Column full-depth dispatch — uses concrete depth to avoid congruence_depth evaluation cost.
+proof fn lemma_container_full_depth_column_dispatch<T: OrderedField>(
+    lim1: Limits<T>, lim2: Limits<T>,
+    p1: Padding<T>, sp1: T, al: Alignment, ch1: Seq<Widget<T>>,
+    w2: Widget<T>,
+    fuel: nat,
+)
+    requires
+        limits_eqv(lim1, lim2),
+        widget_eqv(Widget::Container(ContainerWidget::Column { padding: p1, spacing: sp1, alignment: al, children: ch1 }), w2, fuel),
+        fuel > 1,
+        ch1.len() > 0,
+    ensures
+        crate::diff::nodes_deeply_eqv(
+            layout_widget(lim1, Widget::Container(ContainerWidget::Column { padding: p1, spacing: sp1, alignment: al, children: ch1 }), fuel),
+            layout_widget(lim2, w2, fuel),
+            min_children_congruence_depth(ch1, (fuel - 1) as nat, 0) + 1),
+    decreases fuel, 1nat,
+{
+    if let ContainerWidget::Column { padding: p1, spacing: sp1, alignment: al, children: ch1 } = container {
+        if let Widget::Container(ContainerWidget::Column { padding: p2, spacing: sp2, children: ch2, .. }) = w2 {
+            if ch1.len() > 0 && fuel > 1 {
+                lemma_padding_horizontal_congruence(p1, p2);
+                lemma_padding_vertical_congruence(p1, p2);
+                lemma_shrink_congruence(lim1, lim2, p1.horizontal(), p2.horizontal(), p1.vertical(), p2.vertical());
+                let inner1 = lim1.shrink(p1.horizontal(), p1.vertical());
+                let inner2 = lim2.shrink(p2.horizontal(), p2.vertical());
+                let cn1 = widget_child_nodes(inner1, ch1, (fuel - 1) as nat);
+                let cn2 = widget_child_nodes(inner2, ch2, (fuel - 1) as nat);
+                let rd = min_children_congruence_depth(ch1, (fuel - 1) as nat, 0);
+                assert forall|i: int| 0 <= i < cn1.len() implies
+                    crate::diff::nodes_deeply_eqv(#[trigger] cn1[i], cn2[i], rd)
+                by {
+                    lemma_layout_widget_full_depth_congruence(inner1, inner2, ch1[i], ch2[i], (fuel - 1) as nat);
+                    lemma_min_children_depth_le::<T>(ch1, (fuel - 1) as nat, 0, i);
+                    crate::diff::lemma_deeply_eqv_depth_monotone(cn1[i], cn2[i],
+                        congruence_depth(ch1[i], (fuel - 1) as nat), rd);
+                };
+                lemma_sizes_eqv_from_deeply_eqv(cn1, cn2, rd);
+                let s1 = Seq::new(cn1.len(), |i: int| cn1[i].size);
+                let s2 = Seq::new(cn2.len(), |i: int| cn2[i].size);
+                let ax = crate::layout::Axis::Vertical;
+                lemma_sub_congruence(lim1.max.cross_dim(ax), lim2.max.cross_dim(ax),
+                    p1.cross_padding(ax), p2.cross_padding(ax));
+                lemma_linear_children_positions_congruence(p1, p2, sp1, sp2, al, s1, s2, ax,
+                    lim1.max.cross_dim(ax).sub(p1.cross_padding(ax)),
+                    lim2.max.cross_dim(ax).sub(p2.cross_padding(ax)), 0);
+                reveal(crate::layout::linear_layout);
+                let layout1 = crate::layout::linear_layout(lim1, p1, sp1, al, s1, ax);
+                let layout2 = crate::layout::linear_layout(lim2, p2, sp2, al, s2, ax);
+                lemma_linear_children_len(p1, sp1, al, s1, ax,
+                    lim1.max.cross_dim(ax).sub(p1.cross_padding(ax)), 0);
+                lemma_linear_children_len(p2, sp2, al, s2, ax,
+                    lim2.max.cross_dim(ax).sub(p2.cross_padding(ax)), 0);
+                lemma_merge_layout_deep_congruence_plus_one(layout1, layout2, cn1, cn2, rd);
+                // Connect merge_layout result to layout_widget
+                assert(merge_layout(layout1, cn1) == layout_linear_body(lim1, p1, sp1, al, cn1, ax));
+                assert(layout_widget(lim1, w1, fuel) == layout_linear_body(lim1, p1, sp1, al, cn1, ax));
             }
-        },
-        ContainerWidget::Row { padding: p1, spacing: sp1, alignment: al, children: ch1 } => {
-            if let Widget::Container(ContainerWidget::Row { padding: p2, spacing: sp2, children: ch2, .. }) = w2 {
-                if ch1.len() > 0 && fuel > 1 {
-                    lemma_container_full_depth_linear(lim1, lim2, p1, p2, sp1, sp2, al,
-                        ch1, ch2, fuel, crate::layout::Axis::Horizontal);
-                }
+        }
+    }
+}
+
+/// Row full-depth dispatch.
+proof fn lemma_container_full_depth_row_dispatch<T: OrderedField>(
+    lim1: Limits<T>, lim2: Limits<T>,
+    w1: Widget<T>, w2: Widget<T>,
+    container: ContainerWidget<T>,
+    fuel: nat,
+)
+    requires
+        limits_eqv(lim1, lim2), widget_eqv(w1, w2, fuel), fuel > 0,
+        w1 == Widget::Container(container),
+        node_eqv(layout_widget(lim1, w1, fuel), layout_widget(lim2, w2, fuel)),
+    ensures
+        container is Row ==> crate::diff::nodes_deeply_eqv(
+            layout_widget(lim1, w1, fuel), layout_widget(lim2, w2, fuel),
+            congruence_depth(w1, fuel)),
+    decreases fuel, 1nat,
+{
+    if let ContainerWidget::Row { padding: p1, spacing: sp1, alignment: al, children: ch1 } = container {
+        if let Widget::Container(ContainerWidget::Row { padding: p2, spacing: sp2, children: ch2, .. }) = w2 {
+            if ch1.len() > 0 && fuel > 1 {
+                lemma_container_full_depth_linear(lim1, lim2, p1, p2, sp1, sp2, al,
+                    ch1, ch2, fuel, crate::layout::Axis::Horizontal);
             }
-        },
-        _ => {},
+        }
     }
 }
 
