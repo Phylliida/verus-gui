@@ -15,6 +15,7 @@ use crate::layout::congruence_proofs::*;
 use crate::text_model::*;
 use crate::text_model::operations::*;
 use crate::text_model::undo::*;
+use crate::event::*;
 
 verus! {
 
@@ -187,6 +188,103 @@ pub proof fn theorem_edit_integrity(model: TextModel, ch: char)
     crate::text_model::proofs::lemma_dispatch_insert_preserves_wf(model, ch);
     crate::text_model::undo_proofs::lemma_undo_redo_cancel_full(
         model, s, e, seq![ch], seq![model.typing_style], s + 1);
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// DISPATCH KEY WELL-FORMEDNESS
+// ══════════════════════════════════════════════════════════════════════
+
+/// Master dispatch_key wf: every key event that produces a NewModel
+/// preserves text model well-formedness.
+pub proof fn theorem_dispatch_key_preserves_wf(model: TextModel, event: KeyEvent)
+    requires
+        model.wf(),
+    ensures
+        match dispatch_key(model, event) {
+            KeyAction::NewModel(m) => m.wf(),
+            _ => true,
+        },
+{
+    use crate::text_model::proofs::*;
+    match event.kind {
+        KeyEventKind::Char(ch) => {
+            if model.composition.is_some() {
+            } else if is_permitted(ch) && ch != '\r' {
+                lemma_dispatch_insert_preserves_wf(model, ch);
+            }
+        },
+        KeyEventKind::Enter => {
+            if model.composition.is_some() {
+            } else {
+                lemma_dispatch_insert_preserves_wf(model, '\n');
+            }
+        },
+        KeyEventKind::Tab => {
+            if model.composition.is_some() {
+            } else {
+                lemma_dispatch_insert_preserves_wf(model, '\t');
+            }
+        },
+        KeyEventKind::Backspace => {
+            if model.composition.is_some() {
+            } else if has_selection(model.anchor, model.focus) {
+                lemma_dispatch_delete_selection_preserves_wf(model);
+            } else if model.focus == 0 {
+            } else if event.modifiers.ctrl {
+                lemma_delete_word_backward_preserves_wf(model);
+            } else {
+                lemma_dispatch_delete_backward_preserves_wf(model);
+            }
+        },
+        KeyEventKind::Delete => {
+            if model.composition.is_some() {
+            } else if has_selection(model.anchor, model.focus) {
+                lemma_dispatch_delete_selection_preserves_wf(model);
+            } else if model.focus >= model.text.len() {
+            } else if event.modifiers.ctrl {
+                lemma_delete_word_forward_preserves_wf(model);
+            } else {
+                lemma_dispatch_delete_forward_preserves_wf(model);
+            }
+        },
+        KeyEventKind::SelectAll => {
+            lemma_select_all_preserves_wf(model);
+        },
+        KeyEventKind::ComposeStart => {
+            if model.composition.is_some() {
+            } else {
+                lemma_compose_start_preserves_wf(model);
+            }
+        },
+        KeyEventKind::ComposeUpdate(text, cursor) => {
+            if model.composition.is_none() || cursor > text.len() {
+            } else {
+                lemma_compose_update_preserves_wf(model, text, cursor);
+            }
+        },
+        KeyEventKind::ComposeCommit => {
+            if model.composition.is_none() {
+            } else {
+                lemma_dispatch_compose_commit_preserves_wf(model);
+            }
+        },
+        KeyEventKind::ComposeCancel => {
+            lemma_compose_cancel_preserves_wf(model);
+        },
+        _ => {
+            // Arrow/Home/End keys
+            match key_to_move_direction(event) {
+                Some(dir) => {
+                    if event.modifiers.shift {
+                        lemma_dispatch_extend_selection_preserves_wf(model, dir);
+                    } else {
+                        lemma_dispatch_move_preserves_wf(model, dir);
+                    }
+                },
+                None => {},
+            }
+        },
+    }
 }
 
 // ══════════════════════════════════════════════════════════════════════
