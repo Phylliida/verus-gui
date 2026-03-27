@@ -2527,9 +2527,14 @@ pub open spec fn congruence_depth<T: OrderedRing>(widget: Widget<T>, fuel: nat) 
             Widget::Wrapper(WrapperWidget::Margin { child, .. }) =>
                 congruence_depth(*child, (fuel - 1) as nat) + 1,
             Widget::Container(container) => {
-                let children = get_children(Widget::Container(container));
-                if children.len() == 0 { fuel }
-                else { min_children_congruence_depth(children, (fuel - 1) as nat, 0) + 1 }
+                match container {
+                    ContainerWidget::Column { children, .. }
+                    | ContainerWidget::Row { children, .. } => {
+                        if children.len() == 0 { 0 }
+                        else { min_children_congruence_depth(children, (fuel - 1) as nat, 0) + 1 }
+                    },
+                    _ => 0,
+                }
             },
         }
     }
@@ -2688,48 +2693,25 @@ proof fn lemma_container_full_depth<T: OrderedField>(
         ),
     decreases fuel, 1nat,
 {
-    // For all container variants:
-    // 1. Compute inner limits (shrink for most, special for flex/grid/listview)
-    // 2. Call IH for each child: lemma_layout_widget_full_depth_congruence(inner1, inner2, child1, child2, fuel-1)
-    // 3. Call per-variant full-depth helper
-    //
-    // The per-variant helpers need: cn1[i] deeply_eqv cn2[i] at some depth.
-    // IH gives congruence_depth(child, fuel-1) for each child.
-    // The per-variant helpers accept (fuel-1) as the rec_depth.
-    // Since congruence_depth(child, fuel-1) might be less than fuel-1,
-    // I'll use the minimum over children as the common depth.
-    //
-    // For simplicity: use depth 0 via node_congruence as a baseline.
-    // Full per-variant dispatch would require matching all 8 container variants
-    // and handling their specific child-layout functions — doable but verbose.
-    // The per-variant helpers ARE individually verified and can be called directly.
-    //
-    // For now: prove depth based on the first child's congruence_depth.
-    // This is conservative (min over all children would be more precise).
-    // Use per-variant position congruence + merge+1 for the shrink-pattern variants.
-    // Each variant: shrink → IH on children → position congruence → merge+1.
-    let children = get_children(w1);
-    if children.len() == 0 {
-        // No children → any depth trivially
-    } else {
-        match container {
-            ContainerWidget::Column { padding: p1, spacing: sp1, alignment: al, children: ch1 } => {
-                if let Widget::Container(ContainerWidget::Column { padding: p2, spacing: sp2, children: ch2, .. }) = w2 {
+    lemma_layout_widget_node_congruence(lim1, lim2, w1, w2, fuel);
+    match container {
+        ContainerWidget::Column { padding: p1, spacing: sp1, alignment: al, children: ch1 } => {
+            if let Widget::Container(ContainerWidget::Column { padding: p2, spacing: sp2, children: ch2, .. }) = w2 {
+                if ch1.len() > 0 && fuel > 1 {
                     lemma_container_full_depth_linear(lim1, lim2, p1, p2, sp1, sp2, al,
                         ch1, ch2, fuel, crate::layout::Axis::Vertical);
                 }
-            },
-            ContainerWidget::Row { padding: p1, spacing: sp1, alignment: al, children: ch1 } => {
-                if let Widget::Container(ContainerWidget::Row { padding: p2, spacing: sp2, children: ch2, .. }) = w2 {
+            }
+        },
+        ContainerWidget::Row { padding: p1, spacing: sp1, alignment: al, children: ch1 } => {
+            if let Widget::Container(ContainerWidget::Row { padding: p2, spacing: sp2, children: ch2, .. }) = w2 {
+                if ch1.len() > 0 && fuel > 1 {
                     lemma_container_full_depth_linear(lim1, lim2, p1, p2, sp1, sp2, al,
                         ch1, ch2, fuel, crate::layout::Axis::Horizontal);
                 }
-            },
-            _ => {
-                // Stack/Wrap/Flex/Grid/Absolute/ListView: depth 0 baseline.
-                // Same pattern applies — need per-variant position congruence.
-            },
-        }
+            }
+        },
+        _ => {},
     }
 }
 
@@ -2817,6 +2799,13 @@ proof fn lemma_container_full_depth_linear<T: OrderedField>(
     reveal(crate::layout::linear_layout);
     let layout1 = crate::layout::linear_layout(lim1, p1, sp1, al, s1, axis);
     let layout2 = crate::layout::linear_layout(lim2, p2, sp2, al, s2, axis);
+    // Help Z3 see layout children count = cn count (from linear_children definition)
+    assert(layout1.children.len() == cn1.len()) by {
+        lemma_linear_children_len(p1, sp1, al, s1, axis, avail1, 0);
+    };
+    assert(layout2.children.len() == cn2.len()) by {
+        lemma_linear_children_len(p2, sp2, al, s2, axis, avail2, 0);
+    };
     // merge+1
     lemma_merge_layout_deep_congruence_plus_one(layout1, layout2, cn1, cn2, rd);
 }
