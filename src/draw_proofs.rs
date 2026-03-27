@@ -439,8 +439,15 @@ proof fn lemma_all_sizes_nonneg_xy_irrelevant<T: OrderedRing>(
 
 /// THE KEY THEOREM: every node in a layout tree has non-negative sizes.
 ///
-/// Induction on layout fuel. The check_fuel parameter is independent — we prove
-/// the property at any depth of checking.
+/// Proves all_sizes_nonneg(layout_widget(limits, widget, fuel), check_fuel) for ANY
+/// check_fuel, given only limits.min.is_nonneg(). This weak precondition is preserved
+/// by all inner limit constructions (shrink, intersect, zero min, same min).
+///
+/// Induction on (fuel, check_fuel) with 3-tuple decreases for mutual recursion:
+/// - Main function: decreases (fuel, check_fuel, 3)
+/// - Wrapper helper: decreases (fuel, check_fuel, 2)
+/// - Container helper: decreases (fuel, check_fuel, 2)
+/// - Flex child helper: decreases (fuel, check_fuel, 1)
 pub proof fn lemma_layout_widget_all_sizes_nonneg<T: OrderedField>(
     limits: Limits<T>,
     widget: Widget<T>,
@@ -449,79 +456,218 @@ pub proof fn lemma_layout_widget_all_sizes_nonneg<T: OrderedField>(
 )
     requires limits.min.is_nonneg(),
     ensures all_sizes_nonneg(layout_widget(limits, widget, fuel), check_fuel),
-    decreases fuel, check_fuel,
+    decreases fuel, check_fuel, 3nat,
 {
-    let node = layout_widget(limits, widget, fuel);
     if fuel == 0 {
-        // layout returns zero node — zero.le(zero) by reflexive
         T::axiom_le_reflexive(T::zero());
-        if check_fuel > 0 {
-            // No children, forall is vacuous
-        }
     } else if check_fuel == 0 {
-        // Just need node.size.is_nonneg()
-        lemma_layout_root_nonneg(limits, widget, fuel);
+        // all_sizes_nonneg(node, 0) = node.size.is_nonneg()
+        // Root nonneg for leaf/wrapper: direct resolve call
+        // Root nonneg for container: per-variant helper with reveal()
+        lemma_root_size_nonneg(limits, widget, fuel);
     } else {
-        // Need root nonneg + all children nonneg at check_fuel-1
-        lemma_layout_root_nonneg(limits, widget, fuel);
-        lemma_layout_children_all_nonneg(limits, widget, fuel, check_fuel);
+        // Root nonneg + children nonneg at check_fuel-1
+        lemma_root_size_nonneg(limits, widget, fuel);
+        match widget {
+            Widget::Leaf(_) => { /* no children */ },
+            Widget::Wrapper(wrapper) => {
+                lemma_wrapper_children_nonneg(limits, wrapper, fuel, check_fuel);
+            },
+            Widget::Container(container) => {
+                lemma_container_children_nonneg(limits, container, fuel, check_fuel);
+            },
+        }
     }
 }
 
-/// Root size of any layout is nonneg when limits.min is nonneg.
-proof fn lemma_layout_root_nonneg<T: OrderedField>(
-    limits: Limits<T>,
-    widget: Widget<T>,
-    fuel: nat,
+// ── Root size nonneg helpers ──────────────────────────────────────────
+// Each variant's root is limits.resolve(X). resolve(X) >= min >= 0.
+// Container layout functions are #[verifier::opaque] so need reveal().
+// Split into per-variant helpers for rlimit.
+
+/// Root size nonneg: leaf and wrapper variants (direct resolve).
+proof fn lemma_root_size_nonneg<T: OrderedField>(
+    limits: Limits<T>, widget: Widget<T>, fuel: nat,
 )
     requires limits.min.is_nonneg(), fuel > 0,
     ensures layout_widget(limits, widget, fuel).size.is_nonneg(),
 {
-    // All variants produce root size via limits.resolve(something)
-    lemma_resolve_nonneg_from_min(limits, layout_widget(limits, widget, fuel).size);
-    // Need to show layout_widget(...).size == limits.resolve(X) for some X
-    // Actually, resolve(resolve(x)) == resolve(x) since resolve clamps to [min,max]
-    // But simpler: lemma_layout_widget_respects_limits gives min <= size <= max
-    // and min >= 0, so size >= 0.
-    crate::layout::bounds_proofs::lemma_layout_widget_respects_limits(limits, widget, fuel);
-    T::axiom_le_transitive(T::zero(), limits.min.width, layout_widget(limits, widget, fuel).size.width);
-    T::axiom_le_transitive(T::zero(), limits.min.height, layout_widget(limits, widget, fuel).size.height);
-}
-
-/// Children of a layout all have nonneg sizes (recursively).
-proof fn lemma_layout_children_all_nonneg<T: OrderedField>(
-    limits: Limits<T>,
-    widget: Widget<T>,
-    fuel: nat,
-    check_fuel: nat,
-)
-    requires limits.min.is_nonneg(), fuel > 0, check_fuel > 0,
-    ensures ({
-        let node = layout_widget(limits, widget, fuel);
-        forall|i: int| 0 <= i < node.children.len() ==>
-            all_sizes_nonneg(#[trigger] node.children[i], (check_fuel - 1) as nat)
-    }),
-    decreases fuel, check_fuel,
-{
     match widget {
-        Widget::Leaf(_) => {
-            // Leaf has no children (empty Seq)
+        Widget::Leaf(LeafWidget::Leaf { size }) =>
+            { lemma_resolve_nonneg_from_min(limits, size); },
+        Widget::Leaf(LeafWidget::TextInput { preferred_size, .. }) =>
+            { lemma_resolve_nonneg_from_min(limits, preferred_size); },
+        Widget::Wrapper(WrapperWidget::Conditional { visible, child }) => {
+            if visible {
+                lemma_resolve_nonneg_from_min(limits, layout_widget(limits, *child, (fuel - 1) as nat).size);
+            } else {
+                lemma_resolve_nonneg_from_min(limits, Size::zero_size());
+            }
         },
-        Widget::Wrapper(wrapper) => {
-            lemma_wrapper_children_nonneg(limits, wrapper, fuel, check_fuel);
+        Widget::Wrapper(WrapperWidget::Margin { margin, child }) => {
+            let cn = layout_widget(limits.shrink(margin.horizontal(), margin.vertical()), *child, (fuel - 1) as nat);
+            lemma_resolve_nonneg_from_min(limits, Size::new(margin.horizontal().add(cn.size.width), margin.vertical().add(cn.size.height)));
         },
+        Widget::Wrapper(WrapperWidget::SizedBox { inner_limits, child }) =>
+            { lemma_resolve_nonneg_from_min(limits, layout_widget(limits.intersect(inner_limits), *child, (fuel - 1) as nat).size); },
+        Widget::Wrapper(WrapperWidget::AspectRatio { ratio, child }) => {
+            if limits.max.width.div(ratio).le(limits.max.height) {
+                lemma_resolve_nonneg_from_min(limits, layout_widget(Limits { min: limits.min, max: Size::new(limits.max.width, limits.max.width.div(ratio)) }, *child, (fuel - 1) as nat).size);
+            } else {
+                lemma_resolve_nonneg_from_min(limits, layout_widget(Limits { min: limits.min, max: Size::new(limits.max.height.mul(ratio), limits.max.height) }, *child, (fuel - 1) as nat).size);
+            }
+        },
+        Widget::Wrapper(WrapperWidget::ScrollView { viewport, .. }) =>
+            { lemma_resolve_nonneg_from_min(limits, viewport); },
         Widget::Container(container) => {
-            lemma_container_children_nonneg(limits, container, fuel, check_fuel);
+            // Per-variant with reveals. Each gets own function for rlimit.
+            lemma_container_root_nonneg_column(limits, container, fuel);
+            lemma_container_root_nonneg_row(limits, container, fuel);
+            lemma_container_root_nonneg_stack(limits, container, fuel);
+            lemma_container_root_nonneg_wrap(limits, container, fuel);
+            lemma_container_root_nonneg_flex(limits, container, fuel);
+            lemma_container_root_nonneg_grid(limits, container, fuel);
+            lemma_container_root_nonneg_abs(limits, container, fuel);
+            lemma_container_root_nonneg_listview(limits, container, fuel);
         },
     }
 }
 
+proof fn lemma_container_root_nonneg_column<T: OrderedField>(
+    limits: Limits<T>, container: ContainerWidget<T>, fuel: nat,
+)
+    requires limits.min.is_nonneg(), fuel > 0,
+    ensures container is Column ==> layout_container(limits, container, fuel).size.is_nonneg(),
+{
+    if let ContainerWidget::Column { padding, spacing, alignment, children } = container {
+        reveal(crate::layout::linear_layout);
+        let cn = widget_child_nodes(limits.shrink(padding.horizontal(), padding.vertical()), children, (fuel - 1) as nat);
+        let cs = Seq::new(cn.len(), |i: int| cn[i].size);
+        let x = Size::from_axes(crate::layout::Axis::Vertical,
+            padding.main_padding(crate::layout::Axis::Vertical).add(crate::layout::linear_content_main(cs, crate::layout::Axis::Vertical, spacing)),
+            limits.max.cross_dim(crate::layout::Axis::Vertical));
+        lemma_resolve_nonneg_from_min(limits, x);
+    }
+}
+
+proof fn lemma_container_root_nonneg_row<T: OrderedField>(
+    limits: Limits<T>, container: ContainerWidget<T>, fuel: nat,
+)
+    requires limits.min.is_nonneg(), fuel > 0,
+    ensures container is Row ==> layout_container(limits, container, fuel).size.is_nonneg(),
+{
+    if let ContainerWidget::Row { padding, spacing, alignment, children } = container {
+        reveal(crate::layout::linear_layout);
+        let cn = widget_child_nodes(limits.shrink(padding.horizontal(), padding.vertical()), children, (fuel - 1) as nat);
+        let cs = Seq::new(cn.len(), |i: int| cn[i].size);
+        let x = Size::from_axes(crate::layout::Axis::Horizontal,
+            padding.main_padding(crate::layout::Axis::Horizontal).add(crate::layout::linear_content_main(cs, crate::layout::Axis::Horizontal, spacing)),
+            limits.max.cross_dim(crate::layout::Axis::Horizontal));
+        lemma_resolve_nonneg_from_min(limits, x);
+    }
+}
+
+proof fn lemma_container_root_nonneg_stack<T: OrderedField>(
+    limits: Limits<T>, container: ContainerWidget<T>, fuel: nat,
+)
+    requires limits.min.is_nonneg(), fuel > 0,
+    ensures container is Stack ==> layout_container(limits, container, fuel).size.is_nonneg(),
+{
+    if let ContainerWidget::Stack { padding, h_align, v_align, children } = container {
+        reveal(crate::layout::stack::stack_layout);
+        let cn = widget_child_nodes(limits.shrink(padding.horizontal(), padding.vertical()), children, (fuel - 1) as nat);
+        let cs = Seq::new(cn.len(), |i: int| cn[i].size);
+        let c = crate::layout::stack::stack_content_size(cs);
+        lemma_resolve_nonneg_from_min(limits, Size::new(padding.horizontal().add(c.width), padding.vertical().add(c.height)));
+    }
+}
+
+proof fn lemma_container_root_nonneg_wrap<T: OrderedField>(
+    limits: Limits<T>, container: ContainerWidget<T>, fuel: nat,
+)
+    requires limits.min.is_nonneg(), fuel > 0,
+    ensures container is Wrap ==> layout_container(limits, container, fuel).size.is_nonneg(),
+{
+    if let ContainerWidget::Wrap { padding, h_spacing, v_spacing, children } = container {
+        reveal(crate::layout::wrap::wrap_layout);
+        let cn = widget_child_nodes(limits.shrink(padding.horizontal(), padding.vertical()), children, (fuel - 1) as nat);
+        let cs = Seq::new(cn.len(), |i: int| cn[i].size);
+        let aw = limits.max.width.sub(padding.horizontal());
+        let c = crate::layout::wrap::wrap_content_size(cs, h_spacing, v_spacing, aw);
+        lemma_resolve_nonneg_from_min(limits, Size::new(padding.horizontal().add(c.width), padding.vertical().add(c.height)));
+    }
+}
+
+proof fn lemma_container_root_nonneg_flex<T: OrderedField>(
+    limits: Limits<T>, container: ContainerWidget<T>, fuel: nat,
+)
+    requires limits.min.is_nonneg(), fuel > 0,
+    ensures container is Flex ==> layout_container(limits, container, fuel).size.is_nonneg(),
+{
+    if let ContainerWidget::Flex { direction, .. } = container {
+        match direction.axis() {
+            crate::layout::Axis::Vertical => { reveal(crate::layout::flex::flex_column_layout); },
+            crate::layout::Axis::Horizontal => { reveal(crate::layout::flex::flex_row_layout); },
+        }
+        lemma_resolve_nonneg_from_min(limits, limits.max);
+    }
+}
+
+proof fn lemma_container_root_nonneg_grid<T: OrderedField>(
+    limits: Limits<T>, container: ContainerWidget<T>, fuel: nat,
+)
+    requires limits.min.is_nonneg(), fuel > 0,
+    ensures container is Grid ==> layout_container(limits, container, fuel).size.is_nonneg(),
+{
+    if let ContainerWidget::Grid { padding, h_spacing, v_spacing, col_widths, row_heights, .. } = container {
+        reveal(crate::layout::grid::grid_layout);
+        lemma_resolve_nonneg_from_min(limits, Size::new(
+            padding.horizontal().add(crate::layout::grid::grid_content_width(col_widths, h_spacing)),
+            padding.vertical().add(crate::layout::grid::grid_content_height(row_heights, v_spacing))));
+    }
+}
+
+proof fn lemma_container_root_nonneg_abs<T: OrderedField>(
+    limits: Limits<T>, container: ContainerWidget<T>, fuel: nat,
+)
+    requires limits.min.is_nonneg(), fuel > 0,
+    ensures container is Absolute ==> layout_container(limits, container, fuel).size.is_nonneg(),
+{
+    if let ContainerWidget::Absolute { padding, children } = container {
+        reveal(crate::layout::absolute::absolute_layout);
+        let inner = limits.shrink(padding.horizontal(), padding.vertical());
+        let cn = absolute_widget_child_nodes(inner, children, (fuel - 1) as nat);
+        let offsets = Seq::new(children.len(), |i: int| (children[i].x, children[i].y));
+        // layout_absolute_body constructs child_data internally from cn + offsets
+        let child_data = Seq::new(cn.len(), |i: int| (offsets[i].0, offsets[i].1, cn[i].size));
+        let c = crate::layout::absolute::absolute_content_size(child_data);
+        let x = Size::new(padding.horizontal().add(c.width), padding.vertical().add(c.height));
+        // absolute_layout(limits, padding, child_data).size == limits.resolve(x)
+        // (from absolute_layout definition, now revealed)
+        lemma_resolve_nonneg_from_min(limits, x);
+        // Help Z3 see the chain: layout_container → layout_absolute_body → merge_layout
+        let layout_node = crate::layout::absolute::absolute_layout(limits, padding, child_data);
+        assert(layout_absolute_body(limits, padding, cn, offsets).size == layout_node.size);
+    }
+}
+
+proof fn lemma_container_root_nonneg_listview<T: OrderedField>(
+    limits: Limits<T>, container: ContainerWidget<T>, fuel: nat,
+)
+    requires limits.min.is_nonneg(), fuel > 0,
+    ensures container is ListView ==> layout_container(limits, container, fuel).size.is_nonneg(),
+{
+    if let ContainerWidget::ListView { viewport, .. } = container {
+        reveal(crate::layout::listview::layout_listview_body);
+        lemma_resolve_nonneg_from_min(limits, viewport);
+    }
+}
+
+// ── Children nonneg helpers ──────────────────────────────────────────
+
 /// Wrapper children all_sizes_nonneg.
 proof fn lemma_wrapper_children_nonneg<T: OrderedField>(
-    limits: Limits<T>,
-    wrapper: WrapperWidget<T>,
-    fuel: nat,
-    check_fuel: nat,
+    limits: Limits<T>, wrapper: WrapperWidget<T>, fuel: nat, check_fuel: nat,
 )
     requires limits.min.is_nonneg(), fuel > 0, check_fuel > 0,
     ensures ({
@@ -529,72 +675,52 @@ proof fn lemma_wrapper_children_nonneg<T: OrderedField>(
         forall|i: int| 0 <= i < node.children.len() ==>
             all_sizes_nonneg(#[trigger] node.children[i], (check_fuel - 1) as nat)
     }),
-    decreases fuel, check_fuel,
+    decreases fuel, check_fuel, 2nat,
 {
     match wrapper {
         WrapperWidget::Conditional { visible, child } => {
             if visible {
-                // Output children = child_node.children where child_node = layout_widget(limits, *child, fuel-1)
-                // Need all_sizes_nonneg for each at check_fuel-1
-                // By IH at (fuel-1, check_fuel): all_sizes_nonneg(child_node, check_fuel)
-                // which gives forall|i| all_sizes_nonneg(child_node.children[i], check_fuel-1)
                 lemma_layout_widget_all_sizes_nonneg(limits, *child, (fuel - 1) as nat, check_fuel);
                 let child_node = layout_widget(limits, *child, (fuel - 1) as nat);
                 let node = layout_widget(limits, Widget::Wrapper(wrapper), fuel);
                 assert(node.children =~= child_node.children);
-            } else {
-                // No children
             }
         },
         WrapperWidget::Margin { margin, child } => {
             let inner = limits.shrink(margin.horizontal(), margin.vertical());
-            // inner.min == limits.min, so inner.min.is_nonneg()
             lemma_layout_widget_all_sizes_nonneg(inner, *child, (fuel - 1) as nat, (check_fuel - 1) as nat);
         },
         WrapperWidget::SizedBox { inner_limits, child } => {
             let effective = limits.intersect(inner_limits);
-            // intersect.min = max(limits.min, inner_limits.min) >= limits.min >= 0
             verus_algebra::min_max::lemma_max_ge_left::<T>(limits.min.width, inner_limits.min.width);
-            T::axiom_le_transitive(T::zero(), limits.min.width,
-                max::<T>(limits.min.width, inner_limits.min.width));
+            T::axiom_le_transitive(T::zero(), limits.min.width, max::<T>(limits.min.width, inner_limits.min.width));
             verus_algebra::min_max::lemma_max_ge_left::<T>(limits.min.height, inner_limits.min.height);
-            T::axiom_le_transitive(T::zero(), limits.min.height,
-                max::<T>(limits.min.height, inner_limits.min.height));
+            T::axiom_le_transitive(T::zero(), limits.min.height, max::<T>(limits.min.height, inner_limits.min.height));
             lemma_layout_widget_all_sizes_nonneg(effective, *child, (fuel - 1) as nat, (check_fuel - 1) as nat);
         },
         WrapperWidget::AspectRatio { ratio, child } => {
-            // Inner limits have min = limits.min which is nonneg
-            let w1 = limits.max.width;
-            let h1 = w1.div(ratio);
-            if h1.le(limits.max.height) {
-                let eff = Limits { min: limits.min, max: Size::new(w1, h1) };
-                lemma_layout_widget_all_sizes_nonneg(eff, *child, (fuel - 1) as nat, (check_fuel - 1) as nat);
+            if limits.max.width.div(ratio).le(limits.max.height) {
+                lemma_layout_widget_all_sizes_nonneg(
+                    Limits { min: limits.min, max: Size::new(limits.max.width, limits.max.width.div(ratio)) },
+                    *child, (fuel - 1) as nat, (check_fuel - 1) as nat);
             } else {
-                let h2 = limits.max.height;
-                let w2 = h2.mul(ratio);
-                let eff = Limits { min: limits.min, max: Size::new(w2, h2) };
-                lemma_layout_widget_all_sizes_nonneg(eff, *child, (fuel - 1) as nat, (check_fuel - 1) as nat);
+                lemma_layout_widget_all_sizes_nonneg(
+                    Limits { min: limits.min, max: Size::new(limits.max.height.mul(ratio), limits.max.height) },
+                    *child, (fuel - 1) as nat, (check_fuel - 1) as nat);
             }
         },
         WrapperWidget::ScrollView { viewport, scroll_x, scroll_y, child } => {
-            // child_limits = Limits { min: zero, max: viewport }
-            // min = zero which is nonneg
-            let child_limits = Limits {
-                min: Size::zero_size(),
-                max: viewport,
-            };
             T::axiom_le_reflexive(T::zero());
-            lemma_layout_widget_all_sizes_nonneg(child_limits, *child, (fuel - 1) as nat, (check_fuel - 1) as nat);
+            lemma_layout_widget_all_sizes_nonneg(
+                Limits { min: Size::zero_size(), max: viewport },
+                *child, (fuel - 1) as nat, (check_fuel - 1) as nat);
         },
     }
 }
 
-/// Container children all_sizes_nonneg.
+/// Container children all_sizes_nonneg — dispatches to split helpers.
 proof fn lemma_container_children_nonneg<T: OrderedField>(
-    limits: Limits<T>,
-    container: ContainerWidget<T>,
-    fuel: nat,
-    check_fuel: nat,
+    limits: Limits<T>, container: ContainerWidget<T>, fuel: nat, check_fuel: nat,
 )
     requires limits.min.is_nonneg(), fuel > 0, check_fuel > 0,
     ensures ({
@@ -602,72 +728,180 @@ proof fn lemma_container_children_nonneg<T: OrderedField>(
         forall|i: int| 0 <= i < node.children.len() ==>
             all_sizes_nonneg(#[trigger] node.children[i], (check_fuel - 1) as nat)
     }),
-    decreases fuel, check_fuel,
+    decreases fuel, check_fuel, 2nat,
 {
-    // For ALL container variants, children in the output (after merge_layout or direct construction)
-    // have size = child_nodes[i].size and children = child_nodes[i].children, where
-    // child_nodes[i] = layout_widget(inner_limits, widget_i, fuel-1).
-    // By IH: all_sizes_nonneg(layout_widget(inner, widget_i, fuel-1), check_fuel-1)
-    // Since merged child has same size and children: all_sizes_nonneg(merged_child, check_fuel-1)
     match container {
-        ContainerWidget::Column { padding, spacing, alignment, children }
-        | ContainerWidget::Row { padding, spacing, alignment, children } => {
-            let inner = limits.shrink(padding.horizontal(), padding.vertical());
-            assert forall|i: int| 0 <= i < children.len() implies
-                all_sizes_nonneg(layout_widget(inner, children[i], (fuel - 1) as nat), (check_fuel - 1) as nat)
-            by {
-                lemma_layout_widget_all_sizes_nonneg(inner, children[i], (fuel - 1) as nat, (check_fuel - 1) as nat);
-            };
-        },
-        ContainerWidget::Stack { padding, h_align, v_align, children } => {
-            let inner = limits.shrink(padding.horizontal(), padding.vertical());
-            assert forall|i: int| 0 <= i < children.len() implies
-                all_sizes_nonneg(layout_widget(inner, children[i], (fuel - 1) as nat), (check_fuel - 1) as nat)
-            by {
-                lemma_layout_widget_all_sizes_nonneg(inner, children[i], (fuel - 1) as nat, (check_fuel - 1) as nat);
-            };
-        },
-        ContainerWidget::Wrap { padding, h_spacing, v_spacing, children } => {
-            let inner = limits.shrink(padding.horizontal(), padding.vertical());
-            assert forall|i: int| 0 <= i < children.len() implies
-                all_sizes_nonneg(layout_widget(inner, children[i], (fuel - 1) as nat), (check_fuel - 1) as nat)
-            by {
-                lemma_layout_widget_all_sizes_nonneg(inner, children[i], (fuel - 1) as nat, (check_fuel - 1) as nat);
-            };
-        },
-        ContainerWidget::Flex { padding, spacing, alignment, direction, children } => {
-            let inner = limits.shrink(padding.horizontal(), padding.vertical());
-            // Flex children are laid out with per-child limits derived from inner
-            // All have min nonneg since inner.min = limits.min
-            assert forall|i: int| 0 <= i < children.len() implies
-                all_sizes_nonneg(
-                    layout_widget(
-                        flex_child_limits(inner, children, direction.axis(), i),
-                        children[i].child,
-                        (fuel - 1) as nat),
-                    (check_fuel - 1) as nat)
-            by {
-                // flex_child_limits produces limits with min from inner (nonneg)
-                lemma_flex_child_limits_min_nonneg(inner, children, direction.axis(), i);
-                lemma_layout_widget_all_sizes_nonneg(
-                    flex_child_limits(inner, children, direction.axis(), i),
-                    children[i].child,
-                    (fuel - 1) as nat, (check_fuel - 1) as nat);
-            };
-        },
-        ...
+        ContainerWidget::Column { .. } =>
+            lemma_container_children_nonneg_shrink(limits, container, fuel, check_fuel),
+        ContainerWidget::Row { .. } =>
+            lemma_container_children_nonneg_shrink(limits, container, fuel, check_fuel),
+        ContainerWidget::Stack { .. } =>
+            lemma_container_children_nonneg_shrink(limits, container, fuel, check_fuel),
+        ContainerWidget::Wrap { .. } =>
+            lemma_container_children_nonneg_shrink(limits, container, fuel, check_fuel),
+        ContainerWidget::Absolute { .. } =>
+            lemma_container_children_nonneg_shrink(limits, container, fuel, check_fuel),
+        _ =>
+            lemma_container_children_nonneg_complex(limits, container, fuel, check_fuel),
     }
 }
-```
 
-Hmm, this is getting complex. Let me think about Flex. The flex child layout uses `flex_linear_widget_child_nodes` which is different from `widget_child_nodes`. Let me check how flex children are laid out.
-</thinking>
+/// Container children nonneg — shrink-pattern (Column/Row/Stack/Wrap/Absolute).
+proof fn lemma_container_children_nonneg_shrink<T: OrderedField>(
+    limits: Limits<T>, container: ContainerWidget<T>, fuel: nat, check_fuel: nat,
+)
+    requires limits.min.is_nonneg(), fuel > 0, check_fuel > 0,
+        container is Column || container is Row || container is Stack
+        || container is Wrap || container is Absolute,
+    ensures ({
+        let node = layout_widget(limits, Widget::Container(container), fuel);
+        forall|i: int| 0 <= i < node.children.len() ==>
+            all_sizes_nonneg(#[trigger] node.children[i], (check_fuel - 1) as nat)
+    }),
+    decreases fuel, check_fuel, 1nat,
+{
+    match container {
+        ContainerWidget::Column { padding, children, .. } => {
+            let inner = limits.shrink(padding.horizontal(), padding.vertical());
+            let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
+            assert forall|i: int| 0 <= i < cn.len() implies
+                all_sizes_nonneg(#[trigger] cn[i], (check_fuel - 1) as nat)
+            by { lemma_layout_widget_all_sizes_nonneg(inner, children[i], (fuel - 1) as nat, (check_fuel - 1) as nat); };
+        },
+        ContainerWidget::Row { padding, children, .. } => {
+            let inner = limits.shrink(padding.horizontal(), padding.vertical());
+            let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
+            assert forall|i: int| 0 <= i < cn.len() implies
+                all_sizes_nonneg(#[trigger] cn[i], (check_fuel - 1) as nat)
+            by { lemma_layout_widget_all_sizes_nonneg(inner, children[i], (fuel - 1) as nat, (check_fuel - 1) as nat); };
+        },
+        ContainerWidget::Stack { padding, children, .. } => {
+            let inner = limits.shrink(padding.horizontal(), padding.vertical());
+            let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
+            assert forall|i: int| 0 <= i < cn.len() implies
+                all_sizes_nonneg(#[trigger] cn[i], (check_fuel - 1) as nat)
+            by { lemma_layout_widget_all_sizes_nonneg(inner, children[i], (fuel - 1) as nat, (check_fuel - 1) as nat); };
+        },
+        ContainerWidget::Wrap { padding, children, .. } => {
+            let inner = limits.shrink(padding.horizontal(), padding.vertical());
+            let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
+            assert forall|i: int| 0 <= i < cn.len() implies
+                all_sizes_nonneg(#[trigger] cn[i], (check_fuel - 1) as nat)
+            by { lemma_layout_widget_all_sizes_nonneg(inner, children[i], (fuel - 1) as nat, (check_fuel - 1) as nat); };
+        },
+        ContainerWidget::Absolute { padding, children } => {
+            let inner = limits.shrink(padding.horizontal(), padding.vertical());
+            let cn = absolute_widget_child_nodes(inner, children, (fuel - 1) as nat);
+            assert forall|i: int| 0 <= i < cn.len() implies
+                all_sizes_nonneg(#[trigger] cn[i], (check_fuel - 1) as nat)
+            by { lemma_layout_widget_all_sizes_nonneg(inner, children[i].child, (fuel - 1) as nat, (check_fuel - 1) as nat); };
+        },
+        _ => {},
+    }
+}
 
-Let me check how flex and grid children are laid out:
+/// Container children nonneg — complex variants (Flex/Grid/ListView).
+proof fn lemma_container_children_nonneg_complex<T: OrderedField>(
+    limits: Limits<T>, container: ContainerWidget<T>, fuel: nat, check_fuel: nat,
+)
+    requires limits.min.is_nonneg(), fuel > 0, check_fuel > 0,
+        !(container is Column) && !(container is Row) && !(container is Stack)
+        && !(container is Wrap) && !(container is Absolute),
+    ensures ({
+        let node = layout_widget(limits, Widget::Container(container), fuel);
+        forall|i: int| 0 <= i < node.children.len() ==>
+            all_sizes_nonneg(#[trigger] node.children[i], (check_fuel - 1) as nat)
+    }),
+    decreases fuel, check_fuel, 1nat,
+{
+    match container {
+        ContainerWidget::Flex { padding, spacing, alignment, direction, children } => {
+            let inner = limits.shrink(padding.horizontal(), padding.vertical());
+            let weights = Seq::new(children.len(), |i: int| children[i].weight);
+            let total_weight = crate::layout::flex::sum_weights(weights, weights.len() as nat);
+            let total_spacing = if children.len() > 0 {
+                crate::layout::repeated_add(spacing, (children.len() - 1) as nat)
+            } else { T::zero() };
+            let axis = direction.axis();
+            let available_main = inner.max.main_dim(axis).sub(total_spacing);
+            let cn = flex_linear_widget_child_nodes(
+                inner, children, weights, total_weight, available_main, axis, (fuel - 1) as nat);
+            assert forall|i: int| 0 <= i < cn.len() implies
+                all_sizes_nonneg(#[trigger] cn[i], (check_fuel - 1) as nat)
+            by {
+                lemma_flex_child_nonneg(inner, children, weights, total_weight, available_main, axis, fuel, check_fuel, i);
+            };
+            // Help Z3 see node.children[i] has same size/children as cn[i]
+            // through layout_flex_linear_body → merge_layout(flex_layout, cn)
+            let node = layout_widget(limits, Widget::Container(container), fuel);
+            assert(node.children.len() == cn.len());
+        },
+        ContainerWidget::Grid { padding, h_spacing, v_spacing, h_align, v_align, col_widths, row_heights, children } => {
+            let inner = limits.shrink(padding.horizontal(), padding.vertical());
+            let cn = grid_widget_child_nodes(inner, col_widths, row_heights, children, col_widths.len(), (fuel - 1) as nat);
+            assert forall|i: int| 0 <= i < cn.len() implies
+                all_sizes_nonneg(#[trigger] cn[i], (check_fuel - 1) as nat)
+            by {
+                let child_lim = Limits { min: inner.min,
+                    max: Size::new(col_widths[(i % col_widths.len() as int)].width,
+                                   row_heights[(i / col_widths.len() as int)].height) };
+                lemma_layout_widget_all_sizes_nonneg(child_lim, children[i], (fuel - 1) as nat, (check_fuel - 1) as nat);
+            };
+            let node = layout_widget(limits, Widget::Container(container), fuel);
+            assert(node.children.len() == cn.len());
+        },
+        ContainerWidget::ListView { spacing, scroll_y, viewport, children } => {
+            let child_limits = Limits { min: Size::zero_size(), max: Size::new(viewport.width, viewport.height) };
+            T::axiom_le_reflexive(T::zero());
+            let child_sizes = crate::measure::measure_children(child_limits, children, (fuel - 1) as nat);
+            let first = crate::layout::listview::listview_first_visible(child_sizes, spacing, scroll_y);
+            let end = crate::layout::listview::listview_end_visible(child_sizes, spacing, scroll_y, viewport.height);
+            let cn = crate::layout::listview::listview_widget_child_nodes(child_limits, children, first, end, (fuel - 1) as nat);
+            assert forall|i: int| 0 <= i < cn.len() implies
+                all_sizes_nonneg(#[trigger] cn[i], (check_fuel - 1) as nat)
+            by {
+                lemma_layout_widget_all_sizes_nonneg(child_limits, children[(first + i) as int], (fuel - 1) as nat, (check_fuel - 1) as nat);
+            };
+            // ListView constructs children directly (not merge_layout)
+            // but with same size/children as cn[i]
+            reveal(crate::layout::listview::layout_listview_body);
+        },
+        _ => {},  // Column/Row/Stack/Wrap/Absolute handled by caller
+    }
+}
 
-<function_calls>
-<invoke name="mcp__verus__lookup_source">
-<parameter name="name">flex_linear_widget_child_nodes
+/// Flex child nonneg — per-index helper for rlimit.
+proof fn lemma_flex_child_nonneg<T: OrderedField>(
+    inner: Limits<T>, children: Seq<FlexItem<T>>, weights: Seq<T>,
+    total_weight: T, available_main: T, axis: crate::layout::Axis,
+    fuel: nat, check_fuel: nat, i: int,
+)
+    requires
+        inner.min.is_nonneg(), fuel > 0, check_fuel > 0,
+        0 <= i < children.len(), weights.len() == children.len(),
+    ensures
+        all_sizes_nonneg(
+            flex_linear_widget_child_nodes(
+                inner, children, weights, total_weight, available_main, axis, (fuel - 1) as nat)[i],
+            (check_fuel - 1) as nat),
+    decreases fuel, check_fuel, 0nat,
+{
+    let main_alloc = crate::layout::flex::flex_child_main_size(weights[i], total_weight, available_main);
+    match axis {
+        crate::layout::Axis::Vertical => {
+            lemma_layout_widget_all_sizes_nonneg(
+                Limits { min: inner.min, max: Size::new(inner.max.width, main_alloc) },
+                children[i].child, (fuel - 1) as nat, (check_fuel - 1) as nat);
+        },
+        crate::layout::Axis::Horizontal => {
+            lemma_layout_widget_all_sizes_nonneg(
+                Limits { min: inner.min, max: Size::new(main_alloc, inner.max.height) },
+                children[i].child, (fuel - 1) as nat, (check_fuel - 1) as nat);
+        },
+    }
+}
+
+/// Root draw validity: the root-level draw command from layout is always valid.
 /// This proves the root node's dimensions are non-negative.
 pub proof fn lemma_layout_root_draw_valid<T: OrderedField>(
     limits: Limits<T>,
@@ -692,11 +926,6 @@ pub proof fn lemma_layout_root_draw_valid<T: OrderedField>(
 
 /// Full draw validity: if all nodes in a layout tree have nonneg sizes,
 /// then all draw commands from flattening are valid.
-/// Combined with lemma_flatten_all_valid, this gives the end-to-end guarantee.
-///
-/// Usage: prove all_sizes_nonneg for a specific widget tree
-/// (e.g., by strengthening lemma_layout_widget_respects_limits to be recursive),
-/// then call this lemma.
 pub proof fn lemma_layout_all_draws_valid_from_nonneg<T: OrderedField>(
     limits: Limits<T>,
     widget: Widget<T>,
