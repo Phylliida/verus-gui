@@ -3157,8 +3157,7 @@ proof fn lemma_absolute_layout_children_len<T: OrderedField>(
     ensures crate::layout::absolute::absolute_layout(lim, pad, cd).children.len() == cd.len(),
 {
     reveal(crate::layout::absolute::absolute_layout);
-    crate::layout::absolute_proofs::lemma_absolute_children_element(pad, cd, 0);
-    // absolute_children(pad, cd, 0).len() == cd.len() from element access ensures
+    crate::layout::absolute_proofs::lemma_absolute_children_len(pad, cd, 0);
 }
 
 /// Absolute full-depth deep congruence.
@@ -3213,8 +3212,8 @@ proof fn lemma_absolute_full_deep<T: OrderedField>(
     assert(n2 == merge_layout(al2, cn2));
 
     // Children len
-    assert(al1.children.len() == cn1.len());
-    assert(al2.children.len() == cn2.len());
+    lemma_absolute_layout_children_len(lim1, p1, cd1);
+    lemma_absolute_layout_children_len(lim2, p2, cd2);
 
     assert forall|i: int| 0 <= i < n1.children.len() implies
         crate::diff::nodes_deeply_eqv(n1.children[i], n2.children[i], (fuel-1) as nat)
@@ -3236,6 +3235,139 @@ proof fn lemma_absolute_full_deep<T: OrderedField>(
             p2.top, ch1[i].y, ch2[i].y);
         T::axiom_eqv_transitive(
             p1.top.add(ch1[i].y), p2.top.add(ch1[i].y), p2.top.add(ch2[i].y));
+        lemma_wrapper_child_deep_congruence(
+            cn1[i], cn2[i], n1.children[i].x, n2.children[i].x,
+            n1.children[i].y, n2.children[i].y, (fuel-1) as nat);
+    };
+}
+
+/// Wrap full-depth deep congruence.
+proof fn lemma_wrap_full_deep<T: OrderedField>(
+    lim1: Limits<T>, lim2: Limits<T>,
+    p1: Padding<T>, p2: Padding<T>,
+    hs1: T, hs2: T, vs1: T, vs2: T,
+    ch1: Seq<Widget<T>>, ch2: Seq<Widget<T>>,
+    fuel: nat,
+    cn1: Seq<Node<T>>, cn2: Seq<Node<T>>,
+)
+    requires
+        limits_eqv(lim1, lim2),
+        padding_eqv(p1, p2), hs1.eqv(hs2), vs1.eqv(vs2),
+        ch1.len() == ch2.len(), fuel > 1,
+        cn1.len() == ch1.len(), cn2.len() == ch2.len(),
+        cn1 == widget_child_nodes(lim1.shrink(p1.horizontal(), p1.vertical()), ch1, (fuel-1) as nat),
+        cn2 == widget_child_nodes(lim2.shrink(p2.horizontal(), p2.vertical()), ch2, (fuel-1) as nat),
+        forall|i: int| 0 <= i < cn1.len() ==>
+            crate::diff::nodes_deeply_eqv(cn1[i], cn2[i], (fuel-1) as nat),
+        node_eqv(
+            layout_widget(lim1, Widget::Container(ContainerWidget::Wrap {
+                padding: p1, h_spacing: hs1, v_spacing: vs1, children: ch1 }), fuel),
+            layout_widget(lim2, Widget::Container(ContainerWidget::Wrap {
+                padding: p2, h_spacing: hs2, v_spacing: vs2, children: ch2 }), fuel)),
+    ensures
+        crate::diff::nodes_deeply_eqv(
+            layout_widget(lim1, Widget::Container(ContainerWidget::Wrap {
+                padding: p1, h_spacing: hs1, v_spacing: vs1, children: ch1 }), fuel),
+            layout_widget(lim2, Widget::Container(ContainerWidget::Wrap {
+                padding: p2, h_spacing: hs2, v_spacing: vs2, children: ch2 }), fuel),
+            fuel),
+{
+    lemma_wrap_structural_bridge(lim1, p1, hs1, vs1, ch1, fuel);
+    lemma_wrap_structural_bridge(lim2, p2, hs2, vs2, ch2, fuel);
+    let n1 = layout_widget(lim1, Widget::Container(ContainerWidget::Wrap {
+        padding: p1, h_spacing: hs1, v_spacing: vs1, children: ch1 }), fuel);
+    let n2 = layout_widget(lim2, Widget::Container(ContainerWidget::Wrap {
+        padding: p2, h_spacing: hs2, v_spacing: vs2, children: ch2 }), fuel);
+    let cs1 = Seq::new(cn1.len(), |i: int| cn1[i].size);
+    let cs2 = Seq::new(cn2.len(), |i: int| cn2[i].size);
+    assert(sizes_eqv(cs1, cs2));
+
+    reveal(crate::layout::wrap::wrap_layout);
+    lemma_padding_horizontal_congruence(p1, p2);
+    lemma_sub_congruence(lim1.max.width, lim2.max.width, p1.horizontal(), p2.horizontal());
+    let aw1 = lim1.max.width.sub(p1.horizontal());
+    let aw2 = lim2.max.width.sub(p2.horizontal());
+    let wl1 = crate::layout::wrap::wrap_layout(lim1, p1, hs1, vs1, cs1);
+    let wl2 = crate::layout::wrap::wrap_layout(lim2, p2, hs2, vs2, cs2);
+    assert(n1 == merge_layout(wl1, cn1));
+    assert(n2 == merge_layout(wl2, cn2));
+
+    // Children len
+    crate::layout::wrap_proofs::lemma_wrap_children_len(p1, hs1, vs1, cs1, aw1, 0);
+    crate::layout::wrap_proofs::lemma_wrap_children_len(p2, hs2, vs2, cs2, aw2, 0);
+
+    // wrap_cursor congruence for positions
+    assert forall|i: int| 0 <= i < n1.children.len() implies
+        crate::diff::nodes_deeply_eqv(n1.children[i], n2.children[i], (fuel-1) as nat)
+    by {
+        lemma_merge_layout_children_structure(wl1, cn1, i);
+        lemma_merge_layout_children_structure(wl2, cn2, i);
+        // Element access: wrap_children[i] position comes from wrap_cursor
+        crate::layout::wrap_proofs::lemma_wrap_children_element(
+            p1, hs1, vs1, cs1, aw1, i as nat);
+        crate::layout::wrap_proofs::lemma_wrap_children_element(
+            p2, hs2, vs2, cs2, aw2, i as nat);
+        // wrap_cursor congruence at index i
+        lemma_wrap_cursor_congruence(cs1, cs2, hs1, hs2, vs1, vs2, aw1, aw2, i as nat);
+        use crate::layout::wrap::{wrap_cursor, wrap_needs_break};
+        let cur1 = wrap_cursor(cs1, hs1, vs1, aw1, i as nat);
+        let cur2 = wrap_cursor(cs2, hs2, vs2, aw2, i as nat);
+        // wrap_needs_break congruent (uses le which is congruent)
+        T::axiom_eqv_reflexive(T::zero());
+        lemma_le_congruence_iff(cur1.x, cur2.x, T::zero(), T::zero());
+        T::axiom_add_congruence_left(cur1.x, cur2.x, cs1[i].width);
+        verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(
+            cur2.x, cs1[i].width, cs2[i].width);
+        T::axiom_eqv_transitive(cur1.x.add(cs1[i].width), cur2.x.add(cs1[i].width),
+            cur2.x.add(cs2[i].width));
+        lemma_le_congruence_iff(cur1.x.add(cs1[i].width), cur2.x.add(cs2[i].width), aw1, aw2);
+        // Same branch for both sides
+        let nb1 = wrap_needs_break(cur1.x, cs1[i].width, aw1);
+        // Position: cx = if needs_break { 0 } else { cursor.x }, cy = ...
+        // pad.left + cx eqv, pad.top + cy eqv
+        // Both eqv (cursor fields eqv, branch same, padding eqv)
+        // The positions are eqv because:
+        // - If break: cx=0 (eqv), cy = cursor.y + cursor.lh + vs (all eqv)
+        // - If no break: cx = cursor.x (eqv), cy = cursor.y (eqv)
+        // Then pad.left + cx eqv, pad.top + cy eqv
+        if nb1 {
+            T::axiom_add_congruence_left(p1.left, p2.left, T::zero());
+            // cy = cursor.y + cursor.line_height + v_spacing
+            T::axiom_add_congruence_left(cur1.y, cur2.y, cur1.line_height);
+            verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(
+                cur2.y, cur1.line_height, cur2.line_height);
+            T::axiom_eqv_transitive(cur1.y.add(cur1.line_height),
+                cur2.y.add(cur1.line_height), cur2.y.add(cur2.line_height));
+            T::axiom_add_congruence_left(cur1.y.add(cur1.line_height),
+                cur2.y.add(cur2.line_height), vs1);
+            verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(
+                cur2.y.add(cur2.line_height), vs1, vs2);
+            T::axiom_eqv_transitive(
+                cur1.y.add(cur1.line_height).add(vs1),
+                cur2.y.add(cur2.line_height).add(vs1),
+                cur2.y.add(cur2.line_height).add(vs2));
+            T::axiom_add_congruence_left(p1.top, p2.top,
+                cur1.y.add(cur1.line_height).add(vs1));
+            verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(
+                p2.top,
+                cur1.y.add(cur1.line_height).add(vs1),
+                cur2.y.add(cur2.line_height).add(vs2));
+            T::axiom_eqv_transitive(
+                p1.top.add(cur1.y.add(cur1.line_height).add(vs1)),
+                p2.top.add(cur1.y.add(cur1.line_height).add(vs1)),
+                p2.top.add(cur2.y.add(cur2.line_height).add(vs2)));
+        } else {
+            T::axiom_add_congruence_left(p1.left, p2.left, cur1.x);
+            verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(
+                p2.left, cur1.x, cur2.x);
+            T::axiom_eqv_transitive(
+                p1.left.add(cur1.x), p2.left.add(cur1.x), p2.left.add(cur2.x));
+            T::axiom_add_congruence_left(p1.top, p2.top, cur1.y);
+            verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(
+                p2.top, cur1.y, cur2.y);
+            T::axiom_eqv_transitive(
+                p1.top.add(cur1.y), p2.top.add(cur1.y), p2.top.add(cur2.y));
+        }
         lemma_wrapper_child_deep_congruence(
             cn1[i], cn2[i], n1.children[i].x, n2.children[i].x,
             n1.children[i].y, n2.children[i].y, (fuel-1) as nat);
@@ -3290,6 +3422,101 @@ proof fn lemma_absolute_children_positions_congruence<T: OrderedField>(
             if i == 0 {} else { assert(ac1[i] == rest1[i-1]); assert(ac2[i] == rest2[i-1]); }
         };
     }
+}
+
+// ── Flex full-depth ─────────────────────────────────────────────
+
+/// flex_main_sum respects eqv on all arguments.
+proof fn lemma_flex_main_sum_congruence<T: OrderedField>(
+    w1: Seq<T>, w2: Seq<T>,
+    tw1: T, tw2: T,
+    av1: T, av2: T,
+    n: nat,
+)
+    requires
+        w1.len() == w2.len(), n <= w1.len(),
+        forall|i: int| 0 <= i < w1.len() ==> w1[i].eqv(w2[i]),
+        tw1.eqv(tw2), av1.eqv(av2),
+        !tw1.eqv(T::zero()),
+    ensures
+        crate::layout::flex::flex_main_sum(w1, tw1, av1, n)
+            .eqv(crate::layout::flex::flex_main_sum(w2, tw2, av2, n)),
+    decreases n,
+{
+    use crate::layout::flex::{flex_main_sum, flex_child_main_size};
+    if n == 0 {
+        T::axiom_eqv_reflexive(T::zero());
+    } else {
+        lemma_flex_main_sum_congruence(w1, w2, tw1, tw2, av1, av2, (n-1) as nat);
+        // flex_child_main_size(w[n-1], tw, av) = w[n-1] / tw * av
+        verus_algebra::quadratic::lemma_div_congruence::<T>(w1[(n-1) as int], w2[(n-1) as int], tw1, tw2);
+        T::axiom_mul_congruence_left(
+            w1[(n-1) as int].div(tw1), w2[(n-1) as int].div(tw2), av1);
+        verus_algebra::lemmas::ring_lemmas::lemma_mul_congruence_right::<T>(
+            w2[(n-1) as int].div(tw2), av1, av2);
+        T::axiom_eqv_transitive(
+            w1[(n-1) as int].div(tw1).mul(av1),
+            w2[(n-1) as int].div(tw2).mul(av1),
+            w2[(n-1) as int].div(tw2).mul(av2));
+        // Chain sum + child eqv
+        T::axiom_add_congruence_left(
+            flex_main_sum(w1, tw1, av1, (n-1) as nat),
+            flex_main_sum(w2, tw2, av2, (n-1) as nat),
+            flex_child_main_size(w1[(n-1) as int], tw1, av1));
+        verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(
+            flex_main_sum(w2, tw2, av2, (n-1) as nat),
+            flex_child_main_size(w1[(n-1) as int], tw1, av1),
+            flex_child_main_size(w2[(n-1) as int], tw2, av2));
+        T::axiom_eqv_transitive(
+            flex_main_sum(w1, tw1, av1, (n-1) as nat).add(flex_child_main_size(w1[(n-1) as int], tw1, av1)),
+            flex_main_sum(w2, tw2, av2, (n-1) as nat).add(flex_child_main_size(w1[(n-1) as int], tw1, av1)),
+            flex_main_sum(w2, tw2, av2, (n-1) as nat).add(flex_child_main_size(w2[(n-1) as int], tw2, av2)));
+    }
+}
+
+/// flex_column_child_y respects eqv.
+proof fn lemma_flex_column_child_y_congruence<T: OrderedField>(
+    pt1: T, pt2: T,
+    w1: Seq<T>, w2: Seq<T>,
+    tw1: T, tw2: T,
+    ah1: T, ah2: T,
+    sp1: T, sp2: T,
+    k: nat,
+)
+    requires
+        pt1.eqv(pt2),
+        w1.len() == w2.len(), k <= w1.len(),
+        forall|i: int| 0 <= i < w1.len() ==> w1[i].eqv(w2[i]),
+        tw1.eqv(tw2), ah1.eqv(ah2), sp1.eqv(sp2),
+        !tw1.eqv(T::zero()),
+    ensures
+        crate::layout::flex::flex_column_child_y(pt1, w1, tw1, ah1, sp1, k)
+            .eqv(crate::layout::flex::flex_column_child_y(pt2, w2, tw2, ah2, sp2, k)),
+{
+    use crate::layout::flex::flex_column_child_y;
+    // flex_column_child_y = pt + flex_main_sum(w, tw, ah, k) + repeated_add(sp, k)
+    lemma_flex_main_sum_congruence(w1, w2, tw1, tw2, ah1, ah2, k);
+    lemma_repeated_add_congruence(sp1, sp2, k);
+    // pt1 + fms1 eqv pt2 + fms2
+    T::axiom_add_congruence_left(pt1, pt2,
+        crate::layout::flex::flex_main_sum(w1, tw1, ah1, k));
+    verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(
+        pt2,
+        crate::layout::flex::flex_main_sum(w1, tw1, ah1, k),
+        crate::layout::flex::flex_main_sum(w2, tw2, ah2, k));
+    T::axiom_eqv_transitive(
+        pt1.add(crate::layout::flex::flex_main_sum(w1, tw1, ah1, k)),
+        pt2.add(crate::layout::flex::flex_main_sum(w1, tw1, ah1, k)),
+        pt2.add(crate::layout::flex::flex_main_sum(w2, tw2, ah2, k)));
+    // (pt + fms) + rep_add eqv
+    let mid1 = pt1.add(crate::layout::flex::flex_main_sum(w1, tw1, ah1, k));
+    let mid2 = pt2.add(crate::layout::flex::flex_main_sum(w2, tw2, ah2, k));
+    T::axiom_add_congruence_left(mid1, mid2, repeated_add(sp1, k));
+    verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(
+        mid2, repeated_add(sp1, k), repeated_add(sp2, k));
+    T::axiom_eqv_transitive(
+        mid1.add(repeated_add(sp1, k)), mid2.add(repeated_add(sp1, k)),
+        mid2.add(repeated_add(sp2, k)));
 }
 
 } // verus!
