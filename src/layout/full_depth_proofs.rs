@@ -418,9 +418,18 @@ pub proof fn lemma_grid_full_depth_dispatch<T: OrderedField>(
         lemma_grid_structural_bridge(lim1, p1, hs1, vs1, ha, va, cw1, rh1, ch1, fuel);
         lemma_grid_structural_bridge(lim2, p2, hs2, vs2, ha, va, cw2, rh2, ch2, fuel);
         crate::layout::grid_proofs::lemma_grid_all_children_len(p1, cw1, rh1, hs1, vs1, ha, va, cs2d1, 0, cw1.len());
-        // Establish cs2d size eqv from cn size eqv
-        assert(forall|r: int, c: int| 0 <= r < rh1.len() && 0 <= c < cw1.len() ==>
-            size_eqv(cs2d1[r][c], cs2d2[r][c]));
+        // Establish cs2d size eqv from cn deeply eqv
+        assert forall|r: int, c: int| 0 <= r < rh1.len() && 0 <= c < cw1.len() implies
+            size_eqv(cs2d1[r][c], cs2d2[r][c])
+        by {
+            // cs2d[r][c] = cn[r * ncols + c].size, cn deeply eqv → size eqv
+            let idx = r * cw1.len() as int + c;
+            vstd::arithmetic::div_mod::lemma_fundamental_div_mod(idx, cw1.len() as int);
+            assert(0 <= idx && idx < ch1.len() as int) by(nonlinear_arith)
+                requires 0 <= r, r < rh1.len() as int, 0 <= c, c < cw1.len() as int,
+                         ch1.len() as int == cw1.len() as int * rh1.len() as int,
+                         idx == r * cw1.len() as int + c;
+        };
         // Position congruence per child (ch1.len() == cw1.len() * rh1.len())
         assert forall|i: int| 0 <= i < ch1.len() as int implies
             gl1.children[i].x.eqv(gl2.children[i].x) && gl1.children[i].y.eqv(gl2.children[i].y)
@@ -434,6 +443,24 @@ pub proof fn lemma_grid_full_depth_dispatch<T: OrderedField>(
             Widget::Container(ContainerWidget::Grid {
                 padding: p1, h_spacing: hs1, v_spacing: vs1, h_align: ha, v_align: va,
                 col_widths: cw1, row_heights: rh1, children: ch1 }), w2, fuel);
+        // Bridge connects layout_widget to merge_layout(gl, cn)
+        let w1 = Widget::Container(ContainerWidget::Grid {
+            padding: p1, h_spacing: hs1, v_spacing: vs1, h_align: ha, v_align: va,
+            col_widths: cw1, row_heights: rh1, children: ch1 });
+        assert(layout_widget(lim1, w1, fuel) == merge_layout(gl1, cn1));
+        assert(layout_widget(lim2, w2, fuel) == merge_layout(gl2, cn2));
+        assert(gl1.children.len() == cn1.len()) by(nonlinear_arith)
+            requires gl1.children.len() == (rh1.len() - 0) * cw1.len(),
+                     cn1.len() == ch1.len(), ch1.len() == cw1.len() * rh1.len();
+        // node_eqv: layout_widget == merge_layout (bridge) + node_congruence → substitution
+        assert(node_eqv(merge_layout(gl1, cn1), merge_layout(gl2, cn2))) by {
+            assert(layout_widget(lim1, w1, fuel) == merge_layout(gl1, cn1));
+            assert(layout_widget(lim2, w2, fuel) == merge_layout(gl2, cn2));
+        };
+        crate::layout::grid_proofs::lemma_grid_all_children_len(p2, cw2, rh2, hs2, vs2, ha, va, cs2d2, 0, cw2.len());
+        assert(gl2.children.len() == cn2.len()) by(nonlinear_arith)
+            requires gl2.children.len() == (rh2.len() - 0) * cw2.len(),
+                     cn2.len() == ch2.len(), ch2.len() == cw2.len() * rh2.len();
         lemma_merge_layout_deep_congruence_plus_one(gl1, gl2, cn1, cn2, rd);
     }
 }
@@ -475,8 +502,11 @@ pub proof fn lemma_absolute_full_depth_dispatch<T: OrderedField>(
         };
         lemma_sizes_eqv_from_deeply_eqv(cn1, cn2, rd);
         // Absolute layout
-        let cd1 = Seq::new(cn1.len(), |i: int| (ch1[i].x, ch1[i].y, cn1[i].size));
-        let cd2 = Seq::new(cn2.len(), |i: int| (ch2[i].x, ch2[i].y, cn2[i].size));
+        // Use the SAME form as the bridge: offsets → cd
+        let offsets1 = Seq::new(ch1.len(), |i: int| (ch1[i].x, ch1[i].y));
+        let offsets2 = Seq::new(ch2.len(), |i: int| (ch2[i].x, ch2[i].y));
+        let cd1 = Seq::new(cn1.len(), |i: int| (offsets1[i].0, offsets1[i].1, cn1[i].size));
+        let cd2 = Seq::new(cn2.len(), |i: int| (offsets2[i].0, offsets2[i].1, cn2[i].size));
         reveal(crate::layout::absolute::absolute_layout);
         let al1 = crate::layout::absolute::absolute_layout(lim1, p1, cd1);
         let al2 = crate::layout::absolute::absolute_layout(lim2, p2, cd2);
@@ -487,14 +517,14 @@ pub proof fn lemma_absolute_full_depth_dispatch<T: OrderedField>(
         // Bridge: layout_widget == merge_layout(al_bridge, cn) where al_bridge uses bridge's cd
         lemma_absolute_structural_bridge(lim1, p1, ch1, fuel);
         lemma_absolute_structural_bridge(lim2, p2, ch2, fuel);
-        // node_eqv: bridge gives layout_widget == merge_layout(al, cn)
-        // node_congruence gives node_eqv(layout_widget, layout_widget)
-        // Therefore node_eqv(merge_layout(al1, cn1), merge_layout(al2, cn2))
         lemma_layout_widget_node_congruence(lim1, lim2,
             Widget::Container(ContainerWidget::Absolute { padding: p1, children: ch1 }), w2, fuel);
-        // merge+1: children at rd + positions eqv + node_eqv → depth rd+1
+        assert(al1.children.len() == cn1.len());
+        assert(al2.children.len() == cn2.len());
+        let w1 = Widget::Container(ContainerWidget::Absolute { padding: p1, children: ch1 });
+        assert(layout_widget(lim1, w1, fuel) == merge_layout(al1, cn1));
+        assert(layout_widget(lim2, w2, fuel) == merge_layout(al2, cn2));
         lemma_merge_layout_deep_congruence_plus_one(al1, al2, cn1, cn2, rd);
-        return;
     }
 }
 
