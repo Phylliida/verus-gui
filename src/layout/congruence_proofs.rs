@@ -3947,7 +3947,7 @@ proof fn lemma_stack_full_deep<T: OrderedField>(
 // ── Absolute full-depth ────────────────────────────────────────
 
 /// Absolute structural bridge.
-proof fn lemma_absolute_structural_bridge<T: OrderedField>(
+pub proof fn lemma_absolute_structural_bridge<T: OrderedField>(
     lim: Limits<T>, pad: Padding<T>,
     children: Seq<AbsoluteChild<T>>, fuel: nat,
 )
@@ -3977,7 +3977,7 @@ proof fn lemma_absolute_structural_bridge<T: OrderedField>(
 }
 
 /// absolute_layout children length.
-proof fn lemma_absolute_layout_children_len<T: OrderedField>(
+pub proof fn lemma_absolute_layout_children_len<T: OrderedField>(
     lim: Limits<T>, pad: Padding<T>, cd: Seq<(T, T, Size<T>)>,
 )
     ensures crate::layout::absolute::absolute_layout(lim, pad, cd).children.len() == cd.len(),
@@ -4201,7 +4201,7 @@ proof fn lemma_wrap_full_deep<T: OrderedField>(
 }
 
 /// absolute_children positions congruence.
-proof fn lemma_absolute_children_positions_congruence<T: OrderedField>(
+pub proof fn lemma_absolute_children_positions_congruence<T: OrderedField>(
     pad1: Padding<T>, pad2: Padding<T>,
     d1: Seq<(T, T, Size<T>)>, d2: Seq<(T, T, Size<T>)>,
     index: nat,
@@ -4526,7 +4526,7 @@ pub proof fn lemma_flex_column_child_y_congruence<T: OrderedField>(
 // Use the per-variant helpers directly for full-depth guarantees.
 
 /// flex_row_child_x respects eqv (symmetric to flex_column_child_y).
-proof fn lemma_flex_row_child_x_congruence<T: OrderedField>(
+pub proof fn lemma_flex_row_child_x_congruence<T: OrderedField>(
     pl1: T, pl2: T,
     w1: Seq<T>, w2: Seq<T>,
     tw1: T, tw2: T,
@@ -4890,7 +4890,7 @@ proof fn lemma_grid_row_height_congruence<T: OrderedRing>(
 }
 
 /// grid_child position congruence: children at same (row, col) have eqv positions.
-proof fn lemma_grid_child_position_congruence<T: OrderedField>(
+pub proof fn lemma_grid_child_position_congruence<T: OrderedField>(
     p1: Padding<T>, p2: Padding<T>,
     cw1: Seq<Size<T>>, cw2: Seq<Size<T>>,
     rh1: Seq<Size<T>>, rh2: Seq<Size<T>>,
@@ -4942,7 +4942,7 @@ proof fn lemma_grid_child_position_congruence<T: OrderedField>(
 }
 
 /// Grid structural bridge.
-proof fn lemma_grid_structural_bridge<T: OrderedField>(
+pub proof fn lemma_grid_structural_bridge<T: OrderedField>(
     lim: Limits<T>, pad: Padding<T>,
     hs: T, vs: T, ha: Alignment, va: Alignment,
     cw: Seq<Size<T>>, rh: Seq<Size<T>>,
