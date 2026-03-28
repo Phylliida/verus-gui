@@ -2393,7 +2393,7 @@ proof fn lemma_merge_layout_deep_congruence<T: OrderedField>(
 /// Deep congruence for wrapper output children.
 /// Wrapper children are constructed inline (not via merge_layout),
 /// so we prove their deep eqv directly.
-proof fn lemma_wrapper_child_deep_congruence<T: OrderedField>(
+pub proof fn lemma_wrapper_child_deep_congruence<T: OrderedField>(
     cn1: Node<T>, cn2: Node<T>,
     x1: T, x2: T, y1: T, y2: T,
     depth: nat,

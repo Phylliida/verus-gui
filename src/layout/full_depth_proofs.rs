@@ -528,4 +528,179 @@ pub proof fn lemma_absolute_full_depth_dispatch<T: OrderedField>(
     }
 }
 
+// ── ListView ──────────────────────────────────────────────────────────
+
+/// listview_child_bottom congruence.
+proof fn lemma_listview_child_bottom_congruence<T: OrderedRing>(
+    s1: Seq<Size<T>>, s2: Seq<Size<T>>, sp1: T, sp2: T, i: nat,
+)
+    requires sizes_eqv(s1, s2), sp1.eqv(sp2), i <= s1.len(),
+    ensures
+        crate::layout::listview::listview_child_bottom(s1, sp1, i)
+            .eqv(crate::layout::listview::listview_child_bottom(s2, sp2, i)),
+{
+    // child_bottom(i) = child_y(i) + size[i].height (when i < len)
+    // child_y congruence already proved
+    lemma_listview_child_y_congruence(s1, s2, sp1, sp2, i);
+    if i < s1.len() {
+        T::axiom_add_congruence_left(
+            crate::layout::listview::listview_child_y(s1, sp1, i),
+            crate::layout::listview::listview_child_y(s2, sp2, i),
+            s1[i as int].height);
+        verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(
+            crate::layout::listview::listview_child_y(s2, sp2, i),
+            s1[i as int].height, s2[i as int].height);
+        T::axiom_eqv_transitive(
+            crate::layout::listview::listview_child_bottom(s1, sp1, i),
+            crate::layout::listview::listview_child_y(s2, sp2, i).add(s1[i as int].height),
+            crate::layout::listview::listview_child_bottom(s2, sp2, i));
+    }
+}
+
+/// listview_first_visible_from congruence: eqv inputs → same nat result.
+proof fn lemma_listview_first_visible_from_congruence<T: OrderedField>(
+    s1: Seq<Size<T>>, s2: Seq<Size<T>>, sp1: T, sp2: T, sy1: T, sy2: T, from: nat,
+)
+    requires sizes_eqv(s1, s2), sp1.eqv(sp2), sy1.eqv(sy2),
+    ensures
+        crate::layout::listview::listview_first_visible_from(s1, sp1, sy1, from)
+            == crate::layout::listview::listview_first_visible_from(s2, sp2, sy2, from),
+    decreases s1.len() - from,
+{
+    if from >= s1.len() {
+    } else {
+        let b1 = crate::layout::listview::listview_child_bottom(s1, sp1, from);
+        let b2 = crate::layout::listview::listview_child_bottom(s2, sp2, from);
+        lemma_listview_child_bottom_congruence(s1, s2, sp1, sp2, from);
+        // sy1.lt(b1) iff sy2.lt(b2) (from eqv)
+        T::axiom_lt_iff_le_and_not_eqv(sy1, b1);
+        T::axiom_lt_iff_le_and_not_eqv(sy2, b2);
+        T::axiom_le_congruence(sy1, sy2, b1, b2);
+        T::axiom_eqv_symmetric(sy1, sy2);
+        T::axiom_eqv_symmetric(b1, b2);
+        lemma_le_congruence_iff(sy1, sy2, b1, b2);
+        lemma_le_congruence_iff(b1, b2, sy1, sy2);
+        if sy1.lt(b1) {
+            // Both return from
+        } else {
+            lemma_listview_first_visible_from_congruence(s1, s2, sp1, sp2, sy1, sy2, from + 1);
+        }
+    }
+}
+
+/// listview_end_visible congruence.
+proof fn lemma_listview_end_visible_congruence<T: OrderedField>(
+    s1: Seq<Size<T>>, s2: Seq<Size<T>>, sp1: T, sp2: T, sy1: T, sy2: T, vh1: T, vh2: T,
+)
+    requires sizes_eqv(s1, s2), sp1.eqv(sp2), sy1.eqv(sy2), vh1.eqv(vh2),
+    ensures
+        crate::layout::listview::listview_end_visible(s1, sp1, sy1, vh1)
+            == crate::layout::listview::listview_end_visible(s2, sp2, sy2, vh2),
+{
+    // end_visible uses listview_end_visible_from which also branches on lt
+    // with eqv inputs → same result
+    lemma_listview_end_visible_from_congruence(s1, s2, sp1, sp2, sy1, sy2, vh1, vh2, 0);
+}
+
+/// listview_end_visible_from congruence.
+proof fn lemma_listview_end_visible_from_congruence<T: OrderedField>(
+    s1: Seq<Size<T>>, s2: Seq<Size<T>>, sp1: T, sp2: T, sy1: T, sy2: T, vh1: T, vh2: T, from: nat,
+)
+    requires sizes_eqv(s1, s2), sp1.eqv(sp2), sy1.eqv(sy2), vh1.eqv(vh2),
+    ensures
+        crate::layout::listview::listview_end_visible_from(s1, sp1, sy1, vh1, from)
+            == crate::layout::listview::listview_end_visible_from(s2, sp2, sy2, vh2, from),
+    decreases s1.len() - from,
+{
+    if from >= s1.len() {
+    } else {
+        lemma_listview_child_y_congruence(s1, s2, sp1, sp2, from);
+        let y1 = crate::layout::listview::listview_child_y(s1, sp1, from);
+        let y2 = crate::layout::listview::listview_child_y(s2, sp2, from);
+        // sy1.add(vh1).eqv(sy2.add(vh2))
+        T::axiom_add_congruence_left(sy1, sy2, vh1);
+        verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence_right::<T>(sy2, vh1, vh2);
+        T::axiom_eqv_transitive(sy1.add(vh1), sy2.add(vh1), sy2.add(vh2));
+        // y1.lt(sy1.add(vh1)) iff y2.lt(sy2.add(vh2))
+        lemma_le_congruence_iff(y1, y2, sy1.add(vh1), sy2.add(vh2));
+        lemma_le_congruence_iff(sy1.add(vh1), sy2.add(vh2), y1, y2);
+        T::axiom_lt_iff_le_and_not_eqv(y1, sy1.add(vh1));
+        T::axiom_lt_iff_le_and_not_eqv(y2, sy2.add(vh2));
+        if !y1.lt(sy1.add(vh1)) {
+            // Both return from
+        } else {
+            lemma_listview_end_visible_from_congruence(s1, s2, sp1, sp2, sy1, sy2, vh1, vh2, from + 1);
+        }
+    }
+}
+
+/// ListView full-depth dispatch.
+pub proof fn lemma_listview_full_depth_dispatch<T: OrderedField>(
+    lim1: Limits<T>, lim2: Limits<T>,
+    sp1: T, sy1: T, vp1: Size<T>, ch1: Seq<Widget<T>>,
+    w2: Widget<T>, fuel: nat,
+)
+    requires
+        limits_eqv(lim1, lim2),
+        widget_eqv(Widget::Container(ContainerWidget::ListView {
+            spacing: sp1, scroll_y: sy1, viewport: vp1, children: ch1 }), w2, fuel),
+        fuel > 1, ch1.len() > 0,
+    ensures crate::diff::nodes_deeply_eqv(
+        layout_widget(lim1, Widget::Container(ContainerWidget::ListView {
+            spacing: sp1, scroll_y: sy1, viewport: vp1, children: ch1 }), fuel),
+        layout_widget(lim2, w2, fuel),
+        min_children_congruence_depth(ch1, (fuel - 1) as nat, 0) + 1),
+    decreases fuel, 1nat,
+{
+    if let Widget::Container(ContainerWidget::ListView { spacing: sp2, scroll_y: sy2, viewport: vp2, children: ch2 }) = w2 {
+        T::axiom_eqv_reflexive(T::zero());
+        let cl1 = Limits { min: Size::zero_size(), max: Size::new(vp1.width, vp1.height) };
+        let cl2 = Limits { min: Size::zero_size(), max: Size::new(vp2.width, vp2.height) };
+        // measure_children congruence: eqv limits → eqv sizes
+        let cs1 = crate::measure::measure_children(cl1, ch1, (fuel - 1) as nat);
+        let cs2 = crate::measure::measure_children(cl2, ch2, (fuel - 1) as nat);
+        // Visible range congruence: first1 == first2, end1 == end2
+        lemma_listview_first_visible_from_congruence(cs1, cs2, sp1, sp2, sy1, sy2, 0);
+        lemma_listview_end_visible_congruence(cs1, cs2, sp1, sp2, sy1, sy2, vp1.height, vp2.height);
+        let first = crate::layout::listview::listview_first_visible(cs1, sp1, sy1);
+        let end = crate::layout::listview::listview_end_visible(cs1, sp1, sy1, vp1.height);
+        // Children IH
+        let cn1 = crate::layout::listview::listview_widget_child_nodes(cl1, ch1, first, end, (fuel - 1) as nat);
+        let cn2 = crate::layout::listview::listview_widget_child_nodes(cl2, ch2, first, end, (fuel - 1) as nat);
+        let rd = min_children_congruence_depth(ch1, (fuel - 1) as nat, 0);
+        assert forall|i: int| 0 <= i < cn1.len() implies
+            crate::diff::nodes_deeply_eqv(#[trigger] cn1[i], cn2[i], rd)
+        by {
+            lemma_layout_widget_full_depth_congruence(cl1, cl2, ch1[(first + i) as int], ch2[(first + i) as int], (fuel - 1) as nat);
+            lemma_min_children_depth_le::<T>(ch1, (fuel - 1) as nat, 0, (first + i) as int);
+            crate::diff::lemma_deeply_eqv_depth_monotone(cn1[i], cn2[i],
+                congruence_depth(ch1[(first + i) as int], (fuel - 1) as nat), rd);
+        };
+        // ListView output: direct construction (not merge_layout)
+        // children[i] = Node { x: zero, y: listview_child_y(..., first+i).sub(scroll_y), size: cn[i].size, children: cn[i].children }
+        // Position congruence: x = zero (trivial), y = child_y.sub(scroll_y) (from listview_child_y_congruence + sub_congruence)
+        reveal(crate::layout::listview::layout_listview_body);
+        lemma_layout_widget_node_congruence(lim1, lim2,
+            Widget::Container(ContainerWidget::ListView { spacing: sp1, scroll_y: sy1, viewport: vp1, children: ch1 }), w2, fuel);
+        // nodes_deeply_eqv at rd+1: top-level eqv + children at rd
+        // Each child: wrapper_child_deep_congruence(cn1[i], cn2[i], zero, zero, y1, y2, rd)
+        let n1 = layout_widget(lim1, Widget::Container(ContainerWidget::ListView { spacing: sp1, scroll_y: sy1, viewport: vp1, children: ch1 }), fuel);
+        let n2 = layout_widget(lim2, w2, fuel);
+        assert forall|i: int| 0 <= i < n1.children.len() implies
+            crate::diff::nodes_deeply_eqv(#[trigger] n1.children[i], n2.children[i], rd)
+        by {
+            lemma_listview_child_y_congruence(cs1, cs2, sp1, sp2, (first + i) as nat);
+            lemma_sub_congruence(
+                crate::layout::listview::listview_child_y(cs1, sp1, (first + i) as nat),
+                crate::layout::listview::listview_child_y(cs2, sp2, (first + i) as nat),
+                sy1, sy2);
+            lemma_wrapper_child_deep_congruence(cn1[i], cn2[i],
+                T::zero(), T::zero(),
+                crate::layout::listview::listview_child_y(cs1, sp1, (first + i) as nat).sub(sy1),
+                crate::layout::listview::listview_child_y(cs2, sp2, (first + i) as nat).sub(sy2),
+                rd);
+        };
+    }
+}
+
 } // verus!
