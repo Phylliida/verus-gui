@@ -80,7 +80,6 @@ pub proof fn lemma_flex_column_full_depth_dispatch<T: OrderedField>(
         widget_eqv(Widget::Container(ContainerWidget::Flex {
             padding: p1, spacing: sp1, alignment: al, direction: FlexDirection::Column, children: ch1 }), w2, fuel),
         fuel > 1, ch1.len() > 0,
-        T::zero().lt(sum_weights(Seq::new(ch1.len(), |i: int| ch1[i].weight), ch1.len() as nat)),
     ensures crate::diff::nodes_deeply_eqv(
         layout_widget(lim1, Widget::Container(ContainerWidget::Flex {
             padding: p1, spacing: sp1, alignment: al, direction: FlexDirection::Column, children: ch1 }), fuel),
@@ -99,9 +98,8 @@ pub proof fn lemma_flex_column_full_depth_dispatch<T: OrderedField>(
         let w2s = Seq::new(ch2.len(), |i: int| ch2[i].weight);
         let tw1 = sum_weights(w1s, w1s.len() as nat);
         let tw2 = sum_weights(w2s, w2s.len() as nat);
-        // !tw.eqv(zero) from precondition
-        T::axiom_lt_iff_le_and_not_eqv(T::zero(), tw1);
-        T::axiom_eqv_symmetric(T::zero(), tw1);
+        // !tw.eqv(zero) from widget_eqv for Flex
+        assert(!tw1.eqv(T::zero()));
         let ts1 = repeated_add(sp1, (ch1.len() - 1) as nat);
         let ts2 = repeated_add(sp2, (ch2.len() - 1) as nat);
         lemma_repeated_add_congruence(sp1, sp2, (ch1.len() - 1) as nat);
@@ -207,7 +205,6 @@ pub proof fn lemma_flex_row_full_depth_dispatch<T: OrderedField>(
         widget_eqv(Widget::Container(ContainerWidget::Flex {
             padding: p1, spacing: sp1, alignment: al, direction: FlexDirection::Row, children: ch1 }), w2, fuel),
         fuel > 1, ch1.len() > 0,
-        T::zero().lt(sum_weights(Seq::new(ch1.len(), |i: int| ch1[i].weight), ch1.len() as nat)),
     ensures crate::diff::nodes_deeply_eqv(
         layout_widget(lim1, Widget::Container(ContainerWidget::Flex {
             padding: p1, spacing: sp1, alignment: al, direction: FlexDirection::Row, children: ch1 }), fuel),
@@ -226,8 +223,8 @@ pub proof fn lemma_flex_row_full_depth_dispatch<T: OrderedField>(
         let w2s = Seq::new(ch2.len(), |i: int| ch2[i].weight);
         let tw1 = sum_weights(w1s, w1s.len() as nat);
         let tw2 = sum_weights(w2s, w2s.len() as nat);
-        T::axiom_lt_iff_le_and_not_eqv(T::zero(), tw1);
-        T::axiom_eqv_symmetric(T::zero(), tw1);
+        // !tw.eqv(zero) from widget_eqv for Flex
+        assert(!tw1.eqv(T::zero()));
         let ts1 = repeated_add(sp1, (ch1.len() - 1) as nat);
         let ts2 = repeated_add(sp2, (ch2.len() - 1) as nat);
         lemma_repeated_add_congruence(sp1, sp2, (ch1.len() - 1) as nat);

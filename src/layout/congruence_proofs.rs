@@ -685,6 +685,8 @@ pub open spec fn widget_eqv<T: OrderedField>(
                  ContainerWidget::Flex { padding: p2, spacing: s2, alignment: a2, direction: d2, children: ch2 }) =>
                     padding_eqv(p1, p2) && s1.eqv(s2) && a1 == a2 && d1 == d2
                     && ch1.len() == ch2.len()
+                    && !crate::layout::flex::sum_weights(
+                        Seq::new(ch1.len(), |i: int| ch1[i].weight), ch1.len() as nat).eqv(T::zero())
                     && forall|i: int| 0 <= i < ch1.len() ==> {
                         &&& ch1[i].weight.eqv(ch2[i].weight)
                         &&& widget_eqv(ch1[i].child, ch2[i].child, (fuel - 1) as nat)
@@ -696,6 +698,8 @@ pub open spec fn widget_eqv<T: OrderedField>(
                     padding_eqv(p1, p2) && hs1.eqv(hs2) && vs1.eqv(vs2)
                     && ha1 == ha2 && va1 == va2
                     && sizes_eqv(cw1, cw2) && sizes_eqv(rh1, rh2)
+                    && cw1.len() > 0 && rh1.len() > 0
+                    && ch1.len() == cw1.len() * rh1.len()
                     && ch1.len() == ch2.len()
                     && forall|i: int| 0 <= i < ch1.len() ==>
                         widget_eqv(ch1[i], ch2[i], (fuel - 1) as nat),
@@ -2538,10 +2542,15 @@ pub open spec fn congruence_depth<T: OrderedRing>(widget: Widget<T>, fuel: nat) 
                             if children.len() == 0 { 0 }
                             else { min_children_congruence_depth(children, (fuel - 1) as nat, 0) + 1 }
                         },
-                        ContainerWidget::Flex { .. } => 0,
-                        ContainerWidget::Grid { col_widths, row_heights, children, .. } => {
-                            if children.len() == 0 || col_widths.len() == 0 || row_heights.len() == 0
-                                || children.len() != col_widths.len() * row_heights.len() { 0 }
+                        ContainerWidget::Flex { children, .. } => {
+                            if children.len() == 0 { 0 }
+                            else {
+                                let child_widgets = Seq::new(children.len(), |i: int| children[i].child);
+                                min_children_congruence_depth(child_widgets, (fuel - 1) as nat, 0) + 1
+                            }
+                        },
+                        ContainerWidget::Grid { children, .. } => {
+                            if children.len() == 0 { 0 }
                             else { min_children_congruence_depth(children, (fuel - 1) as nat, 0) + 1 }
                         },
                         ContainerWidget::Absolute { children, .. } => {
@@ -2793,14 +2802,26 @@ proof fn lemma_container_full_depth<T: OrderedField>(
                 };
             }
         },
-        ContainerWidget::Flex { .. } => {
-            // Flex: depth 0 in congruence_depth. Full-depth available via
-            // full_depth_proofs::lemma_flex_column_full_depth_dispatch (requires widget_wf for !tw.eqv(zero)).
+        ContainerWidget::Flex { padding: p1, spacing: sp1, alignment: al, direction: dir, children: ch1 } => {
+            if ch1.len() > 0 && fuel > 1 {
+                // !sum_weights.eqv(zero) now comes from widget_eqv for Flex
+                match dir {
+                    FlexDirection::Column => {
+                        crate::layout::full_depth_proofs::lemma_flex_column_full_depth_dispatch(
+                            lim1, lim2, p1, sp1, al, ch1, w2, fuel);
+                    },
+                    FlexDirection::Row => {
+                        crate::layout::full_depth_proofs::lemma_flex_row_full_depth_dispatch(
+                            lim1, lim2, p1, sp1, al, ch1, w2, fuel);
+                    },
+                }
+            }
         },
         ContainerWidget::Grid { padding: p1, h_spacing: hs1, v_spacing: vs1,
             h_align: ha, v_align: va, col_widths: cw1, row_heights: rh1, children: ch1 } => {
-            if ch1.len() > 0 && fuel > 1 && cw1.len() > 0 && rh1.len() > 0
-                && ch1.len() == cw1.len() * rh1.len() {
+            if ch1.len() > 0 && fuel > 1 {
+                // cw1.len() > 0, rh1.len() > 0, ch1.len() == cw1.len() * rh1.len()
+                // all guaranteed by widget_eqv for Grid
                 crate::layout::full_depth_proofs::lemma_grid_full_depth_dispatch(
                     lim1, lim2, p1, hs1, vs1, ha, va, cw1, rh1, ch1, w2, fuel);
             }
