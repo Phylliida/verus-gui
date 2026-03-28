@@ -2523,7 +2523,8 @@ pub open spec fn congruence_depth<T: OrderedRing>(widget: Widget<T>, fuel: nat) 
                 congruence_depth(*child, (fuel - 1) as nat) + 1,
             Widget::Wrapper(WrapperWidget::SizedBox { child, .. }) =>
                 congruence_depth(*child, (fuel - 1) as nat) + 1,
-            Widget::Wrapper(WrapperWidget::AspectRatio { .. }) => 0,
+            Widget::Wrapper(WrapperWidget::AspectRatio { child, .. }) =>
+                congruence_depth(*child, (fuel - 1) as nat) + 1,
             Widget::Wrapper(WrapperWidget::Margin { child, .. }) =>
                 congruence_depth(*child, (fuel - 1) as nat) + 1,
             Widget::Container(container) => {
@@ -2537,10 +2538,23 @@ pub open spec fn congruence_depth<T: OrderedRing>(widget: Widget<T>, fuel: nat) 
                             if children.len() == 0 { 0 }
                             else { min_children_congruence_depth(children, (fuel - 1) as nat, 0) + 1 }
                         },
-                        ContainerWidget::Flex { .. } => { 0
+                        ContainerWidget::Flex { .. } => 0,
+                        ContainerWidget::Grid { col_widths, row_heights, children, .. } => {
+                            if children.len() == 0 || col_widths.len() == 0 || row_heights.len() == 0
+                                || children.len() != col_widths.len() * row_heights.len() { 0 }
+                            else { min_children_congruence_depth(children, (fuel - 1) as nat, 0) + 1 }
                         },
-                        _ => 0,  // Grid, Absolute, ListView: depth 0
-                        _ => 0,
+                        ContainerWidget::Absolute { children, .. } => {
+                            if children.len() == 0 { 0 }
+                            else {
+                                let child_widgets = Seq::new(children.len(), |i: int| children[i].child);
+                                min_children_congruence_depth(child_widgets, (fuel - 1) as nat, 0) + 1
+                            }
+                        },
+                        ContainerWidget::ListView { children, .. } => {
+                            if children.len() == 0 { 0 }
+                            else { min_children_congruence_depth(children, (fuel - 1) as nat, 0) + 1 }
+                        },
                     }
                 }
             },
@@ -2641,11 +2655,45 @@ proof fn lemma_wrapper_full_depth<T: OrderedField>(
                     congruence_depth(*c1, (fuel - 1) as nat));
             }
         },
-        WrapperWidget::AspectRatio { .. } => {
-            // Depth 0: eqv values can cross branches at the le boundary,
-            // requiring div-mul roundtrip proof for the edge case.
-            // Per-variant helper exists — call directly when variant is known.
-            lemma_layout_widget_node_congruence(lim1, lim2, w1, w2, fuel);
+        WrapperWidget::AspectRatio { ratio: r1, child: c1 } => {
+            if let Widget::Wrapper(WrapperWidget::AspectRatio { ratio: r2, child: c2 }) = w2 {
+                // Prove both sides take the same branch: h.le(max.height)
+                let h1 = lim1.max.width.div(r1);
+                let h2 = lim2.max.width.div(r2);
+                verus_algebra::quadratic::lemma_div_congruence(
+                    lim1.max.width, lim2.max.width, r1, r2);
+                // h1.eqv(h2) and lim1.max.height.eqv(lim2.max.height)
+                // so h1.le(lim1.max.height) == h2.le(lim2.max.height)
+                lemma_le_congruence_iff(h1, h2, lim1.max.height, lim2.max.height);
+                // Both sides take the same branch → effective limits are eqv
+                let eff1 = if h1.le(lim1.max.height) {
+                    Limits { min: lim1.min, max: Size::new(lim1.max.width, h1) }
+                } else {
+                    Limits { min: lim1.min, max: Size::new(lim1.max.height.mul(r1), lim1.max.height) }
+                };
+                let eff2 = if h2.le(lim2.max.height) {
+                    Limits { min: lim2.min, max: Size::new(lim2.max.width, h2) }
+                } else {
+                    Limits { min: lim2.min, max: Size::new(lim2.max.height.mul(r2), lim2.max.height) }
+                };
+                assert(limits_eqv(eff1, eff2)) by {
+                    if h1.le(lim1.max.height) {
+                        // eff = {min, max: (width, h)}
+                    } else {
+                        // eff = {min, max: (height*r, height)}
+                        T::axiom_mul_congruence_left(lim1.max.height, lim2.max.height, r1);
+                        verus_algebra::lemmas::ring_lemmas::lemma_mul_congruence_right::<T>(
+                            lim2.max.height, r1, r2);
+                        T::axiom_eqv_transitive(
+                            lim1.max.height.mul(r1), lim2.max.height.mul(r1),
+                            lim2.max.height.mul(r2));
+                    }
+                };
+                // IH: recursive layout on effective limits
+                lemma_layout_widget_full_depth_congruence(eff1, eff2, *c1, *c2, (fuel - 1) as nat);
+                lemma_aspectratio_full_deep(lim1, lim2, r1, r2, c1, c2, fuel,
+                    congruence_depth(*c1, (fuel - 1) as nat));
+            }
         },
         WrapperWidget::ScrollView { viewport: v1, scroll_x: sx1, scroll_y: sy1, child: c1 } => {
             if let Widget::Wrapper(WrapperWidget::ScrollView { viewport: v2, scroll_x: sx2, scroll_y: sy2, child: c2 }) = w2 {
@@ -2749,8 +2797,25 @@ proof fn lemma_container_full_depth<T: OrderedField>(
             // Flex: depth 0 in congruence_depth. Full-depth available via
             // full_depth_proofs::lemma_flex_column_full_depth_dispatch (requires widget_wf for !tw.eqv(zero)).
         },
-        _ => {
-            // Grid, Absolute, ListView: depth 0 for now
+        ContainerWidget::Grid { padding: p1, h_spacing: hs1, v_spacing: vs1,
+            h_align: ha, v_align: va, col_widths: cw1, row_heights: rh1, children: ch1 } => {
+            if ch1.len() > 0 && fuel > 1 && cw1.len() > 0 && rh1.len() > 0
+                && ch1.len() == cw1.len() * rh1.len() {
+                crate::layout::full_depth_proofs::lemma_grid_full_depth_dispatch(
+                    lim1, lim2, p1, hs1, vs1, ha, va, cw1, rh1, ch1, w2, fuel);
+            }
+        },
+        ContainerWidget::Absolute { padding: p1, children: ch1 } => {
+            if ch1.len() > 0 && fuel > 1 {
+                crate::layout::full_depth_proofs::lemma_absolute_full_depth_dispatch(
+                    lim1, lim2, p1, ch1, w2, fuel);
+            }
+        },
+        ContainerWidget::ListView { spacing: sp1, scroll_y: sy1, viewport: vp1, children: ch1 } => {
+            if ch1.len() > 0 && fuel > 1 {
+                crate::layout::full_depth_proofs::lemma_listview_full_depth_dispatch(
+                    lim1, lim2, sp1, sy1, vp1, ch1, w2, fuel);
+            }
         },
     }
 }
