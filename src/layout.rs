@@ -26,6 +26,7 @@ pub mod listview;
 pub mod listview_proofs;
 pub mod congruence_proofs;
 pub mod full_depth_proofs;
+pub mod eqv_relation_proofs;
 pub mod constraint;
 
 verus! {
