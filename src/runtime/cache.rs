@@ -15,27 +15,27 @@ use crate::layout::cache_proofs::*;
 
 verus! {
 
-// ── Layout cache ──────────────────────────────────────────────────────
+//  ── Layout cache ──────────────────────────────────────────────────────
 
-/// Cached child layout results from a previous frame.
+///  Cached child layout results from a previous frame.
 ///
-/// Stores the RuntimeNode outputs of laying out each child widget,
-/// along with ghost metadata recording which widget models and limits
-/// were used to produce them.
+///  Stores the RuntimeNode outputs of laying out each child widget,
+///  along with ghost metadata recording which widget models and limits
+///  were used to produce them.
 pub struct RuntimeLayoutCache {
-    /// Cached child layout results.
+    ///  Cached child layout results.
     pub entries: Vec<RuntimeNode>,
-    /// Ghost: the spec-level widget models these entries were computed from.
+    ///  Ghost: the spec-level widget models these entries were computed from.
     pub widget_models: Ghost<Seq<Widget<RationalModel>>>,
-    /// Ghost: the inner limits used for layout.
+    ///  Ghost: the inner limits used for layout.
     pub inner_limits: Ghost<Limits<RationalModel>>,
-    /// Ghost: the fuel level used for layout.
+    ///  Ghost: the fuel level used for layout.
     pub fuel: Ghost<nat>,
 }
 
 impl RuntimeLayoutCache {
-    /// Cache is well-formed: each entry matches layout_widget of the
-    /// corresponding widget model at the recorded limits and fuel.
+    ///  Cache is well-formed: each entry matches layout_widget of the
+    ///  corresponding widget model at the recorded limits and fuel.
     pub open spec fn wf_spec(&self) -> bool {
         &&& self.entries@.len() == self.widget_models@.len() as int
         &&& forall|i: int| 0 <= i < self.entries@.len() ==>
@@ -45,14 +45,14 @@ impl RuntimeLayoutCache {
                 self.inner_limits@, self.widget_models@[i], self.fuel@)
     }
 
-    /// Number of cached entries.
+    ///  Number of cached entries.
     pub fn len(&self) -> (out: usize)
         ensures out == self.entries@.len(),
     {
         self.entries.len()
     }
 
-    /// Create an empty cache.
+    ///  Create an empty cache.
     pub fn empty() -> (out: Self)
         ensures
             out.entries@.len() == 0,
@@ -69,17 +69,17 @@ impl RuntimeLayoutCache {
     }
 }
 
-// ── Incremental child layout ──────────────────────────────────────────
+//  ── Incremental child layout ──────────────────────────────────────────
 
-/// Lay out children incrementally: reuse cached results for unchanged
-/// children, recompute only changed ones.
+///  Lay out children incrementally: reuse cached results for unchanged
+///  children, recompute only changed ones.
 ///
-/// `old_cache` is consumed so that cached RuntimeNode entries can be
-/// moved out (Vec elements contain BigInt witnesses that can't be copied).
+///  `old_cache` is consumed so that cached RuntimeNode entries can be
+///  moved out (Vec elements contain BigInt witnesses that can't be copied).
 ///
-/// The `changed` array indicates which children need recomputation.
-/// Ghost preconditions ensure that unchanged children's cache entries
-/// are valid for the new children's models.
+///  The `changed` array indicates which children need recomputation.
+///  Ghost preconditions ensure that unchanged children's cache entries
+///  are valid for the new children's models.
 pub fn layout_children_incremental_exec(
     inner: &RuntimeLimits,
     mut old_cache: RuntimeLayoutCache,
@@ -97,8 +97,8 @@ pub fn layout_children_incremental_exec(
         changed@.len() == new_children@.len(),
         forall|i: int| 0 <= i < new_children@.len() ==>
             (#[trigger] new_children@[i]).wf_spec((fuel - 1) as nat),
-        // Ghost obligation: for unchanged children, the cached widget model
-        // matches the new child's model, so the cache entry is valid.
+        //  Ghost obligation: for unchanged children, the cached widget model
+        //  matches the new child's model, so the cache entry is valid.
         forall|i: int| 0 <= i < changed@.len() && !changed@[i] ==>
             old_cache.widget_models@[i] === (#[trigger] new_children@[i]).model(),
     ensures
@@ -119,7 +119,7 @@ pub fn layout_children_incremental_exec(
     let ghost spec_wc: Seq<Widget<RationalModel>> =
         Seq::new(new_children@.len() as nat, |j: int| new_children@[j].model());
 
-    // Snapshot the old cache state before mutations
+    //  Snapshot the old cache state before mutations
     let ghost old_cache_entries = old_cache.entries@;
     let ghost old_cache_models = old_cache.widget_models@;
     let ghost old_cache_inner = old_cache.inner_limits@;
@@ -129,7 +129,7 @@ pub fn layout_children_incremental_exec(
     let mut child_sizes: Vec<RuntimeSize> = Vec::new();
     let mut i: usize = 0;
 
-    // Dummy node for set_and_swap
+    //  Dummy node for set_and_swap
     let dummy_size = RuntimeSize::zero_exec();
     let dummy_x = RuntimeRational::from_int(0);
     let dummy_y = RuntimeRational::from_int(0);
@@ -154,19 +154,19 @@ pub fn layout_children_incremental_exec(
                 (#[trigger] new_children@[j]).wf_spec((fuel - 1) as nat),
             forall|j: int| 0 <= j < changed@.len() && !changed@[j] ==>
                 old_cache_models[j] === (#[trigger] new_children@[j]).model(),
-            // old_cache_entries validity (snapshot before mutations)
+            //  old_cache_entries validity (snapshot before mutations)
             forall|j: int| 0 <= j < old_cache_entries.len() as int ==>
                 (#[trigger] old_cache_entries[j]).wf_spec(),
             forall|j: int| 0 <= j < old_cache_entries.len() as int ==>
                 old_cache_entries[j]@ === layout_widget::<RationalModel>(
                     old_cache_inner, old_cache_models[j], old_cache_fuel),
-            // Entries still in old_cache.entries at index >= i are from original snapshot
+            //  Entries still in old_cache.entries at index >= i are from original snapshot
             old_cache.entries@.len() == n as int,
             forall|j: int| i <= j < n ==> {
                 &&& (#[trigger] old_cache.entries@[j]).wf_spec()
                 &&& old_cache.entries@[j]@ === old_cache_entries[j]@
             },
-            // Output invariants
+            //  Output invariants
             forall|j: int| 0 <= j < i ==> {
                 &&& (#[trigger] child_nodes@[j]).wf_spec()
                 &&& child_nodes@[j]@ === layout_widget::<RationalModel>(
@@ -179,34 +179,34 @@ pub fn layout_children_incremental_exec(
         decreases n - i,
     {
         if !changed[i] {
-            // Unchanged child: reuse cached entry via set_and_swap
+            //  Unchanged child: reuse cached entry via set_and_swap
             proof {
-                // Cache entry is valid for old model, which === new model
+                //  Cache entry is valid for old model, which === new model
                 assert(old_cache_entries[i as int]@ === layout_widget::<RationalModel>(
                     old_cache_inner, old_cache_models[i as int], old_cache_fuel));
                 assert(old_cache_models[i as int] === new_children@[i as int].model());
                 assert(old_cache_inner === inner@);
                 assert(old_cache_fuel === (fuel - 1) as nat);
-                // Therefore cache entry is valid for new child
+                //  Therefore cache entry is valid for new child
                 assert(old_cache_entries[i as int]@ === layout_widget::<RationalModel>(
                     inner@, new_children@[i as int].model(), (fuel - 1) as nat));
                 assert(spec_wc[i as int] == new_children@[i as int].model());
             }
 
-            // Swap out the cached entry and use it
+            //  Swap out the cached entry and use it
             old_cache.entries.set_and_swap(i, &mut dummy);
-            // Now dummy holds the old cache entry at index i
+            //  Now dummy holds the old cache entry at index i
             let cached_size = dummy.size.copy_size();
             child_sizes.push(cached_size);
             child_nodes.push(dummy);
 
-            // Create a new dummy for next iteration
+            //  Create a new dummy for next iteration
             let ds = RuntimeSize::zero_exec();
             let dx = RuntimeRational::from_int(0);
             let dy = RuntimeRational::from_int(0);
             dummy = RuntimeNode::leaf_exec(dx, dy, ds);
         } else {
-            // Changed child: recompute layout
+            //  Changed child: recompute layout
             let cn = layout_widget_exec(inner, &new_children[i], fuel - 1);
             child_sizes.push(cn.size.copy_size());
             child_nodes.push(cn);
@@ -217,7 +217,7 @@ pub fn layout_children_incremental_exec(
     (child_nodes, child_sizes)
 }
 
-/// Build a fresh cache from child layout results.
+///  Build a fresh cache from child layout results.
 pub fn build_cache(
     entries: Vec<RuntimeNode>,
     inner: &RuntimeLimits,
@@ -259,17 +259,17 @@ pub fn build_cache(
     }
 }
 
-// ── Reconciliation ───────────────────────────────────────────────────
+//  ── Reconciliation ───────────────────────────────────────────────────
 
-/// Compare old and new children, building a `changed` bitvector.
-/// A child is "unchanged" when `widgets_deep_equal_exec` returns true,
-/// meaning: same variant, same parameters (eqv on rationals), and
-/// recursively equal children down to the leaves.
+///  Compare old and new children, building a `changed` bitvector.
+///  A child is "unchanged" when `widgets_deep_equal_exec` returns true,
+///  meaning: same variant, same parameters (eqv on rationals), and
+///  recursively equal children down to the leaves.
 ///
-/// For unchanged children, we bridge semantic equality (eqv) to
-/// structural model equality (===). This is sound because the
-/// Rational model values are deterministically derived from the
-/// same construction path when the runtime values compare equal.
+///  For unchanged children, we bridge semantic equality (eqv) to
+///  structural model equality (===). This is sound because the
+///  Rational model values are deterministically derived from the
+///  same construction path when the runtime values compare equal.
 fn build_changed_vec(
     old_children: &Vec<RuntimeWidget>,
     new_children: &Vec<RuntimeWidget>,
@@ -287,7 +287,7 @@ fn build_changed_vec(
         },
     ensures
         out@.len() == new_children@.len(),
-        // Key ghost guarantee: unchanged children have identical models
+        //  Key ghost guarantee: unchanged children have identical models
         forall|i: int| 0 <= i < out@.len() && !out@[i] ==>
             (#[trigger] old_children@[i]).model() === new_children@[i].model(),
 {
@@ -314,8 +314,8 @@ fn build_changed_vec(
         decreases n - i,
     {
         if depth > 0 && widgets_deep_equal_exec(&old_children[i], &new_children[i], depth) {
-            // Deep equal + model_normalized on both sides → model() === model()
-            // via widgets_deep_equal_exec ensures.
+            //  Deep equal + model_normalized on both sides → model() === model()
+            //  via widgets_deep_equal_exec ensures.
             changed.push(false);
         } else {
             changed.push(true);
@@ -325,8 +325,8 @@ fn build_changed_vec(
     changed
 }
 
-/// Reconcile old cache with new children: compare, reuse unchanged, recompute changed.
-/// Returns (child_nodes, child_sizes) — caller uses build_cache separately if needed.
+///  Reconcile old cache with new children: compare, reuse unchanged, recompute changed.
+///  Returns (child_nodes, child_sizes) — caller uses build_cache separately if needed.
 pub fn reconcile_children_exec(
     inner: &RuntimeLimits,
     old_cache: RuntimeLayoutCache,
@@ -350,7 +350,7 @@ pub fn reconcile_children_exec(
             &&& (#[trigger] new_children@[i]).wf_spec((fuel - 1) as nat)
             &&& new_children@[i].model_normalized((fuel - 1) as nat)
         },
-        // The cache was built from old_children's models
+        //  The cache was built from old_children's models
         forall|i: int| 0 <= i < old_children@.len() ==>
             old_cache.widget_models@[i] === (#[trigger] old_children@[i]).model(),
     ensures
@@ -369,12 +369,12 @@ pub fn reconcile_children_exec(
     let changed = build_changed_vec(old_children, new_children, fuel - 1);
 
     proof {
-        // Bridge: for unchanged children, chain old_cache.widget_models === old_children.model() === new_children.model()
+        //  Bridge: for unchanged children, chain old_cache.widget_models === old_children.model() === new_children.model()
         assert forall|i: int| 0 <= i < changed@.len() && !changed@[i] implies
             old_cache.widget_models@[i] === (#[trigger] new_children@[i]).model()
         by {
-            // build_changed_vec ensures: old_children@[i].model() === new_children@[i].model()
-            // precondition ensures: old_cache.widget_models@[i] === old_children@[i].model()
+            //  build_changed_vec ensures: old_children@[i].model() === new_children@[i].model()
+            //  precondition ensures: old_cache.widget_models@[i] === old_children@[i].model()
             assert(old_cache.widget_models@[i] === old_children@[i].model());
             assert(old_children@[i].model() === new_children@[i].model());
         }
@@ -383,13 +383,13 @@ pub fn reconcile_children_exec(
     layout_children_incremental_exec(inner, old_cache, new_children, &changed, fuel)
 }
 
-// ── Dynamic reconciliation (variable-length children) ────────────────
+//  ── Dynamic reconciliation (variable-length children) ────────────────
 
-/// Reconcile children when the count may have changed between frames.
-/// Reuses cache entries for matching prefix children; recomputes the rest.
+///  Reconcile children when the count may have changed between frames.
+///  Reuses cache entries for matching prefix children; recomputes the rest.
 ///
-/// This handles the common case of children being appended or removed
-/// at the end without requiring key-based matching.
+///  This handles the common case of children being appended or removed
+///  at the end without requiring key-based matching.
 pub fn reconcile_children_dynamic_exec(
     inner: &RuntimeLimits,
     old_cache: RuntimeLayoutCache,
@@ -426,13 +426,13 @@ pub fn reconcile_children_dynamic_exec(
         },
 {
     if old_children.len() == new_children.len() {
-        // Same length: use existing reconciliation
-        // Need model_normalized on new children for build_changed_vec
-        // For now, always recompute when lengths match but new children aren't normalized
-        // (the full path requires normalize_widget_exec on new_children)
+        //  Same length: use existing reconciliation
+        //  Need model_normalized on new children for build_changed_vec
+        //  For now, always recompute when lengths match but new children aren't normalized
+        //  (the full path requires normalize_widget_exec on new_children)
     }
 
-    // Recompute all children (safe fallback for variable-length case)
+    //  Recompute all children (safe fallback for variable-length case)
     let mut child_nodes: Vec<RuntimeNode> = Vec::new();
     let mut child_sizes: Vec<RuntimeSize> = Vec::new();
     let mut i: usize = 0;
@@ -466,24 +466,24 @@ pub fn reconcile_children_dynamic_exec(
     (child_nodes, child_sizes)
 }
 
-// ── Key-based matching ───────────────────────────────────────────────
+//  ── Key-based matching ───────────────────────────────────────────────
 
-/// Match old and new children by optional keys.
-/// Returns a mapping: for each new child, the old child index it matches (if any).
+///  Match old and new children by optional keys.
+///  Returns a mapping: for each new child, the old child index it matches (if any).
 ///
-/// Algorithm:
-/// 1. Build index of keyed old children
-/// 2. For each new child with a key, find the matching old child
-/// 3. Unkeyed children are not matched (always recomputed)
+///  Algorithm:
+///  1. Build index of keyed old children
+///  2. For each new child with a key, find the matching old child
+///  3. Unkeyed children are not matched (always recomputed)
 ///
-/// Ensures: matched pairs have equal keys, and each old index is used at most once.
+///  Ensures: matched pairs have equal keys, and each old index is used at most once.
 pub fn match_children_by_key(
     old_keys: &Vec<Option<usize>>,
     new_keys: &Vec<Option<usize>>,
 ) -> (out: Vec<Option<usize>>)
     ensures
         out@.len() == new_keys@.len(),
-        // Matched pairs have equal keys
+        //  Matched pairs have equal keys
         forall|i: int| 0 <= i < out@.len() ==> (
             (#[trigger] out@[i]) is Some ==> {
                 let old_idx = out@[i].unwrap();
@@ -512,7 +512,7 @@ pub fn match_children_by_key(
     {
         match &new_keys[i] {
             Some(new_key) => {
-                // Search for matching key in old children
+                //  Search for matching key in old children
                 let mut found: Option<usize> = None;
                 let mut j: usize = 0;
                 while j < old_keys.len()
@@ -546,4 +546,4 @@ pub fn match_children_by_key(
     mapping
 }
 
-} // verus!
+} //  verus!

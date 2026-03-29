@@ -9,7 +9,7 @@ use crate::text_model::cursor::*;
 
 verus! {
 
-// ── Event types ────────────────────────────────────────────────────
+//  ── Event types ────────────────────────────────────────────────────
 
 pub enum PointerEventKind {
     Down,
@@ -17,16 +17,16 @@ pub enum PointerEventKind {
     Move,
 }
 
-/// A pointer event with coordinates.
+///  A pointer event with coordinates.
 pub struct PointerEvent<T: OrderedRing> {
     pub kind: PointerEventKind,
     pub x: T,
     pub y: T,
 }
 
-// ── Dispatch ───────────────────────────────────────────────────────
+//  ── Dispatch ───────────────────────────────────────────────────────
 
-/// Dispatch a pointer event: find the target path using hit_test.
+///  Dispatch a pointer event: find the target path using hit_test.
 pub open spec fn dispatch_pointer<T: OrderedRing>(
     root: Node<T>,
     event: PointerEvent<T>,
@@ -35,9 +35,9 @@ pub open spec fn dispatch_pointer<T: OrderedRing>(
     hit_test(root, event.x, event.y, fuel)
 }
 
-// ── Focus state ────────────────────────────────────────────────────
+//  ── Focus state ────────────────────────────────────────────────────
 
-/// Focus tracks which path was last clicked (PointerDown).
+///  Focus tracks which path was last clicked (PointerDown).
 pub struct FocusState {
     pub focused_path: Option<Seq<nat>>,
 }
@@ -60,9 +60,9 @@ pub open spec fn update_focus<T: OrderedRing>(
     }
 }
 
-// ── Dispatch soundness proofs ──────────────────────────────────────
+//  ── Dispatch soundness proofs ──────────────────────────────────────
 
-/// Dispatch always returns valid paths.
+///  Dispatch always returns valid paths.
 pub proof fn lemma_dispatch_path_valid<T: OrderedRing>(
     root: Node<T>,
     event: PointerEvent<T>,
@@ -76,7 +76,7 @@ pub proof fn lemma_dispatch_path_valid<T: OrderedRing>(
     lemma_hit_test_path_valid(root, event.x, event.y, fuel);
 }
 
-/// Dispatch target is within root bounds.
+///  Dispatch target is within root bounds.
 pub proof fn lemma_dispatch_in_bounds<T: OrderedRing>(
     root: Node<T>,
     event: PointerEvent<T>,
@@ -90,10 +90,10 @@ pub proof fn lemma_dispatch_in_bounds<T: OrderedRing>(
     lemma_hit_test_point_in_node(root, event.x, event.y, fuel);
 }
 
-// ── Bubble path ────────────────────────────────────────────────────
+//  ── Bubble path ────────────────────────────────────────────────────
 
-/// The sequence of ancestor paths from the target to the root.
-/// bubble_path([2,1,0]) = [[2,1,0], [2,1], [2], []]
+///  The sequence of ancestor paths from the target to the root.
+///  bubble_path([2,1,0]) = [[2,1,0], [2,1], [2], []]
 pub open spec fn bubble_path(path: Seq<nat>) -> Seq<Seq<nat>>
     decreases path.len(),
 {
@@ -104,9 +104,9 @@ pub open spec fn bubble_path(path: Seq<nat>) -> Seq<Seq<nat>>
     }
 }
 
-// ── Bubble + focus proofs ──────────────────────────────────────────
+//  ── Bubble + focus proofs ──────────────────────────────────────────
 
-/// Bubble path has length = original path length + 1 (includes root).
+///  Bubble path has length = original path length + 1 (includes root).
 pub proof fn lemma_bubble_path_len(path: Seq<nat>)
     ensures
         bubble_path(path).len() == path.len() + 1,
@@ -117,7 +117,7 @@ pub proof fn lemma_bubble_path_len(path: Seq<nat>)
     }
 }
 
-/// path_valid is prefix-closed: valid path -> any prefix is valid.
+///  path_valid is prefix-closed: valid path -> any prefix is valid.
 pub proof fn lemma_path_valid_prefix<T: OrderedRing>(
     root: Node<T>,
     path: Seq<nat>,
@@ -131,30 +131,30 @@ pub proof fn lemma_path_valid_prefix<T: OrderedRing>(
     decreases path.len(),
 {
     if k == 0 {
-        // empty path is always valid
+        //  empty path is always valid
     } else if path.len() == 0 {
-        // k <= 0, so k == 0, handled above
+        //  k <= 0, so k == 0, handled above
     } else {
-        // path_valid(root, path) implies:
-        //   path[0] < root.children.len()
-        //   path_valid(root.children[path[0]], path.subrange(1, path.len()))
+        //  path_valid(root, path) implies:
+        //    path[0] < root.children.len()
+        //    path_valid(root.children[path[0]], path.subrange(1, path.len()))
         let idx = path[0];
         let child = root.children[idx as int];
         let rest = path.subrange(1, path.len() as int);
-        // We need path_valid(root, path.subrange(0, k))
-        // path.subrange(0, k) = seq![idx] + path.subrange(1, k)
+        //  We need path_valid(root, path.subrange(0, k))
+        //  path.subrange(0, k) = seq![idx] + path.subrange(1, k)
         assert(path.subrange(0, k as int)[0] == idx);
         assert(path.subrange(0, k as int).subrange(1, k as int) =~= path.subrange(1, k as int));
-        // Need: path_valid(child, path.subrange(1, k))
-        // By IH: path_valid(child, rest) and (k-1) <= rest.len()
-        //   → path_valid(child, rest.subrange(0, k-1))
-        // rest.subrange(0, k-1) = path.subrange(1, k)
+        //  Need: path_valid(child, path.subrange(1, k))
+        //  By IH: path_valid(child, rest) and (k-1) <= rest.len()
+        //    → path_valid(child, rest.subrange(0, k-1))
+        //  rest.subrange(0, k-1) = path.subrange(1, k)
         lemma_path_valid_prefix(child, rest, (k - 1) as nat);
         assert(rest.subrange(0, (k - 1) as int) =~= path.subrange(1, k as int));
     }
 }
 
-/// Each bubble path entry is a valid prefix of the original.
+///  Each bubble path entry is a valid prefix of the original.
 pub proof fn lemma_bubble_paths_valid<T: OrderedRing>(
     root: Node<T>,
     path: Seq<nat>,
@@ -168,34 +168,34 @@ pub proof fn lemma_bubble_paths_valid<T: OrderedRing>(
 {
     lemma_bubble_path_len(path);
     if path.len() == 0 {
-        // bubble_path([]) = [[]], only entry is empty path which is valid
+        //  bubble_path([]) = [[]], only entry is empty path which is valid
     } else {
-        // bubble_path(path) = [path] ++ bubble_path(path[0..n-1])
+        //  bubble_path(path) = [path] ++ bubble_path(path[0..n-1])
         let prefix = path.subrange(0, path.len() as int - 1);
-        // path is valid → prefix is valid
+        //  path is valid → prefix is valid
         lemma_path_valid_prefix(root, path, (path.len() - 1) as nat);
         assert(prefix =~= path.subrange(0, path.len() as int - 1));
-        // Recurse on prefix
+        //  Recurse on prefix
         lemma_bubble_paths_valid(root, prefix);
 
-        // Entry 0 is path itself (valid by precondition)
+        //  Entry 0 is path itself (valid by precondition)
         assert(bubble_path(path)[0] =~= path);
 
-        // Entries 1..n+1 come from bubble_path(prefix)
+        //  Entries 1..n+1 come from bubble_path(prefix)
         assert forall|i: nat| i < bubble_path(path).len() implies
             path_valid(root, #[trigger] bubble_path(path)[i as int])
         by {
             if i == 0 {
                 assert(bubble_path(path)[0] =~= path);
             } else {
-                // bubble_path(path)[i] = bubble_path(prefix)[i-1]
+                //  bubble_path(path)[i] = bubble_path(prefix)[i-1]
                 assert(bubble_path(path)[i as int] =~= bubble_path(prefix)[(i - 1) as int]);
             }
         };
     }
 }
 
-/// Focus is stable on non-Down events.
+///  Focus is stable on non-Down events.
 pub proof fn lemma_focus_stable_on_move<T: OrderedRing>(
     state: FocusState,
     root: Node<T>,
@@ -209,16 +209,16 @@ pub proof fn lemma_focus_stable_on_move<T: OrderedRing>(
 {
 }
 
-// ── Keyboard event types ──────────────────────────────────────────
+//  ── Keyboard event types ──────────────────────────────────────────
 
-/// Modifier key state.
+///  Modifier key state.
 pub struct Modifiers {
     pub shift: bool,
     pub ctrl: bool,
     pub alt: bool,
 }
 
-/// Kind of keyboard event.
+///  Kind of keyboard event.
 pub enum KeyEventKind {
     Char(char),
     Backspace,
@@ -237,22 +237,22 @@ pub enum KeyEventKind {
     Cut,
     Copy,
     Paste,
-    // IME composition events
+    //  IME composition events
     ComposeStart,
     ComposeUpdate(Seq<char>, nat),
     ComposeCommit,
     ComposeCancel,
 }
 
-/// A keyboard event with modifiers.
+///  A keyboard event with modifiers.
 pub struct KeyEvent {
     pub kind: KeyEventKind,
     pub modifiers: Modifiers,
 }
 
-// ── Key to move direction ────────────────────────────────────────
+//  ── Key to move direction ────────────────────────────────────────
 
-/// Map arrow/home/end key events to move directions.
+///  Map arrow/home/end key events to move directions.
 pub open spec fn key_to_move_direction(event: KeyEvent) -> Option<MoveDirection> {
     match event.kind {
         KeyEventKind::Left => if event.modifiers.ctrl {
@@ -281,17 +281,17 @@ pub open spec fn key_to_move_direction(event: KeyEvent) -> Option<MoveDirection>
     }
 }
 
-/// Result of dispatching a key event.
+///  Result of dispatching a key event.
 pub enum KeyAction {
-    /// A text model operation that produces a new model.
+    ///  A text model operation that produces a new model.
     NewModel(TextModel),
-    /// An undo/redo/clipboard action handled at a higher level.
+    ///  An undo/redo/clipboard action handled at a higher level.
     External(ExternalAction),
-    /// Key event not handled.
+    ///  Key event not handled.
     None,
 }
 
-/// Actions that must be handled externally (undo stack, clipboard, find).
+///  Actions that must be handled externally (undo stack, clipboard, find).
 pub enum ExternalAction {
     Undo,
     Redo,
@@ -300,11 +300,11 @@ pub enum ExternalAction {
     Paste,
     FindNext(Seq<char>),
     FindPrev(Seq<char>),
-    ReplaceAt(nat, nat, Seq<char>),  // start, pattern_len, replacement
-    ReplaceAll(Seq<char>, Seq<char>),  // pattern, replacement
+    ReplaceAt(nat, nat, Seq<char>),  //  start, pattern_len, replacement
+    ReplaceAll(Seq<char>, Seq<char>),  //  pattern, replacement
 }
 
-/// Dispatch a keyboard event to a text model operation.
+///  Dispatch a keyboard event to a text model operation.
 pub open spec fn dispatch_key(model: TextModel, event: KeyEvent) -> KeyAction {
     match event.kind {
         KeyEventKind::Char(ch) => {
@@ -389,7 +389,7 @@ pub open spec fn dispatch_key(model: TextModel, event: KeyEvent) -> KeyAction {
             KeyAction::NewModel(compose_cancel(model))
         },
         _ => {
-            // Arrow/Home/End keys
+            //  Arrow/Home/End keys
             match key_to_move_direction(event) {
                 Some(dir) => {
                     if event.modifiers.shift {
@@ -404,4 +404,4 @@ pub open spec fn dispatch_key(model: TextModel, event: KeyEvent) -> KeyAction {
     }
 }
 
-} // verus!
+} //  verus!

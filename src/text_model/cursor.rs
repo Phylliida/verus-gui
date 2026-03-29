@@ -4,11 +4,11 @@ use super::operations::resolve_typing_style;
 
 verus! {
 
-// ──────────────────────────────────────────────────────────────────────
-// Move direction
-// ──────────────────────────────────────────────────────────────────────
+//  ──────────────────────────────────────────────────────────────────────
+//  Move direction
+//  ──────────────────────────────────────────────────────────────────────
 
-/// Direction of cursor movement.
+///  Direction of cursor movement.
 pub enum MoveDirection {
     Left,
     Right,
@@ -22,12 +22,12 @@ pub enum MoveDirection {
     Down,
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// Line helpers
-// ──────────────────────────────────────────────────────────────────────
+//  ──────────────────────────────────────────────────────────────────────
+//  Line helpers
+//  ──────────────────────────────────────────────────────────────────────
 
-/// The line (paragraph) number containing position `pos`.
-/// Equals the count of '\n' characters in `text[0..pos)`.
+///  The line (paragraph) number containing position `pos`.
+///  Equals the count of '\n' characters in `text[0..pos)`.
 pub open spec fn line_of(text: Seq<char>, pos: nat) -> nat {
     if pos == 0 || text.len() == 0 {
         0
@@ -36,7 +36,7 @@ pub open spec fn line_of(text: Seq<char>, pos: nat) -> nat {
     }
 }
 
-/// Start of the line containing `pos`: scan back for '\n' or return 0.
+///  Start of the line containing `pos`: scan back for '\n' or return 0.
 pub open spec fn line_start(text: Seq<char>, pos: nat) -> nat
     decreases pos,
 {
@@ -49,7 +49,7 @@ pub open spec fn line_start(text: Seq<char>, pos: nat) -> nat
     }
 }
 
-/// End of the line containing `pos`: scan forward for '\n' or return text.len().
+///  End of the line containing `pos`: scan forward for '\n' or return text.len().
 pub open spec fn line_end(text: Seq<char>, pos: nat) -> nat
     decreases text.len() - pos,
 {
@@ -62,14 +62,14 @@ pub open spec fn line_end(text: Seq<char>, pos: nat) -> nat
     }
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// Movement resolution
-// ──────────────────────────────────────────────────────────────────────
+//  ──────────────────────────────────────────────────────────────────────
+//  Movement resolution
+//  ──────────────────────────────────────────────────────────────────────
 
-/// Compute `(new_focus, new_affinity, new_preferred_column)` for a movement.
+///  Compute `(new_focus, new_affinity, new_preferred_column)` for a movement.
 ///
-/// Horizontal movements clear `preferred_column` to `None`.
-/// Vertical movements preserve/establish `preferred_column`.
+///  Horizontal movements clear `preferred_column` to `None`.
+///  Vertical movements preserve/establish `preferred_column`.
 pub open spec fn resolve_movement(
     text: Seq<char>,
     focus: nat,
@@ -119,7 +119,7 @@ pub open spec fn resolve_movement(
                 None => cur_col,
             };
             if cur_line == 0 {
-                // Already on first line, go to start
+                //  Already on first line, go to start
                 (0, Affinity::Downstream, Some(col))
             } else {
                 let (new_pos, new_aff) = visual_to_text_pos(text, (cur_line - 1) as nat, col);
@@ -133,7 +133,7 @@ pub open spec fn resolve_movement(
                 None => cur_col,
             };
             let (new_pos, new_aff) = visual_to_text_pos(text, cur_line + 1, col);
-            // If visual_to_text_pos returns beyond text.len(), clamp
+            //  If visual_to_text_pos returns beyond text.len(), clamp
             if new_pos > text.len() {
                 (text.len(), Affinity::Upstream, Some(col))
             } else {
@@ -143,7 +143,7 @@ pub open spec fn resolve_movement(
     }
 }
 
-/// Whether a direction is horizontal (clears preferred_column).
+///  Whether a direction is horizontal (clears preferred_column).
 pub open spec fn is_horizontal(dir: MoveDirection) -> bool {
     match dir {
         MoveDirection::Left
@@ -158,11 +158,11 @@ pub open spec fn is_horizontal(dir: MoveDirection) -> bool {
     }
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// Public cursor/selection operations
-// ──────────────────────────────────────────────────────────────────────
+//  ──────────────────────────────────────────────────────────────────────
+//  Public cursor/selection operations
+//  ──────────────────────────────────────────────────────────────────────
 
-/// Move cursor (collapsing selection) in the given direction.
+///  Move cursor (collapsing selection) in the given direction.
 pub open spec fn move_cursor(model: TextModel, dir: MoveDirection) -> TextModel {
     let (new_focus, new_aff, new_pref) = resolve_movement(
         model.text, model.focus, model.focus_affinity, model.preferred_column, dir);
@@ -178,7 +178,7 @@ pub open spec fn move_cursor(model: TextModel, dir: MoveDirection) -> TextModel 
     }
 }
 
-/// Extend selection: move focus, keep anchor fixed.
+///  Extend selection: move focus, keep anchor fixed.
 pub open spec fn extend_selection(model: TextModel, dir: MoveDirection) -> TextModel {
     let (new_focus, new_aff, new_pref) = resolve_movement(
         model.text, model.focus, model.focus_affinity, model.preferred_column, dir);
@@ -190,7 +190,7 @@ pub open spec fn extend_selection(model: TextModel, dir: MoveDirection) -> TextM
     }
 }
 
-/// Select all text: anchor = 0, focus = text.len().
+///  Select all text: anchor = 0, focus = text.len().
 pub open spec fn select_all(model: TextModel) -> TextModel {
     TextModel {
         anchor: 0,
@@ -201,7 +201,7 @@ pub open spec fn select_all(model: TextModel) -> TextModel {
     }
 }
 
-/// Collapse selection to the leftmost position.
+///  Collapse selection to the leftmost position.
 pub open spec fn collapse_left(model: TextModel) -> TextModel {
     let pos = if model.anchor <= model.focus { model.anchor } else { model.focus };
     let new_typing = resolve_typing_style(model.text, model.styles, pos, model.default_style);
@@ -215,7 +215,7 @@ pub open spec fn collapse_left(model: TextModel) -> TextModel {
     }
 }
 
-/// Collapse selection to the rightmost position.
+///  Collapse selection to the rightmost position.
 pub open spec fn collapse_right(model: TextModel) -> TextModel {
     let pos = if model.anchor >= model.focus { model.anchor } else { model.focus };
     let new_typing = resolve_typing_style(model.text, model.styles, pos, model.default_style);
@@ -229,4 +229,4 @@ pub open spec fn collapse_right(model: TextModel) -> TextModel {
     }
 }
 
-} // verus!
+} //  verus!

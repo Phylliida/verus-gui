@@ -19,53 +19,53 @@ use crate::event::*;
 
 verus! {
 
-// ══════════════════════════════════════════════════════════════════════
-// THE FUNDAMENTAL THEOREM OF THE GUI FRAMEWORK
+//  ══════════════════════════════════════════════════════════════════════
+//  THE FUNDAMENTAL THEOREM OF THE GUI FRAMEWORK
 //
-// The entire GUI pipeline — layout, rendering, hit-testing, animation,
-// text editing, and incremental updates — is correct. Specifically:
+//  The entire GUI pipeline — layout, rendering, hit-testing, animation,
+//  text editing, and incremental updates — is correct. Specifically:
 //
-// 1. QUOTIENT WELL-DEFINEDNESS: The pipeline is a well-defined function
-//    on the quotient ring of rational representations. Equivalent inputs
-//    produce equivalent visual output, interaction behavior, and animations.
+//  1. QUOTIENT WELL-DEFINEDNESS: The pipeline is a well-defined function
+//     on the quotient ring of rational representations. Equivalent inputs
+//     produce equivalent visual output, interaction behavior, and animations.
 //
-// 2. GPU SAFETY: Layout with well-formed constraints produces draw
-//    commands with non-negative dimensions, safe for GPU submission.
+//  2. GPU SAFETY: Layout with well-formed constraints produces draw
+//     commands with non-negative dimensions, safe for GPU submission.
 //
-// 3. HIT-TEST CORRECTNESS: Hit-testing produces geometrically valid
-//    paths — the click point is within the node at every path step.
+//  3. HIT-TEST CORRECTNESS: Hit-testing produces geometrically valid
+//     paths — the click point is within the node at every path step.
 //
-// 4. EDIT INTEGRITY: Text editing preserves model well-formedness,
-//    and undo-redo is a perfect roundtrip on text and styles.
+//  4. EDIT INTEGRITY: Text editing preserves model well-formedness,
+//     and undo-redo is a perfect roundtrip on text and styles.
 //
-// 5. INCREMENTAL CORRECTNESS: Changing one widget only affects that
-//    subtree; siblings are identical and diff detects no change.
+//  5. INCREMENTAL CORRECTNESS: Changing one widget only affects that
+//     subtree; siblings are identical and diff detects no change.
 //
-// 6. DETERMINISM: Layout is deterministic once fuel exceeds tree depth.
-// ══════════════════════════════════════════════════════════════════════
+//  6. DETERMINISM: Layout is deterministic once fuel exceeds tree depth.
+//  ══════════════════════════════════════════════════════════════════════
 
-/// The Fundamental Theorem: the GUI pipeline is correct.
+///  The Fundamental Theorem: the GUI pipeline is correct.
 ///
-/// Given equivalent widget specifications (w1 ≡ w2) under equivalent
-/// layout constraints (lim1 ≡ lim2), the pipeline produces:
-///   - Equivalent layout nodes (same position, size, children count)
-///   - Equivalent root draw commands (same rendered rectangle)
-///   - Equivalent measure results (same fast-path size)
-///   - Same containment decision for equivalent click coordinates
-///   - Equivalent animation interpolation
-///   - Valid GPU draw commands (non-negative dimensions)
-///   - Geometrically correct hit-test paths
+///  Given equivalent widget specifications (w1 ≡ w2) under equivalent
+///  layout constraints (lim1 ≡ lim2), the pipeline produces:
+///    - Equivalent layout nodes (same position, size, children count)
+///    - Equivalent root draw commands (same rendered rectangle)
+///    - Equivalent measure results (same fast-path size)
+///    - Same containment decision for equivalent click coordinates
+///    - Equivalent animation interpolation
+///    - Valid GPU draw commands (non-negative dimensions)
+///    - Geometrically correct hit-test paths
 pub proof fn the_fundamental_theorem<T: OrderedField>(
-    // Equivalent layout inputs
+    //  Equivalent layout inputs
     lim1: Limits<T>, lim2: Limits<T>,
     w1: Widget<T>, w2: Widget<T>,
     fuel: nat,
-    // Equivalent click coordinates
+    //  Equivalent click coordinates
     px1: T, px2: T, py1: T, py2: T,
-    // Equivalent animation endpoints
+    //  Equivalent animation endpoints
     w1b: Widget<T>, w2b: Widget<T>,
     t: T,
-    // Draw parameters
+    //  Draw parameters
     draw_fuel: nat,
 )
     requires
@@ -79,41 +79,41 @@ pub proof fn the_fundamental_theorem<T: OrderedField>(
         let n1 = layout_widget(lim1, w1, fuel);
         let n2 = layout_widget(lim2, w2, fuel);
 
-        // ── 1. Quotient well-definedness ──
+        //  ── 1. Quotient well-definedness ──
 
-        // Layout produces equivalent nodes (x, y, size eqv, children count equal)
+        //  Layout produces equivalent nodes (x, y, size eqv, children count equal)
         &&& node_eqv(n1, n2)
 
-        // Root draw commands are equivalent
+        //  Root draw commands are equivalent
         &&& draws_eqv(
                 flatten_node_to_draws(n1, T::zero(), T::zero(), 0, 0),
                 flatten_node_to_draws(n2, T::zero(), T::zero(), 0, 0))
 
-        // Measure (fast-path size) is equivalent
+        //  Measure (fast-path size) is equivalent
         &&& size_eqv(
                 crate::measure::measure_widget(lim1, w1, fuel),
                 crate::measure::measure_widget(lim2, w2, fuel))
 
-        // Same containment decision at root
+        //  Same containment decision at root
         &&& point_in_node(n1, px1, py1) == point_in_node(n2, px2, py2)
 
-        // Animation interpolation produces equivalent results
+        //  Animation interpolation produces equivalent results
         &&& nodes_deeply_eqv(
                 lerp_node(n1, layout_widget(lim1, w1b, fuel), t, 1),
                 lerp_node(n2, layout_widget(lim2, w2b, fuel), t, 1),
                 0)
 
-        // ── 2. GPU safety ──
+        //  ── 2. GPU safety ──
 
-        // Root draw command has non-negative dimensions
+        //  Root draw command has non-negative dimensions
         &&& ({
             let draws = flatten_node_to_draws(n1, T::zero(), T::zero(), 0, draw_fuel);
             draws.len() > 0 && draw_command_valid(draws[0])
         })
 
-        // ── 3. Hit-test correctness ──
+        //  ── 3. Hit-test correctness ──
 
-        // If hit-test succeeds, path is geometrically valid
+        //  If hit-test succeeds, path is geometrically valid
         &&& (hit_test(n1, px1, py1, fuel) is Some ==>
             path_geometrically_valid(
                 n1, hit_test(n1, px1, py1, fuel).unwrap(), px1, py1))
@@ -122,22 +122,22 @@ pub proof fn the_fundamental_theorem<T: OrderedField>(
     let n1 = layout_widget(lim1, w1, fuel);
     let n2 = layout_widget(lim2, w2, fuel);
 
-    // 1a. Layout node congruence
+    //  1a. Layout node congruence
     lemma_layout_widget_node_congruence(lim1, lim2, w1, w2, fuel);
 
-    // 1b. Draw congruence (root)
+    //  1b. Draw congruence (root)
     lemma_layout_widget_deep_congruence(lim1, lim2, w1, w2, fuel);
     T::axiom_eqv_reflexive(T::zero());
     lemma_flatten_congruence(n1, n2,
         T::zero(), T::zero(), T::zero(), T::zero(), 0, 0);
 
-    // 1c. Measure congruence
+    //  1c. Measure congruence
     lemma_measure_widget_congruence(lim1, lim2, w1, w2, fuel);
 
-    // 1d. Interaction congruence
+    //  1d. Interaction congruence
     lemma_point_in_node_congruence(n1, n2, px1, px2, py1, py2);
 
-    // 1e. Animation congruence
+    //  1e. Animation congruence
     lemma_layout_widget_deep_congruence(lim1, lim2, w1b, w2b, fuel);
     let n1b = layout_widget(lim1, w1b, fuel);
     let n2b = layout_widget(lim2, w2b, fuel);
@@ -147,21 +147,21 @@ pub proof fn the_fundamental_theorem<T: OrderedField>(
         lerp_node(n1, n1b, t, 1), lerp_node(n2, n1b, t, 1),
         lerp_node(n2, n2b, t, 1), 0);
 
-    // 2. GPU safety: root draw is valid
+    //  2. GPU safety: root draw is valid
     lemma_layout_root_draw_valid(lim1, w1, fuel, draw_fuel);
 
-    // 3. Hit-test geometric correctness
+    //  3. Hit-test geometric correctness
     if hit_test(n1, px1, py1, fuel) is Some {
         lemma_hit_test_geometrically_valid(n1, px1, py1, fuel);
     }
 }
 
-// ══════════════════════════════════════════════════════════════════════
-// EDIT INTEGRITY
-// ══════════════════════════════════════════════════════════════════════
+//  ══════════════════════════════════════════════════════════════════════
+//  EDIT INTEGRITY
+//  ══════════════════════════════════════════════════════════════════════
 
-/// Edit integrity: character insertion preserves well-formedness and
-/// undo-redo is a perfect roundtrip on both text and styles.
+///  Edit integrity: character insertion preserves well-formedness and
+///  undo-redo is a perfect roundtrip on both text and styles.
 pub proof fn theorem_edit_integrity(model: TextModel, ch: char)
     requires
         model.wf(),
@@ -171,10 +171,10 @@ pub proof fn theorem_edit_integrity(model: TextModel, ch: char)
         let (s, e) = selection_range(model.anchor, model.focus);
         let m2 = insert_char(model, ch);
 
-        // Well-formedness preserved
+        //  Well-formedness preserved
         &&& m2.wf()
 
-        // Undo-redo roundtrip
+        //  Undo-redo roundtrip
         &&& ({
             let entry = undo_entry_for_splice(model, s, e, seq![ch], seq![model.typing_style], s + 1);
             let stack = push_undo(empty_undo_stack(), entry);
@@ -190,12 +190,12 @@ pub proof fn theorem_edit_integrity(model: TextModel, ch: char)
         model, s, e, seq![ch], seq![model.typing_style], s + 1);
 }
 
-// ══════════════════════════════════════════════════════════════════════
-// DISPATCH KEY WELL-FORMEDNESS
-// ══════════════════════════════════════════════════════════════════════
+//  ══════════════════════════════════════════════════════════════════════
+//  DISPATCH KEY WELL-FORMEDNESS
+//  ══════════════════════════════════════════════════════════════════════
 
-/// Master dispatch_key wf: every key event that produces a NewModel
-/// preserves text model well-formedness.
+///  Master dispatch_key wf: every key event that produces a NewModel
+///  preserves text model well-formedness.
 pub proof fn theorem_dispatch_key_preserves_wf(model: TextModel, event: KeyEvent)
     requires
         model.wf(),
@@ -272,7 +272,7 @@ pub proof fn theorem_dispatch_key_preserves_wf(model: TextModel, event: KeyEvent
             lemma_compose_cancel_preserves_wf(model);
         },
         _ => {
-            // Arrow/Home/End keys
+            //  Arrow/Home/End keys
             match key_to_move_direction(event) {
                 Some(dir) => {
                     if event.modifiers.shift {
@@ -287,19 +287,19 @@ pub proof fn theorem_dispatch_key_preserves_wf(model: TextModel, event: KeyEvent
     }
 }
 
-// ══════════════════════════════════════════════════════════════════════
-// INCREMENTAL CORRECTNESS + DETERMINISM
-// ══════════════════════════════════════════════════════════════════════
+//  ══════════════════════════════════════════════════════════════════════
+//  INCREMENTAL CORRECTNESS + DETERMINISM
+//  ══════════════════════════════════════════════════════════════════════
 
-/// Frame theorem + determinism: unchanged siblings have identical layout,
-/// diff detects no change for them, and converged layout is fuel-independent.
+///  Frame theorem + determinism: unchanged siblings have identical layout,
+///  diff detects no change for them, and converged layout is fuel-independent.
 pub proof fn theorem_incremental_and_deterministic<T: OrderedField>(
     limits: Limits<T>,
     children1: Seq<Widget<T>>,
     children2: Seq<Widget<T>>,
     fuel: nat,
     diff_fuel: nat,
-    // Determinism inputs
+    //  Determinism inputs
     widget: Widget<T>,
     fuel1: nat, fuel2: nat,
 )
@@ -309,17 +309,17 @@ pub proof fn theorem_incremental_and_deterministic<T: OrderedField>(
         widget_converged(widget, fuel1),
         widget_converged(widget, fuel2),
     ensures
-        // Frame: all unchanged siblings are identical in layout and diff
+        //  Frame: all unchanged siblings are identical in layout and diff
         (forall|j: int| 0 <= j < children1.len() && children1[j] === children2[j] ==> ({
             let cn1 = widget_child_nodes(limits, children1, fuel);
             let cn2 = widget_child_nodes(limits, children2, fuel);
             cn1[j] === cn2[j]
             && diff_nodes::<T>(cn1[j], cn2[j], diff_fuel) === DiffResult::<T>::Same
         }))
-        // Determinism: layout is fuel-independent once converged
+        //  Determinism: layout is fuel-independent once converged
         && layout_widget(limits, widget, fuel1) == layout_widget(limits, widget, fuel2),
 {
-    // Frame theorem
+    //  Frame theorem
     assert forall|j: int| 0 <= j < children1.len() && children1[j] === children2[j]
     implies ({
         let cn1 = widget_child_nodes(limits, children1, fuel);
@@ -333,22 +333,22 @@ pub proof fn theorem_incremental_and_deterministic<T: OrderedField>(
         lemma_diff_reflexive::<T>(cn1[j], diff_fuel);
     };
 
-    // Determinism
+    //  Determinism
     crate::widget::lemma_layout_deterministic(limits, widget, fuel1, fuel2);
 }
 
-// ══════════════════════════════════════════════════════════════════════
-// HIT-TEST CONGRUENCE AT ARBITRARY DEPTH
-// ══════════════════════════════════════════════════════════════════════
+//  ══════════════════════════════════════════════════════════════════════
+//  HIT-TEST CONGRUENCE AT ARBITRARY DEPTH
+//  ══════════════════════════════════════════════════════════════════════
 
-/// Hit-test congruence: eqv widgets produce the same hit-test result.
+///  Hit-test congruence: eqv widgets produce the same hit-test result.
 ///
-/// Uses the full-depth congruence master (congruence_depth) to establish
-/// deep eqv at the hit-test fuel depth. When congruence_depth(widget, fuel)
-/// >= hit_fuel, both hit-tests return the same path.
+///  Uses the full-depth congruence master (congruence_depth) to establish
+///  deep eqv at the hit-test fuel depth. When congruence_depth(widget, fuel)
+///  >= hit_fuel, both hit-tests return the same path.
 ///
-/// For widget trees without SizedBox/AspectRatio/ScrollView/Container at the root,
-/// congruence_depth = fuel (or fuel - conditional_nesting for Conditional(true)).
+///  For widget trees without SizedBox/AspectRatio/ScrollView/Container at the root,
+///  congruence_depth = fuel (or fuel - conditional_nesting for Conditional(true)).
 pub proof fn theorem_hit_test_congruence<T: OrderedField>(
     lim1: Limits<T>, lim2: Limits<T>,
     w1: Widget<T>, w2: Widget<T>,
@@ -380,18 +380,18 @@ pub proof fn theorem_hit_test_congruence<T: OrderedField>(
         px1, px2, py1, py2, hit_fuel);
 }
 
-// ══════════════════════════════════════════════════════════════════════
-// FULL DRAW VALIDITY
-// ══════════════════════════════════════════════════════════════════════
+//  ══════════════════════════════════════════════════════════════════════
+//  FULL DRAW VALIDITY
+//  ══════════════════════════════════════════════════════════════════════
 
-/// Full draw validity: ALL draw commands from layout are GPU-safe.
+///  Full draw validity: ALL draw commands from layout are GPU-safe.
 ///
-/// Composes:
-///   1. lemma_layout_widget_all_sizes_nonneg — all nodes in layout tree have nonneg sizes
-///   2. lemma_flatten_all_valid — nonneg sizes → all draws valid
+///  Composes:
+///    1. lemma_layout_widget_all_sizes_nonneg — all nodes in layout tree have nonneg sizes
+///    2. lemma_flatten_all_valid — nonneg sizes → all draws valid
 ///
-/// This is the end-to-end GPU safety guarantee: for any widget tree laid out with
-/// non-negative min limits, every generated draw command has non-negative dimensions.
+///  This is the end-to-end GPU safety guarantee: for any widget tree laid out with
+///  non-negative min limits, every generated draw command has non-negative dimensions.
 pub proof fn theorem_full_draw_validity<T: OrderedField>(
     limits: Limits<T>,
     widget: Widget<T>,
@@ -406,46 +406,46 @@ pub proof fn theorem_full_draw_validity<T: OrderedField>(
                 T::zero(), T::zero(), 0, draw_fuel)),
 {
     let node = layout_widget(limits, widget, fuel);
-    // Step 1: all nodes in the layout tree have nonneg sizes
+    //  Step 1: all nodes in the layout tree have nonneg sizes
     lemma_layout_widget_all_sizes_nonneg(limits, widget, fuel, draw_fuel);
-    // Step 2: nonneg sizes → all draws valid
+    //  Step 2: nonneg sizes → all draws valid
     lemma_flatten_all_valid(node, T::zero(), T::zero(), 0, draw_fuel);
 }
 
-// ══════════════════════════════════════════════════════════════════════
-// EXEC-SPEC BRIDGE
-// ══════════════════════════════════════════════════════════════════════
+//  ══════════════════════════════════════════════════════════════════════
+//  EXEC-SPEC BRIDGE
+//  ══════════════════════════════════════════════════════════════════════
 //
-// All spec-level proofs carry to exec via the View trait pattern:
+//  All spec-level proofs carry to exec via the View trait pattern:
 //
-//   layout_widget_exec(limits, widget, fuel)
-//     ensures out@ == layout_widget::<RationalModel>(limits@, widget.model(), fuel as nat)
+//    layout_widget_exec(limits, widget, fuel)
+//      ensures out@ == layout_widget::<RationalModel>(limits@, widget.model(), fuel as nat)
 //
-// There are 13 layout exec functions with spec-matching ensures clauses:
-//   - layout_widget_exec (master dispatch)
-//   - layout_widget_checked (with CWB guarantee)
-//   - layout_column_exec, layout_row_exec, layout_stack_exec
-//   - layout_wrap_exec, layout_flex_exec, layout_grid_exec
-//   - layout_absolute_exec, layout_listview_exec
-//   - layout_margin_exec, layout_sizedbox_exec, layout_scrollview_exec
+//  There are 13 layout exec functions with spec-matching ensures clauses:
+//    - layout_widget_exec (master dispatch)
+//    - layout_widget_checked (with CWB guarantee)
+//    - layout_column_exec, layout_row_exec, layout_stack_exec
+//    - layout_wrap_exec, layout_flex_exec, layout_grid_exec
+//    - layout_absolute_exec, layout_listview_exec
+//    - layout_margin_exec, layout_sizedbox_exec, layout_scrollview_exec
 //
-// The bridge is: if `layout_widget_exec(limits, widget, fuel).out@ == layout_widget::<R>(limits@, widget.model(), fuel)`
-// then ALL spec proofs about `layout_widget::<R>(limits@, widget.model(), fuel)` apply to the exec result.
+//  The bridge is: if `layout_widget_exec(limits, widget, fuel).out@ == layout_widget::<R>(limits@, widget.model(), fuel)`
+//  then ALL spec proofs about `layout_widget::<R>(limits@, widget.model(), fuel)` apply to the exec result.
 //
-// Trusted assumptions:
-//   - 12 #[verifier::external_body] axioms in text_model.rs (Unicode/IME boundaries)
-//   - 1 #[verifier::external_body] axiom in text_model.rs (find_result_grapheme_aligned)
-//   - 15 #[verifier::external_body] exec functions in runtime/text_model.rs (runtime text ops)
-//   - 0 assume calls (eliminated in Step 3)
+//  Trusted assumptions:
+//    - 12 #[verifier::external_body] axioms in text_model.rs (Unicode/IME boundaries)
+//    - 1 #[verifier::external_body] axiom in text_model.rs (find_result_grapheme_aligned)
+//    - 15 #[verifier::external_body] exec functions in runtime/text_model.rs (runtime text ops)
+//    - 0 assume calls (eliminated in Step 3)
 //
-// The proof chain for any exec operation:
-//   1. Exec function has `ensures out@ == spec_fn(...)` — bridges runtime to spec
-//   2. Spec proof proves property about `spec_fn(...)` — e.g., the_fundamental_theorem
-//   3. Therefore the property holds for the exec result
+//  The proof chain for any exec operation:
+//    1. Exec function has `ensures out@ == spec_fn(...)` — bridges runtime to spec
+//    2. Spec proof proves property about `spec_fn(...)` — e.g., the_fundamental_theorem
+//    3. Therefore the property holds for the exec result
 
-/// Exec-spec bridge for layout: the runtime layout result matches the spec.
-/// This is a documentation wrapper — the actual bridge is in the exec function's
-/// ensures clause. This theorem just demonstrates the pattern.
+///  Exec-spec bridge for layout: the runtime layout result matches the spec.
+///  This is a documentation wrapper — the actual bridge is in the exec function's
+///  ensures clause. This theorem just demonstrates the pattern.
 pub proof fn theorem_exec_spec_bridge<T: OrderedField>(
     limits: Limits<T>,
     widget: Widget<T>,
@@ -456,38 +456,38 @@ pub proof fn theorem_exec_spec_bridge<T: OrderedField>(
         limits.wf(),
         fuel > 0,
     ensures
-        // The spec guarantees that apply to any layout result:
-        // 1. All draws are GPU-safe (from theorem_full_draw_validity)
+        //  The spec guarantees that apply to any layout result:
+        //  1. All draws are GPU-safe (from theorem_full_draw_validity)
         all_draws_valid(
             flatten_node_to_draws(
                 layout_widget(limits, widget, fuel),
                 T::zero(), T::zero(), 0, draw_fuel)),
-        // 2. Root draw is valid (from lemma_layout_root_draw_valid)
+        //  2. Root draw is valid (from lemma_layout_root_draw_valid)
         ({
             let draws = flatten_node_to_draws(
                 layout_widget(limits, widget, fuel),
                 T::zero(), T::zero(), 0, draw_fuel);
             draws.len() > 0 && draw_command_valid(draws[0])
         }),
-        // 3. Output size within limits
+        //  3. Output size within limits
         limits.min.le(layout_widget(limits, widget, fuel).size),
         layout_widget(limits, widget, fuel).size.le(limits.max),
-        // 4. Draw count is bounded
+        //  4. Draw count is bounded
         flatten_node_to_draws(
             layout_widget(limits, widget, fuel),
             T::zero(), T::zero(), 0, draw_fuel).len()
             == node_count::<T>(layout_widget(limits, widget, fuel), draw_fuel),
 {
-    // 1. Full draw validity (composes all_sizes_nonneg + flatten_all_valid)
+    //  1. Full draw validity (composes all_sizes_nonneg + flatten_all_valid)
     theorem_full_draw_validity(limits, widget, fuel, draw_fuel);
-    // 2. Root draw valid
+    //  2. Root draw valid
     lemma_layout_root_draw_valid(limits, widget, fuel, draw_fuel);
-    // 3. Size bounds
+    //  3. Size bounds
     crate::layout::bounds_proofs::lemma_layout_widget_respects_limits(limits, widget, fuel);
-    // 4. Draw count
+    //  4. Draw count
     lemma_flatten_preserves_count(
         layout_widget(limits, widget, fuel),
         T::zero(), T::zero(), 0, draw_fuel);
 }
 
-} // verus!
+} //  verus!

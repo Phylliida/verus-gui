@@ -51,7 +51,7 @@ pub fn key_to_move_direction_exec(event: &RuntimeKeyEvent) -> (result: Option<Mo
     }
 }
 
-/// Handle Char/Enter/Tab insertion.
+///  Handle Char/Enter/Tab insertion.
 pub fn dispatch_insert_char_exec(
     model: RuntimeTextModel, ch: char,
 ) -> (result: RuntimeKeyAction)
@@ -77,7 +77,7 @@ pub fn dispatch_insert_char_exec(
     RuntimeKeyAction::NewModel(insert_char_exec(model, ch))
 }
 
-/// Handle Backspace key.
+///  Handle Backspace key.
 pub fn dispatch_backspace_exec(
     model: RuntimeTextModel, ctrl: bool,
 ) -> (result: RuntimeKeyAction)
@@ -125,7 +125,7 @@ pub fn dispatch_backspace_exec(
     }
 }
 
-/// Handle Delete key.
+///  Handle Delete key.
 pub fn dispatch_delete_exec(
     model: RuntimeTextModel, ctrl: bool,
 ) -> (result: RuntimeKeyAction)
@@ -173,7 +173,7 @@ pub fn dispatch_delete_exec(
     }
 }
 
-/// Handle ComposeStart.
+///  Handle ComposeStart.
 pub fn dispatch_compose_start_exec(
     model: RuntimeTextModel,
 ) -> (result: RuntimeKeyAction)
@@ -197,7 +197,7 @@ pub fn dispatch_compose_start_exec(
     }
 }
 
-/// Handle ComposeUpdate.
+///  Handle ComposeUpdate.
 pub fn dispatch_compose_update_exec(
     model: RuntimeTextModel,
     text: &Vec<char>,
@@ -236,7 +236,7 @@ pub fn dispatch_compose_update_exec(
     }
 }
 
-/// Handle ComposeCommit.
+///  Handle ComposeCommit.
 pub fn dispatch_compose_commit_exec(
     model: RuntimeTextModel,
 ) -> (result: RuntimeKeyAction)
@@ -273,7 +273,7 @@ pub fn dispatch_compose_commit_exec(
     }
 }
 
-/// Handle ComposeCancel.
+///  Handle ComposeCancel.
 pub fn dispatch_compose_cancel_exec(
     model: RuntimeTextModel,
 ) -> (result: RuntimeKeyAction)
@@ -292,7 +292,7 @@ pub fn dispatch_compose_cancel_exec(
     RuntimeKeyAction::NewModel(compose_cancel_exec(model))
 }
 
-/// Handle movement keys (arrow, home, end).
+///  Handle movement keys (arrow, home, end).
 pub fn dispatch_movement_exec(
     model: RuntimeTextModel,
     event: &RuntimeKeyEvent,
@@ -322,4 +322,4 @@ pub fn dispatch_movement_exec(
     }
 }
 
-} // verus!
+} //  verus!

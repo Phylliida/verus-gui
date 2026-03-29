@@ -10,9 +10,9 @@ use crate::alignment::{Alignment, align_offset};
 
 verus! {
 
-// ── Helper spec functions ───────────────────────────────────────────
+//  ── Helper spec functions ───────────────────────────────────────────
 
-/// Maximum width among the first `count` children.
+///  Maximum width among the first `count` children.
 #[verifier::opaque]
 pub open spec fn max_width<T: OrderedRing>(
     sizes: Seq<Size<T>>,
@@ -27,7 +27,7 @@ pub open spec fn max_width<T: OrderedRing>(
     }
 }
 
-/// Maximum height among the first `count` children.
+///  Maximum height among the first `count` children.
 #[verifier::opaque]
 pub open spec fn max_height<T: OrderedRing>(
     sizes: Seq<Size<T>>,
@@ -42,7 +42,7 @@ pub open spec fn max_height<T: OrderedRing>(
     }
 }
 
-/// The content size of a stack: max width x max height.
+///  The content size of a stack: max width x max height.
 #[verifier::opaque]
 pub open spec fn stack_content_size<T: OrderedRing>(
     child_sizes: Seq<Size<T>>,
@@ -53,10 +53,10 @@ pub open spec fn stack_content_size<T: OrderedRing>(
     )
 }
 
-// ── Stack layout ────────────────────────────────────────────────────
+//  ── Stack layout ────────────────────────────────────────────────────
 
-/// Build the sequence of child Nodes for a stack layout.
-/// Each child is independently positioned via alignment on both axes.
+///  Build the sequence of child Nodes for a stack layout.
+///  Each child is independently positioned via alignment on both axes.
 #[verifier::opaque]
 pub open spec fn stack_children<T: OrderedField>(
     padding: Padding<T>,
@@ -86,13 +86,13 @@ pub open spec fn stack_children<T: OrderedField>(
     }
 }
 
-/// Lay out children in a stack (all overlapping at the same position).
+///  Lay out children in a stack (all overlapping at the same position).
 ///
-/// Algorithm:
-/// 1. Subtract padding from available space
-/// 2. Content size is max_width x max_height of children
-/// 3. Each child is independently aligned on both axes
-/// 4. Return parent Node with positioned children
+///  Algorithm:
+///  1. Subtract padding from available space
+///  2. Content size is max_width x max_height of children
+///  3. Each child is independently aligned on both axes
+///  4. Return parent Node with positioned children
 #[verifier::opaque]
 pub open spec fn stack_layout<T: OrderedField>(
     limits: Limits<T>,
@@ -114,4 +114,4 @@ pub open spec fn stack_layout<T: OrderedField>(
     Node { x: T::zero(), y: T::zero(), size: parent_size, children }
 }
 
-} // verus!
+} //  verus!

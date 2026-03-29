@@ -9,7 +9,7 @@ use crate::layout::proofs::lemma_resolve_bounds;
 
 verus! {
 
-/// ListView output respects limits: output size is within [min, max].
+///  ListView output respects limits: output size is within [min, max].
 pub proof fn lemma_listview_respects_limits<T: OrderedField>(
     limits: Limits<T>,
     child_sizes: Seq<Size<T>>,
@@ -25,11 +25,11 @@ pub proof fn lemma_listview_respects_limits<T: OrderedField>(
         layout_listview_body(limits, child_sizes, spacing, scroll_y, viewport, child_nodes, first).size.le(limits.max),
 {
     reveal(layout_listview_body);
-    // layout_listview_body returns limits.resolve(viewport)
+    //  layout_listview_body returns limits.resolve(viewport)
     lemma_resolve_bounds(limits, viewport);
 }
 
-/// First visible scan is bounded: result <= total.
+///  First visible scan is bounded: result <= total.
 pub proof fn lemma_first_visible_bounded<T: OrderedRing>(
     child_sizes: Seq<Size<T>>,
     spacing: T,
@@ -53,15 +53,15 @@ proof fn lemma_first_visible_from_bounded<T: OrderedRing>(
     decreases child_sizes.len() - from,
 {
     if from >= child_sizes.len() {
-        // returns child_sizes.len()
+        //  returns child_sizes.len()
     } else if scroll_y.lt(listview_child_bottom(child_sizes, spacing, from)) {
-        // returns from <= child_sizes.len()
+        //  returns from <= child_sizes.len()
     } else {
         lemma_first_visible_from_bounded(child_sizes, spacing, scroll_y, from + 1);
     }
 }
 
-/// End visible scan is bounded: result <= total.
+///  End visible scan is bounded: result <= total.
 pub proof fn lemma_end_visible_bounded<T: OrderedRing>(
     child_sizes: Seq<Size<T>>,
     spacing: T,
@@ -87,15 +87,15 @@ proof fn lemma_end_visible_from_bounded<T: OrderedRing>(
     decreases child_sizes.len() - from,
 {
     if from >= child_sizes.len() {
-        // returns child_sizes.len()
+        //  returns child_sizes.len()
     } else {
         let scroll_bottom = scroll_y.add(viewport_h);
         if scroll_bottom.le(listview_child_y(child_sizes, spacing, from)) {
-            // returns from <= child_sizes.len()
+            //  returns from <= child_sizes.len()
         } else {
             lemma_end_visible_from_bounded(child_sizes, spacing, scroll_y, viewport_h, from + 1);
         }
     }
 }
 
-} // verus!
+} //  verus!

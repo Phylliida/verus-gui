@@ -15,7 +15,7 @@ use crate::runtime::session::RuntimeTextEditSession;
 
 verus! {
 
-/// Create a Vec of `count` copies of a style set.
+///  Create a Vec of `count` copies of a style set.
 pub fn repeat_style_set_exec(style: &RuntimeStyleSet, count: usize) -> (out: Vec<RuntimeStyleSet>)
     ensures
         out@.len() == count,
@@ -65,9 +65,9 @@ pub fn new_session_exec(model: RuntimeTextModel) -> (out: RuntimeTextEditSession
     }
 }
 
-// ── Undo/Redo helpers ───────────────────────────────────────────────
+//  ── Undo/Redo helpers ───────────────────────────────────────────────
 
-/// Apply undo at the session level. Now verified via ghost history.
+///  Apply undo at the session level. Now verified via ghost history.
 pub fn session_apply_undo_exec(
     session: RuntimeTextEditSession,
 ) -> (result: RuntimeTextEditSession)
@@ -113,7 +113,7 @@ pub fn session_apply_undo_exec(
     }
 }
 
-/// Apply redo at the session level. Now verified via ghost history.
+///  Apply redo at the session level. Now verified via ghost history.
 pub fn session_apply_redo_exec(
     session: RuntimeTextEditSession,
 ) -> (result: RuntimeTextEditSession)
@@ -159,13 +159,13 @@ pub fn session_apply_redo_exec(
     }
 }
 
-/// Helper for unreachable branches — requires false so can never be called
-/// in valid execution. Used to satisfy Rust's type checker.
-/// Not external_body: the body constructs a dummy value that is never executed.
+///  Helper for unreachable branches — requires false so can never be called
+///  in valid execution. Used to satisfy Rust's type checker.
+///  Not external_body: the body constructs a dummy value that is never executed.
 pub fn dead_session(undo_stack: RuntimeUndoStack, clipboard: Vec<char>, history: Ghost<Seq<Seq<char>>>, style_history: Ghost<Seq<Seq<StyleSet>>>) -> (out: RuntimeTextEditSession)
     requires false,
 {
-    // requires false → body never executes → any construction is fine
+    //  requires false → body never executes → any construction is fine
     let dummy_style = RuntimeStyleSet {
         bold: None, italic: None, underline: None, strikethrough: None,
         font_size: None, font_family: None, color: None, bg_color: None,
@@ -202,9 +202,9 @@ pub fn dead_session(undo_stack: RuntimeUndoStack, clipboard: Vec<char>, history:
     }
 }
 
-// ── Cut helper ──────────────────────────────────────────────────────
+//  ── Cut helper ──────────────────────────────────────────────────────
 
-/// Handle Cut at the session level with full wf_spec preservation.
+///  Handle Cut at the session level with full wf_spec preservation.
 pub fn session_handle_cut_exec(
     session: RuntimeTextEditSession,
 ) -> (result: RuntimeTextEditSession)
@@ -251,14 +251,14 @@ pub fn session_handle_cut_exec(
     let ghost new_style_history = update_style_history_for_push(
         old_stack, old_style_history, entry@, new_model@.styles, false);
     proof {
-        // Prove entry_describes_transition for the cut
+        //  Prove entry_describes_transition for the cut
         lemma_entry_for_splice_describes_transition(
             old_model, sel_start as nat, sel_end as nat,
             Seq::<char>::empty(), Seq::<StyleSet>::empty(), sel_start as nat);
-        // Prove push_or_merge maintains history validity
+        //  Prove push_or_merge maintains history validity
         lemma_push_or_merge_history_valid(
             old_stack, old_history, entry@, new_model@.text, false);
-        // Style history
+        //  Style history
         lemma_entry_for_splice_describes_style_transition(
             old_model, sel_start as nat, sel_end as nat,
             Seq::<char>::empty(), Seq::<StyleSet>::empty(), sel_start as nat);
@@ -275,9 +275,9 @@ pub fn session_handle_cut_exec(
     }
 }
 
-// ── Paste helper ────────────────────────────────────────────────────
+//  ── Paste helper ────────────────────────────────────────────────────
 
-/// Handle Paste at the session level with full wf_spec preservation.
+///  Handle Paste at the session level with full wf_spec preservation.
 pub fn session_handle_paste_exec(
     session: RuntimeTextEditSession,
     clean: Vec<char>,
@@ -358,11 +358,11 @@ pub fn session_handle_paste_exec(
     }
 }
 
-// ── Undo splice params extraction ─────────────────────────────────
+//  ── Undo splice params extraction ─────────────────────────────────
 
-/// Extract undo splice parameters for a text-edit key event.
-/// Mirrors the spec `undo_splice_params_full`. Separated from
-/// `session_handle_text_edit_exec` to reduce Z3 path explosion.
+///  Extract undo splice parameters for a text-edit key event.
+///  Mirrors the spec `undo_splice_params_full`. Separated from
+///  `session_handle_text_edit_exec` to reduce Z3 path explosion.
 pub fn undo_splice_params_full_exec(
     model: &RuntimeTextModel,
     event: &RuntimeKeyEvent,
@@ -462,11 +462,11 @@ pub fn undo_splice_params_full_exec(
     }
 }
 
-// ── Per-arm helpers for apply_key_to_session_exec ───────────────────
-// Each handles one event kind (active + noop path), keeping the
-// parent dispatch trivially small.
+//  ── Per-arm helpers for apply_key_to_session_exec ───────────────────
+//  Each handles one event kind (active + noop path), keeping the
+//  parent dispatch trivially small.
 
-/// Handle Copy event: copy selection to clipboard, or noop.
+///  Handle Copy event: copy selection to clipboard, or noop.
 pub fn session_copy_arm_exec(
     session: RuntimeTextEditSession,
     event: &RuntimeKeyEvent,
@@ -504,7 +504,7 @@ pub fn session_copy_arm_exec(
     }
 }
 
-/// Handle Cut event: cut selection, or noop if no selection.
+///  Handle Cut event: cut selection, or noop if no selection.
 pub fn session_cut_arm_exec(
     session: RuntimeTextEditSession,
     event: &RuntimeKeyEvent,
@@ -536,7 +536,7 @@ pub fn session_cut_arm_exec(
     }
 }
 
-/// Handle Undo event: apply undo if possible, or noop.
+///  Handle Undo event: apply undo if possible, or noop.
 pub fn session_undo_arm_exec(
     session: RuntimeTextEditSession,
     event: &RuntimeKeyEvent,
@@ -567,7 +567,7 @@ pub fn session_undo_arm_exec(
     session
 }
 
-/// Handle Redo event: apply redo if possible, or noop.
+///  Handle Redo event: apply redo if possible, or noop.
 pub fn session_redo_arm_exec(
     session: RuntimeTextEditSession,
     event: &RuntimeKeyEvent,
@@ -598,7 +598,7 @@ pub fn session_redo_arm_exec(
     session
 }
 
-/// Handle Paste event: paste clipboard, or noop if empty/overflow.
+///  Handle Paste event: paste clipboard, or noop if empty/overflow.
 pub fn session_paste_arm_exec(
     session: RuntimeTextEditSession,
     event: &RuntimeKeyEvent,
@@ -634,11 +634,11 @@ pub fn session_paste_arm_exec(
     }
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// Find exec
-// ──────────────────────────────────────────────────────────────────────
+//  ──────────────────────────────────────────────────────────────────────
+//  Find exec
+//  ──────────────────────────────────────────────────────────────────────
 
-/// Runtime find next: scan text forward for pattern.
+///  Runtime find next: scan text forward for pattern.
 pub fn find_next_exec(
     text: &Vec<char>, pattern: &Vec<char>, from: usize,
 ) -> (out: Option<usize>)
@@ -656,14 +656,14 @@ pub fn find_next_exec(
     let pat_len = pattern.len();
     let text_len = text.len();
 
-    // If from > text_len or text too short for pattern, no match
+    //  If from > text_len or text too short for pattern, no match
     if from > text_len || text_len < pat_len {
-        // find_next_scan with from + pat_len > text_len → None
+        //  find_next_scan with from + pat_len > text_len → None
         proof { lemma_find_next_scan_none_out_of_range(text@, pattern@, from as nat); }
         return None;
     }
 
-    // Compute the last valid start position (text_len - pat_len)
+    //  Compute the last valid start position (text_len - pat_len)
     let last_start = text_len - pat_len;
     let mut i = from;
 
@@ -675,12 +675,12 @@ pub fn find_next_exec(
             last_start == text_len - pat_len,
             text_len == text@.len(),
             i <= text_len,
-            // Key invariant: no match exists in [from, i)
+            //  Key invariant: no match exists in [from, i)
             forall|p: nat| from as nat <= p && p < i as nat ==>
                 !seq_matches_at(text@, pattern@, p),
         decreases last_start - i + 1,
     {
-        // Check if pattern matches at i
+        //  Check if pattern matches at i
         let mut j: usize = 0;
         let mut matches = true;
         while j < pat_len && matches
@@ -702,10 +702,10 @@ pub fn find_next_exec(
         }
 
         if matches {
-            // Pattern matches at i. By invariant, no match in [from, i).
-            // So i is the first match = find_next_scan result.
+            //  Pattern matches at i. By invariant, no match in [from, i).
+            //  So i is the first match = find_next_scan result.
             proof {
-                // matches ==> seq_matches_at(text@, pattern@, i as nat)
+                //  matches ==> seq_matches_at(text@, pattern@, i as nat)
                 assert(seq_matches_at(text@, pattern@, i as nat));
                 lemma_find_next_scan_matches_first(
                     text@, pattern@, from as nat, i as nat, text@.len());
@@ -713,17 +713,17 @@ pub fn find_next_exec(
             return Some(i);
         }
 
-        // !matches at position i — no match here
-        // The invariant for next iteration will include this position
+        //  !matches at position i — no match here
+        //  The invariant for next iteration will include this position
 
         if i == last_start {
-            // Checked all positions [from, last_start]. None matched.
-            // For p > last_start: p + pat_len > text_len, so no valid match.
+            //  Checked all positions [from, last_start]. None matched.
+            //  For p > last_start: p + pat_len > text_len, so no valid match.
             proof {
-                // Invariant gives: no match in [from, i). Plus !matches gives: no match at i.
-                // So no match in [from, i] = [from, last_start].
-                // Any p with p + pat_len <= text_len has p <= last_start.
-                // Combined: no match for any valid p >= from.
+                //  Invariant gives: no match in [from, i). Plus !matches gives: no match at i.
+                //  So no match in [from, i] = [from, last_start].
+                //  Any p with p + pat_len <= text_len has p <= last_start.
+                //  Combined: no match for any valid p >= from.
                 assert(forall|p: nat| from as nat <= p && p + pattern@.len() <= text@.len()
                     ==> !seq_matches_at(text@, pattern@, p));
                 lemma_find_next_scan_exhausted(
@@ -734,7 +734,7 @@ pub fn find_next_exec(
         i = i + 1;
     }
 
-    // Loop condition i > last_start without break — same exhaustion
+    //  Loop condition i > last_start without break — same exhaustion
     proof {
         assert(forall|p: nat| from as nat <= p && p + pattern@.len() <= text@.len()
             ==> !seq_matches_at(text@, pattern@, p));
@@ -744,7 +744,7 @@ pub fn find_next_exec(
     None
 }
 
-/// Runtime find prev: scan text backward for pattern.
+///  Runtime find prev: scan text backward for pattern.
 pub fn find_prev_exec(
     text: &Vec<char>, pattern: &Vec<char>, from: usize,
 ) -> (out: Option<usize>)
@@ -757,7 +757,7 @@ pub fn find_prev_exec(
         },
 {
     if pattern.len() == 0 || from == 0 {
-        // find_prev with empty pattern or from==0 returns None
+        //  find_prev with empty pattern or from==0 returns None
         return None;
     }
     let pat_len = pattern.len();
@@ -770,7 +770,7 @@ pub fn find_prev_exec(
             pat_len == pattern@.len(),
             pat_len > 0,
             text_len == text@.len(),
-            // Key invariant: no match in [pos, from)
+            //  Key invariant: no match in [pos, from)
             forall|p: nat| pos as nat <= p && p < from as nat ==>
                 !seq_matches_at(text@, pattern@, p),
         decreases pos,
@@ -799,7 +799,7 @@ pub fn find_prev_exec(
             }
 
             if matches {
-                // Pattern matches at pos. No match in (pos, from). So pos is the last match.
+                //  Pattern matches at pos. No match in (pos, from). So pos is the last match.
                 proof {
                     assert(seq_matches_at(text@, pattern@, pos as nat));
                     lemma_find_prev_scan_matches_last(
@@ -808,11 +808,11 @@ pub fn find_prev_exec(
                 return Some(pos);
             }
         } else {
-            // pos + pat_len > text_len, so !seq_matches_at trivially
+            //  pos + pat_len > text_len, so !seq_matches_at trivially
         }
     }
 
-    // Exhausted: no match in [0, from)
+    //  Exhausted: no match in [0, from)
     proof {
         lemma_find_prev_scan_exhausted(
             text@, pattern@, from as nat, from as nat);
@@ -820,11 +820,11 @@ pub fn find_prev_exec(
     None
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// Session find/replace exec
-// ──────────────────────────────────────────────────────────────────────
+//  ──────────────────────────────────────────────────────────────────────
+//  Session find/replace exec
+//  ──────────────────────────────────────────────────────────────────────
 
-/// Find next and select the match.
+///  Find next and select the match.
 pub fn session_find_next_exec(
     mut session: RuntimeTextEditSession,
     pattern: &Vec<char>,
@@ -847,11 +847,11 @@ pub fn session_find_next_exec(
             };
             proof {
                 lemma_find_next_correct(session.model@.text, pattern@, from as nat);
-                // seq_matches_at → pos + pattern.len() <= text.len() and pos <= text.len()
+                //  seq_matches_at → pos + pattern.len() <= text.len() and pos <= text.len()
                 axiom_find_result_grapheme_aligned(session.model@.text, pattern@, pos as nat);
-                // pos and pos + pattern.len() are grapheme boundaries
-                // end == pos + pattern.len() (since text_len >= pattern.len() && pos <= text_len - pattern.len())
-                // or end == text_len (which is always a grapheme boundary by axiom_grapheme_boundaries_valid)
+                //  pos and pos + pattern.len() are grapheme boundaries
+                //  end == pos + pattern.len() (since text_len >= pattern.len() && pos <= text_len - pattern.len())
+                //  or end == text_len (which is always a grapheme boundary by axiom_grapheme_boundaries_valid)
                 axiom_grapheme_boundaries_valid(session.model@.text);
             }
             session.model.anchor = pos;
@@ -867,7 +867,7 @@ pub fn session_find_next_exec(
     }
 }
 
-/// Find previous and select the match.
+///  Find previous and select the match.
 pub fn session_find_prev_exec(
     mut session: RuntimeTextEditSession,
     pattern: &Vec<char>,
@@ -906,4 +906,4 @@ pub fn session_find_prev_exec(
     }
 }
 
-} // verus!
+} //  verus!

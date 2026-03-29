@@ -13,7 +13,7 @@ use crate::layout::wrap_proofs::*;
 
 verus! {
 
-/// Execute wrap layout: place children left-to-right with line wrapping.
+///  Execute wrap layout: place children left-to-right with line wrapping.
 pub fn wrap_layout_exec(
     limits: &RuntimeLimits,
     padding: &RuntimePadding,
@@ -40,16 +40,16 @@ pub fn wrap_layout_exec(
 
     let n = child_sizes.len();
 
-    // Available width for wrapping
+    //  Available width for wrapping
     let available_width = limits.max.width.sub(&padding.horizontal_exec());
 
-    // ── Build children via cursor tracking ──
+    //  ── Build children via cursor tracking ──
     let mut cursor_x = RuntimeRational::from_int(0);
     let mut cursor_y = RuntimeRational::from_int(0);
     let mut line_height = RuntimeRational::from_int(0);
     let mut content_width = RuntimeRational::from_int(0);
 
-    // Establish children length
+    //  Establish children length
     let ghost spec_children = wrap_children(
         padding@, h_spacing@, v_spacing@, spec_sizes, available_width@, 0,
     );
@@ -102,33 +102,33 @@ pub fn wrap_layout_exec(
         let child_w = copy_rational(&child_sizes[i].width);
         let child_h = copy_rational(&child_sizes[i].height);
 
-        // Check if we need a line break
+        //  Check if we need a line break
         let at_line_start = cursor_x.le(&zero);
         let would_fit = cursor_x.add(&child_w).le(&available_width);
         let needs_break = !at_line_start && !would_fit;
 
         let (cx, cy) = if needs_break {
-            // New line
+            //  New line
             let new_y = cursor_y.add(&line_height).add(v_spacing);
             (RuntimeRational::from_int(0), new_y)
         } else {
-            // Same line
+            //  Same line
             (copy_rational(&cursor_x), copy_rational(&cursor_y))
         };
 
-        // Position the child
+        //  Position the child
         let child_x = padding.left.add(&cx);
         let child_y = padding.top.add(&cy);
         let cs = child_sizes[i].copy_size();
         let child_node = RuntimeNode::leaf_exec(child_x, child_y, cs);
 
         proof {
-            // Z3 connects runtime values to spec via invariant + element lemma
+            //  Z3 connects runtime values to spec via invariant + element lemma
         }
 
         children.push(child_node);
 
-        // Update cursor
+        //  Update cursor
         if needs_break {
             cursor_x = child_w.add(h_spacing);
             cursor_y = cy;
@@ -138,14 +138,14 @@ pub fn wrap_layout_exec(
             let new_line_w = cursor_x.add(&child_w);
             content_width = content_width.max(&new_line_w);
             cursor_x = new_line_w.add(h_spacing);
-            // cursor_y unchanged
+            //  cursor_y unchanged
             line_height = line_height.max(&child_h);
         }
 
         i = i + 1;
     }
 
-    // ── Compute content size + parent size ──
+    //  ── Compute content size + parent size ──
     let content_size = if n == 0 {
         RuntimeSize::zero_exec()
     } else {
@@ -187,4 +187,4 @@ pub fn wrap_layout_exec(
     out
 }
 
-} // verus!
+} //  verus!

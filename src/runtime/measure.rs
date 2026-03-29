@@ -23,7 +23,7 @@ use crate::layout::absolute::*;
 
 verus! {
 
-/// Recursively measure a RuntimeWidget tree, returning its preferred size.
+///  Recursively measure a RuntimeWidget tree, returning its preferred size.
 pub fn measure_widget_exec(
     limits: &RuntimeLimits,
     widget: &RuntimeWidget,
@@ -39,10 +39,10 @@ pub fn measure_widget_exec(
 {
     proof { reveal(measure_widget); }
     if fuel == 0 {
-        // Unreachable: wf_spec(0) is false
+        //  Unreachable: wf_spec(0) is false
         RuntimeSize::zero_exec()
     } else {
-        // Fuel bridge: one proof for all variants
+        //  Fuel bridge: one proof for all variants
         proof { assert((fuel as nat - 1) as nat == (fuel - 1) as nat); }
 
         match widget {
@@ -114,7 +114,7 @@ pub fn measure_widget_exec(
                         limits.resolve_exec(child_size)
                     },
                     RuntimeWrapperWidget::ScrollView { viewport, scroll_x, scroll_y, child, model } => {
-                        // measure = limits.resolve(viewport), child doesn't affect output
+                        //  measure = limits.resolve(viewport), child doesn't affect output
                         limits.resolve_exec(viewport.copy_size())
                     },
                 }
@@ -142,7 +142,7 @@ pub fn measure_widget_exec(
                             children, fuel, ContainerKind::Wrap)
                     },
                     RuntimeContainerWidget::Flex { padding, spacing, alignment, direction, children, model } => {
-                        // Flex fills limits.max regardless of children
+                        //  Flex fills limits.max regardless of children
                         limits.resolve_exec(limits.max.copy_size())
                     },
                     RuntimeContainerWidget::Grid { padding, h_spacing, v_spacing, h_align, v_align,
@@ -159,7 +159,7 @@ pub fn measure_widget_exec(
                         measure_absolute_exec(limits, padding, children, fuel)
                     },
                     RuntimeContainerWidget::ListView { spacing, scroll_y, viewport, children, model } => {
-                        // measure = limits.resolve(viewport), children don't affect output
+                        //  measure = limits.resolve(viewport), children don't affect output
                         limits.resolve_exec(viewport.copy_size())
                     },
                 }
@@ -168,7 +168,7 @@ pub fn measure_widget_exec(
     }
 }
 
-/// Shared container measure: recursively measure children, compute content size, resolve.
+///  Shared container measure: recursively measure children, compute content size, resolve.
 fn measure_container_exec(
     limits: &RuntimeLimits,
     padding: &RuntimePadding,
@@ -211,12 +211,12 @@ fn measure_container_exec(
 
     let n = children.len();
 
-    // Ghost: spec-level children sequence
+    //  Ghost: spec-level children sequence
     let ghost spec_wc: Seq<Widget<RationalModel>> =
         Seq::new(children@.len() as nat, |j: int| children@[j].model());
     let ghost spec_cs = measure_children(inner@, spec_wc, (fuel - 1) as nat);
 
-    // 1. Recursively measure children
+    //  1. Recursively measure children
     let mut child_sizes: Vec<RuntimeSize> = Vec::new();
     let mut i: usize = 0;
 
@@ -245,7 +245,7 @@ fn measure_container_exec(
         i = i + 1;
     }
 
-    // Ghost: child_sizes_seq matches spec measure_children
+    //  Ghost: child_sizes_seq matches spec measure_children
     let ghost child_sizes_seq: Seq<Size<RationalModel>> =
         Seq::new(child_sizes@.len() as nat, |j: int| child_sizes@[j]@);
 
@@ -260,7 +260,7 @@ fn measure_container_exec(
         assert(child_sizes_seq =~= spec_cs);
     }
 
-    // 2. Compute content size and resolve per variant
+    //  2. Compute content size and resolve per variant
     match kind {
         ContainerKind::Linear(Axis::Vertical) => {
             measure_column_size_exec(limits, padding, spacing1, &child_sizes,
@@ -281,7 +281,7 @@ fn measure_container_exec(
     }
 }
 
-/// Measure an absolute widget: recursively measure children, compute bounding box, resolve.
+///  Measure an absolute widget: recursively measure children, compute bounding box, resolve.
 fn measure_absolute_exec(
     limits: &RuntimeLimits,
     padding: &RuntimePadding,
@@ -314,7 +314,7 @@ fn measure_absolute_exec(
     let inner = limits.shrink_exec(&pad_h, &pad_v);
     let n = children.len();
 
-    // Measure children
+    //  Measure children
     let mut child_sizes: Vec<RuntimeSize> = Vec::new();
     let mut i: usize = 0;
 
@@ -354,7 +354,7 @@ fn measure_absolute_exec(
         assert(child_sizes_seq =~= spec_cs);
     }
 
-    // Compute bounding box
+    //  Compute bounding box
     let mut max_right = RuntimeRational::from_int(0);
     let mut max_bottom = RuntimeRational::from_int(0);
 
@@ -399,4 +399,4 @@ fn measure_absolute_exec(
     limits.resolve_exec(RuntimeSize::new(tw, th))
 }
 
-} // verus!
+} //  verus!

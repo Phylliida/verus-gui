@@ -5,14 +5,14 @@ use crate::size::Size;
 
 verus! {
 
-/// Size constraints: a minimum and maximum bounding box.
+///  Size constraints: a minimum and maximum bounding box.
 pub struct Limits<T: OrderedRing> {
     pub min: Size<T>,
     pub max: Size<T>,
 }
 
 impl<T: OrderedRing> Limits<T> {
-    /// Well-formedness: min <= max component-wise, and both are non-negative.
+    ///  Well-formedness: min <= max component-wise, and both are non-negative.
     pub open spec fn wf(self) -> bool {
         self.min.is_nonneg()
         && self.max.is_nonneg()
@@ -20,12 +20,12 @@ impl<T: OrderedRing> Limits<T> {
         && self.min.height.le(self.max.height)
     }
 
-    /// Clamp a single value between lo and hi: max(lo, min(val, hi)).
+    ///  Clamp a single value between lo and hi: max(lo, min(val, hi)).
     pub open spec fn clamp(val: T, lo: T, hi: T) -> T {
         max::<T>(lo, min::<T>(val, hi))
     }
 
-    /// Resolve a desired size within these limits by clamping each dimension.
+    ///  Resolve a desired size within these limits by clamping each dimension.
     pub open spec fn resolve(self, size: Size<T>) -> Size<T> {
         Size {
             width: Self::clamp(size.width, self.min.width, self.max.width),
@@ -33,7 +33,7 @@ impl<T: OrderedRing> Limits<T> {
         }
     }
 
-    /// Intersect two limits: max-of-mins for min, clamp max to be >= the new min.
+    ///  Intersect two limits: max-of-mins for min, clamp max to be >= the new min.
     pub open spec fn intersect(self, other: Limits<T>) -> Limits<T> {
         let new_min_w = max::<T>(self.min.width, other.min.width);
         let new_min_h = max::<T>(self.min.height, other.min.height);
@@ -46,7 +46,7 @@ impl<T: OrderedRing> Limits<T> {
         }
     }
 
-    /// Shrink limits by subtracting padding from the max (keeping min unchanged).
+    ///  Shrink limits by subtracting padding from the max (keeping min unchanged).
     pub open spec fn shrink(self, width: T, height: T) -> Limits<T> {
         Limits {
             min: self.min,
@@ -58,4 +58,4 @@ impl<T: OrderedRing> Limits<T> {
     }
 }
 
-} // verus!
+} //  verus!

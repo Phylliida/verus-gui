@@ -15,7 +15,7 @@ use crate::widget::*;
 
 verus! {
 
-/// Layout a margin widget: shrink limits, layout child, wrap with offsets.
+///  Layout a margin widget: shrink limits, layout child, wrap with offsets.
 pub fn layout_margin_widget_exec(
     limits: &RuntimeLimits,
     margin: &RuntimePadding,
@@ -44,14 +44,14 @@ pub fn layout_margin_widget_exec(
 
     let child_node = layout_widget_exec(&inner, child, fuel - 1);
 
-    // Compute total size
+    //  Compute total size
     let pad_h2 = margin.horizontal_exec();
     let pad_v2 = margin.vertical_exec();
     let total_w = pad_h2.add(&child_node.size.width);
     let total_h = pad_v2.add(&child_node.size.height);
     let parent_size = limits.resolve_exec(RuntimeSize::new(total_w, total_h));
 
-    // Build the single child with margin offsets
+    //  Build the single child with margin offsets
     let child_x = copy_rational(&margin.left);
     let child_y = copy_rational(&margin.top);
     let child_size = child_node.size.copy_size();
@@ -103,8 +103,8 @@ pub fn layout_margin_widget_exec(
     };
 
     proof {
-        // Show out@ == parent_model
-        // parent_model.children == Seq::empty().push(Node { x: margin.left, y: margin.top, ... })
+        //  Show out@ == parent_model
+        //  parent_model.children == Seq::empty().push(Node { x: margin.left, y: margin.top, ... })
         assert(parent_model.children.len() == 1);
         assert(out.children@.len() == 1);
         assert(out@.children.len() == 1);
@@ -115,4 +115,4 @@ pub fn layout_margin_widget_exec(
     out
 }
 
-} // verus!
+} //  verus!

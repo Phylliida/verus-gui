@@ -46,7 +46,7 @@ pub mod draw;
 
 verus! {
 
-/// Copy a RuntimeRational (needed because BigInt witnesses don't implement Copy).
+///  Copy a RuntimeRational (needed because BigInt witnesses don't implement Copy).
 pub fn copy_rational(r: &RuntimeRational) -> (out: RuntimeRational)
     requires
         r.wf_spec(),
@@ -63,4 +63,4 @@ pub fn copy_rational(r: &RuntimeRational) -> (out: RuntimeRational)
     }
 }
 
-} // verus!
+} //  verus!

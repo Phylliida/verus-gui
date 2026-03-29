@@ -16,7 +16,7 @@ use crate::layout::proofs::*;
 
 verus! {
 
-/// Compute align_offset at runtime.
+///  Compute align_offset at runtime.
 pub fn align_offset_exec(
     alignment: &Alignment,
     available: &RuntimeRational,
@@ -45,8 +45,8 @@ pub fn align_offset_exec(
     }
 }
 
-/// Execute linear layout: build a parent Node with children laid out along axis.
-/// Replaces column_layout_exec (Vertical) and row_layout_exec (Horizontal).
+///  Execute linear layout: build a parent Node with children laid out along axis.
+///  Replaces column_layout_exec (Vertical) and row_layout_exec (Horizontal).
 pub fn linear_layout_exec(
     limits: &RuntimeLimits,
     padding: &RuntimePadding,
@@ -72,11 +72,11 @@ pub fn linear_layout_exec(
     let ghost spec_sizes: Seq<Size<RationalModel>> =
         Seq::new(child_sizes@.len() as nat, |i: int| child_sizes@[i]@);
 
-    // Compute available cross-axis dimension
+    //  Compute available cross-axis dimension
     let pad_cross = padding.cross_padding_exec(axis);
     let available_cross = limits.max.cross_exec(axis).sub(&pad_cross);
 
-    // Compute content main: sum of child main dimensions + (n-1) * spacing
+    //  Compute content main: sum of child main dimensions + (n-1) * spacing
     let n = child_sizes.len();
     let mut content_main = RuntimeRational::from_int(0);
     let mut i: usize = 0;
@@ -95,7 +95,7 @@ pub fn linear_layout_exec(
         i = i + 1;
     }
 
-    // Add spacing: (n-1) * spacing for n > 0
+    //  Add spacing: (n-1) * spacing for n > 0
     if n > 0 {
         let mut sp_total = RuntimeRational::from_int(0);
         let mut j: usize = 0;
@@ -118,23 +118,23 @@ pub fn linear_layout_exec(
         content_main = content_main.add(&sp_total);
     }
 
-    // Compute parent size: pad + content for main, max for cross, then resolve
+    //  Compute parent size: pad + content for main, max for cross, then resolve
     let pad_main = padding.main_padding_exec(axis);
     let total_main = pad_main.add(&content_main);
     let max_cross = limits.max.cross_exec(axis);
     let parent_size_unclamped = RuntimeSize::from_axes_exec(axis, total_main, max_cross);
 
-    // Resolve: clamp to limits
+    //  Resolve: clamp to limits
     let parent_size = limits.resolve_exec(parent_size_unclamped);
 
-    // Establish children sequence length
+    //  Establish children sequence length
     proof {
         lemma_linear_children_len::<RationalModel>(
             padding@, spacing@, *alignment, spec_sizes, *axis, available_cross@, 0,
         );
     }
 
-    // Build children
+    //  Build children
     let mut children: Vec<RuntimeNode> = Vec::new();
     let mut main_pos = padding.main_start_exec(axis);
     let mut k: usize = 0;
@@ -164,7 +164,7 @@ pub fn linear_layout_exec(
             },
         decreases n - k,
     {
-        // Tell Z3 what linear_children[k] should be
+        //  Tell Z3 what linear_children[k] should be
         proof {
             lemma_linear_children_element::<RationalModel>(
                 padding@, spacing@, *alignment, spec_sizes, *axis, available_cross@, k as nat,
@@ -177,14 +177,14 @@ pub fn linear_layout_exec(
         let child_main_pos = copy_rational(&main_pos);
         let cs = child_sizes[k].copy_size();
 
-        // Build node with correct (x, y) based on axis
+        //  Build node with correct (x, y) based on axis
         let child_node = match axis {
             Axis::Vertical => RuntimeNode::leaf_exec(child_cross_pos, child_main_pos, cs),
             Axis::Horizontal => RuntimeNode::leaf_exec(child_main_pos, child_cross_pos, cs),
         };
         children.push(child_node);
 
-        // Advance main position
+        //  Advance main position
         if k + 1 < n {
             main_pos = main_pos.add(&child_sizes[k].main_exec(axis));
             main_pos = main_pos.add(spacing);
@@ -209,7 +209,7 @@ pub fn linear_layout_exec(
     };
 
     proof {
-        // Help Z3: children match model
+        //  Help Z3: children match model
         let lc = linear_children::<RationalModel>(
             padding@, spacing@, *alignment, spec_sizes, *axis, available_cross@, 0,
         );
@@ -224,4 +224,4 @@ pub fn linear_layout_exec(
     out
 }
 
-} // verus!
+} //  verus!

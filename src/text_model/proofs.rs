@@ -15,11 +15,11 @@ use crate::event::{
 
 verus! {
 
-// ──────────────────────────────────────────────────────────────────────
-// Seq helper proofs
-// ──────────────────────────────────────────────────────────────────────
+//  ──────────────────────────────────────────────────────────────────────
+//  Seq helper proofs
+//  ──────────────────────────────────────────────────────────────────────
 
-/// Length of a spliced sequence.
+///  Length of a spliced sequence.
 pub proof fn lemma_seq_splice_len<A>(s: Seq<A>, start: int, end: int, r: Seq<A>)
     requires
         0 <= start <= end,
@@ -32,7 +32,7 @@ pub proof fn lemma_seq_splice_len<A>(s: Seq<A>, start: int, end: int, r: Seq<A>)
     assert((s.subrange(0, start) + r).len() == start + r.len());
 }
 
-/// Length of seq_repeat.
+///  Length of seq_repeat.
 pub proof fn lemma_seq_repeat_len<A>(val: A, count: nat)
     ensures
         seq_repeat(val, count).len() == count,
@@ -43,7 +43,7 @@ pub proof fn lemma_seq_repeat_len<A>(val: A, count: nat)
     }
 }
 
-/// count_char on concatenation.
+///  count_char on concatenation.
 pub proof fn lemma_count_char_concat(a: Seq<char>, b: Seq<char>, c: char)
     ensures
         count_char(a + b, c) == count_char(a, c) + count_char(b, c),
@@ -60,11 +60,11 @@ pub proof fn lemma_count_char_concat(a: Seq<char>, b: Seq<char>, c: char)
     }
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// Boundary ordering lemmas
-// ──────────────────────────────────────────────────────────────────────
+//  ──────────────────────────────────────────────────────────────────────
+//  Boundary ordering lemmas
+//  ──────────────────────────────────────────────────────────────────────
 
-/// prev_boundary_in always returns a value < pos, when boundaries start at 0 and pos > 0.
+///  prev_boundary_in always returns a value < pos, when boundaries start at 0 and pos > 0.
 pub proof fn lemma_prev_boundary_lt(bounds: Seq<nat>, pos: nat)
     requires
         bounds.len() > 0,
@@ -75,11 +75,11 @@ pub proof fn lemma_prev_boundary_lt(bounds: Seq<nat>, pos: nat)
     decreases bounds.len(),
 {
     if bounds.last() < pos {
-        // returns bounds.last() which is < pos
+        //  returns bounds.last() which is < pos
     } else {
         if bounds.len() == 1 {
-            // bounds = [0], bounds.last() = 0 >= pos, but pos > 0 and bounds[0] = 0
-            // so bounds.last() = 0 < pos (since pos > 0). Contradiction with else branch.
+            //  bounds = [0], bounds.last() = 0 >= pos, but pos > 0 and bounds[0] = 0
+            //  so bounds.last() = 0 < pos (since pos > 0). Contradiction with else branch.
             assert(bounds.last() == 0);
             assert(false);
         } else {
@@ -91,23 +91,23 @@ pub proof fn lemma_prev_boundary_lt(bounds: Seq<nat>, pos: nat)
     }
 }
 
-/// next_boundary_in returns a value > pos when the last boundary exceeds pos.
+///  next_boundary_in returns a value > pos when the last boundary exceeds pos.
 pub proof fn lemma_next_boundary_gt(bounds: Seq<nat>, pos: nat)
     requires
         bounds.len() > 0,
         bounds[bounds.len() - 1] > pos,
-        // Boundaries are strictly increasing
+        //  Boundaries are strictly increasing
         forall|i: int| 0 <= i < bounds.len() - 1 ==> (#[trigger] bounds[i]) < bounds[i + 1],
     ensures
         next_boundary_in(bounds, pos) > pos,
     decreases bounds.len(),
 {
     if bounds[0] > pos {
-        // returns bounds[0] which is > pos
+        //  returns bounds[0] which is > pos
     } else {
         let rest = bounds.subrange(1, bounds.len() as int);
         if rest.len() == 0 {
-            // bounds.len() == 1, bounds[0] <= pos, but bounds[0] > pos. Contradiction.
+            //  bounds.len() == 1, bounds[0] <= pos, but bounds[0] > pos. Contradiction.
             assert(false);
         } else {
             assert(rest[rest.len() - 1] == bounds[bounds.len() - 1]);
@@ -123,22 +123,22 @@ pub proof fn lemma_next_boundary_gt(bounds: Seq<nat>, pos: nat)
     }
 }
 
-/// prev_boundary_in always returns a value <= pos.
+///  prev_boundary_in always returns a value <= pos.
 pub proof fn lemma_prev_boundary_in_le(bounds: Seq<nat>, pos: nat)
     ensures
         prev_boundary_in(bounds, pos) <= pos,
     decreases bounds.len(),
 {
     if bounds.len() == 0 {
-        // returns 0 <= pos (nat)
+        //  returns 0 <= pos (nat)
     } else if bounds.last() < pos {
-        // returns bounds.last() < pos
+        //  returns bounds.last() < pos
     } else {
         lemma_prev_boundary_in_le(bounds.drop_last(), pos);
     }
 }
 
-/// prev_boundary_in returns a member of bounds (when bounds is non-empty).
+///  prev_boundary_in returns a member of bounds (when bounds is non-empty).
 pub proof fn lemma_prev_boundary_in_member(bounds: Seq<nat>, pos: nat)
     ensures
         bounds.len() > 0 ==> (
@@ -150,7 +150,7 @@ pub proof fn lemma_prev_boundary_in_member(bounds: Seq<nat>, pos: nat)
 {
     if bounds.len() > 0 {
         if bounds.last() < pos {
-            // returns bounds.last() = bounds[bounds.len() - 1]
+            //  returns bounds.last() = bounds[bounds.len() - 1]
             assert(bounds[bounds.len() - 1] == prev_boundary_in(bounds, pos));
         } else {
             let dropped = bounds.drop_last();
@@ -164,27 +164,27 @@ pub proof fn lemma_prev_boundary_in_member(bounds: Seq<nat>, pos: nat)
                     assert(bounds[i] == prev_boundary_in(bounds, pos));
                 }
             }
-            // dropped.len() == 0 → returns 0
+            //  dropped.len() == 0 → returns 0
         }
     }
 }
 
-/// next_boundary_in returns a value >= pos.
+///  next_boundary_in returns a value >= pos.
 pub proof fn lemma_next_boundary_in_ge(bounds: Seq<nat>, pos: nat)
     ensures
         next_boundary_in(bounds, pos) >= pos,
     decreases bounds.len(),
 {
     if bounds.len() == 0 {
-        // returns pos
+        //  returns pos
     } else if bounds[0] > pos {
-        // returns bounds[0] > pos
+        //  returns bounds[0] > pos
     } else {
         lemma_next_boundary_in_ge(bounds.subrange(1, bounds.len() as int), pos);
     }
 }
 
-/// next_boundary_in returns a member of bounds (when bounds is non-empty and last > pos).
+///  next_boundary_in returns a member of bounds (when bounds is non-empty and last > pos).
 pub proof fn lemma_next_boundary_in_member(bounds: Seq<nat>, pos: nat)
     requires
         bounds.len() > 0,
@@ -199,10 +199,10 @@ pub proof fn lemma_next_boundary_in_member(bounds: Seq<nat>, pos: nat)
     } else {
         let rest = bounds.subrange(1, bounds.len() as int);
         assert(rest.len() > 0) by {
-            // bounds[0] <= pos < bounds[len-1], so len >= 2
+            //  bounds[0] <= pos < bounds[len-1], so len >= 2
             if bounds.len() == 1 {
                 assert(bounds[0] == bounds[bounds.len() - 1]);
-                assert(false); // contradiction: bounds[0] <= pos < bounds[0]
+                assert(false); //  contradiction: bounds[0] <= pos < bounds[0]
             }
         }
         assert(rest[rest.len() - 1] == bounds[bounds.len() - 1]);
@@ -214,7 +214,7 @@ pub proof fn lemma_next_boundary_in_member(bounds: Seq<nat>, pos: nat)
     }
 }
 
-/// next_boundary_in is bounded by the last element when last >= pos.
+///  next_boundary_in is bounded by the last element when last >= pos.
 pub proof fn lemma_next_boundary_in_le_last(bounds: Seq<nat>, pos: nat)
     requires
         bounds.len() > 0,
@@ -225,24 +225,24 @@ pub proof fn lemma_next_boundary_in_le_last(bounds: Seq<nat>, pos: nat)
     decreases bounds.len(),
 {
     if bounds[0] > pos {
-        // returns bounds[0]
-        // Need: bounds[0] <= bounds[len-1]
-        // For len==1 trivial. For len>=2, use strict increasing chain.
+        //  returns bounds[0]
+        //  Need: bounds[0] <= bounds[len-1]
+        //  For len==1 trivial. For len>=2, use strict increasing chain.
         if bounds.len() >= 2 {
-            // bounds[0] < bounds[1], and we only need bounds[0] <= bounds[len-1]
-            // Since bounds are strictly increasing, bounds[0] < bounds[1] <= bounds[len-1]
+            //  bounds[0] < bounds[1], and we only need bounds[0] <= bounds[len-1]
+            //  Since bounds are strictly increasing, bounds[0] < bounds[1] <= bounds[len-1]
             assert(bounds[0] < bounds[1]);
             lemma_next_boundary_in_le_last(bounds.subrange(1, bounds.len() as int), pos);
-            // Actually, just need bounds[0] <= bounds[len-1]
-            // bounds[0] < bounds[1] and bounds.len() >= 2
-            // If len==2, bounds[0] < bounds[1] = bounds[len-1] ✓
-            // If len>2, bounds[0] < bounds[1] < ... < bounds[len-1] ✓
+            //  Actually, just need bounds[0] <= bounds[len-1]
+            //  bounds[0] < bounds[1] and bounds.len() >= 2
+            //  If len==2, bounds[0] < bounds[1] = bounds[len-1] ✓
+            //  If len>2, bounds[0] < bounds[1] < ... < bounds[len-1] ✓
         }
     } else {
         let rest = bounds.subrange(1, bounds.len() as int);
         if rest.len() == 0 {
-            // bounds.len() == 1, bounds[0] <= pos, bounds[0] >= pos → bounds[0] == pos
-            // next_boundary_in(Seq::empty(), pos) = pos = bounds[0] = bounds[len-1]
+            //  bounds.len() == 1, bounds[0] <= pos, bounds[0] >= pos → bounds[0] == pos
+            //  next_boundary_in(Seq::empty(), pos) = pos = bounds[0] = bounds[len-1]
             assert(next_boundary_in(rest, pos) == pos);
         } else {
             assert(rest[rest.len() - 1] == bounds[bounds.len() - 1]);
@@ -257,7 +257,7 @@ pub proof fn lemma_next_boundary_in_le_last(bounds: Seq<nat>, pos: nat)
     }
 }
 
-/// prev_grapheme_boundary returns a value < pos when text is non-empty and pos > 0.
+///  prev_grapheme_boundary returns a value < pos when text is non-empty and pos > 0.
 pub proof fn lemma_prev_grapheme_lt(text: Seq<char>, pos: nat)
     requires
         text.len() > 0,
@@ -272,7 +272,7 @@ pub proof fn lemma_prev_grapheme_lt(text: Seq<char>, pos: nat)
     lemma_prev_boundary_lt(bounds, pos);
 }
 
-/// next_grapheme_boundary returns a value > pos when text is non-empty and pos < text.len().
+///  next_grapheme_boundary returns a value > pos when text is non-empty and pos < text.len().
 pub proof fn lemma_next_grapheme_gt(text: Seq<char>, pos: nat)
     requires
         text.len() > 0,
@@ -288,11 +288,11 @@ pub proof fn lemma_next_grapheme_gt(text: Seq<char>, pos: nat)
     lemma_next_boundary_gt(bounds, pos);
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// Central wf-preservation theorem
-// ──────────────────────────────────────────────────────────────────────
+//  ──────────────────────────────────────────────────────────────────────
+//  Central wf-preservation theorem
+//  ──────────────────────────────────────────────────────────────────────
 
-/// Splice preserves well-formedness.
+///  Splice preserves well-formedness.
 pub proof fn lemma_splice_preserves_wf(
     model: TextModel,
     start: nat,
@@ -318,24 +318,24 @@ pub proof fn lemma_splice_preserves_wf(
     let text_prime = seq_splice(model.text, start as int, end as int, new_text);
     let styles_prime = seq_splice(model.styles, start as int, end as int, new_styles);
 
-    // styles'.len() == text'.len()
+    //  styles'.len() == text'.len()
     lemma_seq_splice_len(model.text, start as int, end as int, new_text);
     lemma_seq_splice_len(model.styles, start as int, end as int, new_styles);
     assert(styles_prime.len() == text_prime.len());
 
-    // paragraph_styles'.len() == paragraph_count(text')
+    //  paragraph_styles'.len() == paragraph_count(text')
     lemma_adjust_paragraph_styles_len(
         model.paragraph_styles, model.text, start, end, new_text);
 
-    // cursor bounds and grapheme boundary from preconditions
-    // composition is None
+    //  cursor bounds and grapheme boundary from preconditions
+    //  composition is None
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// Per-operation wf-preservation wrappers
-// ──────────────────────────────────────────────────────────────────────
+//  ──────────────────────────────────────────────────────────────────────
+//  Per-operation wf-preservation wrappers
+//  ──────────────────────────────────────────────────────────────────────
 
-/// insert_char preserves wf.
+///  insert_char preserves wf.
 pub proof fn lemma_insert_char_preserves_wf(model: TextModel, ch: char)
     requires
         model.wf(),
@@ -356,7 +356,7 @@ pub proof fn lemma_insert_char_preserves_wf(model: TextModel, ch: char)
         model, sel_start, sel_end, seq![ch], seq![model.typing_style], sel_start + 1);
 }
 
-/// delete_selection preserves wf (when there is a selection).
+///  delete_selection preserves wf (when there is a selection).
 pub proof fn lemma_delete_selection_preserves_wf(model: TextModel)
     requires
         model.wf(),
@@ -378,7 +378,7 @@ pub proof fn lemma_delete_selection_preserves_wf(model: TextModel)
         model, sel_start, sel_end, Seq::empty(), Seq::empty(), sel_start);
 }
 
-/// delete_backward preserves wf.
+///  delete_backward preserves wf.
 pub proof fn lemma_delete_backward_preserves_wf(model: TextModel)
     requires
         model.wf(),
@@ -404,7 +404,7 @@ pub proof fn lemma_delete_backward_preserves_wf(model: TextModel)
         model, prev, model.focus, Seq::empty(), Seq::empty(), prev);
 }
 
-/// delete_forward preserves wf.
+///  delete_forward preserves wf.
 pub proof fn lemma_delete_forward_preserves_wf(model: TextModel)
     requires
         model.wf(),
@@ -430,7 +430,7 @@ pub proof fn lemma_delete_forward_preserves_wf(model: TextModel)
         model, model.focus, next, Seq::empty(), Seq::empty(), model.focus);
 }
 
-/// paste preserves wf.
+///  paste preserves wf.
 pub proof fn lemma_paste_preserves_wf(
     model: TextModel,
     text: Seq<char>,
@@ -457,7 +457,7 @@ pub proof fn lemma_paste_preserves_wf(
         model, sel_start, sel_end, clean, clean_styles, sel_start + clean.len());
 }
 
-/// move_cursor preserves wf.
+///  move_cursor preserves wf.
 pub proof fn lemma_move_cursor_preserves_wf(model: TextModel, dir: MoveDirection)
     requires
         model.wf(),
@@ -473,7 +473,7 @@ pub proof fn lemma_move_cursor_preserves_wf(model: TextModel, dir: MoveDirection
 {
 }
 
-/// extend_selection preserves wf.
+///  extend_selection preserves wf.
 pub proof fn lemma_extend_selection_preserves_wf(model: TextModel, dir: MoveDirection)
     requires
         model.wf(),
@@ -489,7 +489,7 @@ pub proof fn lemma_extend_selection_preserves_wf(model: TextModel, dir: MoveDire
 {
 }
 
-/// compose_start preserves wf.
+///  compose_start preserves wf.
 pub proof fn lemma_compose_start_preserves_wf(model: TextModel)
     requires
         model.wf(),
@@ -499,7 +499,7 @@ pub proof fn lemma_compose_start_preserves_wf(model: TextModel)
 {
 }
 
-/// compose_commit preserves wf.
+///  compose_commit preserves wf.
 pub proof fn lemma_compose_commit_preserves_wf(model: TextModel)
     requires
         model.wf(),
@@ -525,14 +525,14 @@ pub proof fn lemma_compose_commit_preserves_wf(model: TextModel)
         c.range_start + c.provisional.len());
 }
 
-/// compose_cancel preserves wf.
+///  compose_cancel preserves wf.
 pub proof fn lemma_compose_cancel_preserves_wf(model: TextModel)
     requires model.wf(),
     ensures compose_cancel(model).wf(),
 {
 }
 
-/// apply_style_to_range preserves wf.
+///  apply_style_to_range preserves wf.
 pub proof fn lemma_apply_style_preserves_wf(
     model: TextModel,
     start: nat,
@@ -550,42 +550,42 @@ pub proof fn lemma_apply_style_preserves_wf(
     assert(result.styles.len() == model.styles.len());
 }
 
-/// select_all preserves wf.
+///  select_all preserves wf.
 pub proof fn lemma_select_all_preserves_wf(model: TextModel)
     requires
         model.wf(),
     ensures
         select_all(model).wf(),
 {
-    // Need: is_grapheme_boundary(text, 0) and is_grapheme_boundary(text, text.len())
+    //  Need: is_grapheme_boundary(text, 0) and is_grapheme_boundary(text, text.len())
     if model.text.len() > 0 {
         axiom_grapheme_boundaries_valid(model.text);
         let bounds = grapheme_boundaries(model.text);
-        // bounds[0] == 0
+        //  bounds[0] == 0
         assert(is_grapheme_boundary(model.text, 0)) by {
             assert(bounds[0] == 0);
         }
-        // bounds[bounds.len()-1] == text.len()
+        //  bounds[bounds.len()-1] == text.len()
         assert(is_grapheme_boundary(model.text, model.text.len())) by {
             assert(bounds[bounds.len() - 1] == model.text.len());
         }
     } else {
-        // Empty text: is_grapheme_boundary(text, 0) is true by definition
+        //  Empty text: is_grapheme_boundary(text, 0) is true by definition
     }
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// Structural / behavioral proofs
-// ──────────────────────────────────────────────────────────────────────
+//  ──────────────────────────────────────────────────────────────────────
+//  Structural / behavioral proofs
+//  ──────────────────────────────────────────────────────────────────────
 
-/// Cancelling a composition doesn't change the text.
+///  Cancelling a composition doesn't change the text.
 pub proof fn lemma_compose_cancel_noop(model: TextModel)
     requires model.wf(),
     ensures compose_cancel(model).text =~= model.text,
 {
 }
 
-/// Applying a style doesn't change the text.
+///  Applying a style doesn't change the text.
 pub proof fn lemma_style_preserves_text(
     model: TextModel,
     start: nat,
@@ -601,7 +601,7 @@ pub proof fn lemma_style_preserves_text(
 {
 }
 
-/// select_all covers the full text range.
+///  select_all covers the full text range.
 pub proof fn lemma_select_all_covers_all(model: TextModel)
     requires model.wf(),
     ensures
@@ -610,7 +610,7 @@ pub proof fn lemma_select_all_covers_all(model: TextModel)
 {
 }
 
-/// delete_selection on no selection is identity.
+///  delete_selection on no selection is identity.
 pub proof fn lemma_delete_no_selection_noop(model: TextModel)
     requires
         model.wf(),
@@ -620,8 +620,8 @@ pub proof fn lemma_delete_no_selection_noop(model: TextModel)
 {
 }
 
-/// Toggling bold twice resolves the style (Some(b) → Some(!b) → Some(b)).
-/// When starting from None, it resolves to Some(false) (None → Some(true) → Some(false)).
+///  Toggling bold twice resolves the style (Some(b) → Some(!b) → Some(b)).
+///  When starting from None, it resolves to Some(false) (None → Some(true) → Some(false)).
 pub proof fn lemma_toggle_bold_involution(model: TextModel)
     requires model.typing_style.bold.is_some(),
     ensures
@@ -636,7 +636,7 @@ pub proof fn lemma_toggle_bold_involution(model: TextModel)
     assert(!!b == b);
 }
 
-/// Moving Home twice ends at position 0.
+///  Moving Home twice ends at position 0.
 pub proof fn lemma_home_idempotent(model: TextModel)
     requires
         model.wf(),
@@ -646,11 +646,11 @@ pub proof fn lemma_home_idempotent(model: TextModel)
 {
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// Splice algebra
-// ──────────────────────────────────────────────────────────────────────
+//  ──────────────────────────────────────────────────────────────────────
+//  Splice algebra
+//  ──────────────────────────────────────────────────────────────────────
 
-/// Splicing with an empty replacement at a single point is identity.
+///  Splicing with an empty replacement at a single point is identity.
 pub proof fn lemma_seq_splice_identity<A>(s: Seq<A>, start: int)
     requires
         0 <= start <= s.len(),
@@ -659,7 +659,7 @@ pub proof fn lemma_seq_splice_identity<A>(s: Seq<A>, start: int)
 {
 }
 
-/// Splicing the entire sequence with a replacement gives the replacement.
+///  Splicing the entire sequence with a replacement gives the replacement.
 pub proof fn lemma_seq_splice_full<A>(s: Seq<A>, r: Seq<A>)
     ensures
         seq_splice(s, 0int, s.len() as int, r) =~= r,
@@ -668,7 +668,7 @@ pub proof fn lemma_seq_splice_full<A>(s: Seq<A>, r: Seq<A>)
     assert(s.subrange(s.len() as int, s.len() as int) =~= Seq::<A>::empty());
 }
 
-/// Splicing then splicing back the original content restores the sequence.
+///  Splicing then splicing back the original content restores the sequence.
 pub proof fn lemma_seq_splice_roundtrip<A>(
     s: Seq<A>, start: int, end: int, r: Seq<A>,
 )
@@ -688,22 +688,22 @@ pub proof fn lemma_seq_splice_roundtrip<A>(
     let original = s.subrange(start, end);
     lemma_seq_splice_len(s_prime, start, start + r.len(), original);
 
-    // Prefix and suffix of s' match original s
+    //  Prefix and suffix of s' match original s
     assert(s_prime.subrange(0int, start) =~= s.subrange(0int, start));
     assert(s_prime.subrange(start + r.len(), s_prime.len() as int)
         =~= s.subrange(end, s.len() as int));
 
-    // Three adjacent subranges reassemble s
+    //  Three adjacent subranges reassemble s
     assert(s.subrange(0int, start) + s.subrange(start, end)
         + s.subrange(end, s.len() as int) =~= s);
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// Round-trip identities
-// ──────────────────────────────────────────────────────────────────────
+//  ──────────────────────────────────────────────────────────────────────
+//  Round-trip identities
+//  ──────────────────────────────────────────────────────────────────────
 
-/// Insert a character then delete backward restores original text.
-/// Requires that the inserted character forms a complete grapheme cluster.
+///  Insert a character then delete backward restores original text.
+///  Requires that the inserted character forms a complete grapheme cluster.
 pub proof fn lemma_insert_delete_roundtrip(model: TextModel, ch: char)
     requires
         model.wf(),
@@ -728,14 +728,14 @@ pub proof fn lemma_insert_delete_roundtrip(model: TextModel, ch: char)
     assert(model1.focus == focus + 1);
     assert(model1.focus > 0nat);
 
-    // Empty subrange for the roundtrip
+    //  Empty subrange for the roundtrip
     assert(model.text.subrange(focus as int, focus as int)
         =~= Seq::<char>::empty());
 
     lemma_seq_splice_roundtrip(model.text, focus as int, focus as int, seq![ch]);
 }
 
-/// Select all then delete selection gives empty text.
+///  Select all then delete selection gives empty text.
 pub proof fn lemma_select_all_delete_empty(model: TextModel)
     requires
         model.wf(),
@@ -752,7 +752,7 @@ pub proof fn lemma_select_all_delete_empty(model: TextModel)
     }
 }
 
-/// Compose start then cancel restores the original model.
+///  Compose start then cancel restores the original model.
 pub proof fn lemma_compose_start_cancel_identity(model: TextModel)
     requires
         model.wf(),
@@ -762,7 +762,7 @@ pub proof fn lemma_compose_start_cancel_identity(model: TextModel)
 {
 }
 
-/// Compose commit replaces the composition range with the provisional text.
+///  Compose commit replaces the composition range with the provisional text.
 pub proof fn lemma_compose_commit_correct_text(model: TextModel)
     requires
         model.wf(),
@@ -777,11 +777,11 @@ pub proof fn lemma_compose_commit_correct_text(model: TextModel)
 {
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// Idempotency
-// ──────────────────────────────────────────────────────────────────────
+//  ──────────────────────────────────────────────────────────────────────
+//  Idempotency
+//  ──────────────────────────────────────────────────────────────────────
 
-/// Moving to End twice is the same as once.
+///  Moving to End twice is the same as once.
 pub proof fn lemma_end_idempotent(model: TextModel)
     requires
         model.wf(),
@@ -793,7 +793,7 @@ pub proof fn lemma_end_idempotent(model: TextModel)
 {
 }
 
-/// select_all is idempotent.
+///  select_all is idempotent.
 pub proof fn lemma_select_all_idempotent(model: TextModel)
     requires
         model.wf(),
@@ -802,7 +802,7 @@ pub proof fn lemma_select_all_idempotent(model: TextModel)
 {
 }
 
-/// delete_selection is idempotent on text.
+///  delete_selection is idempotent on text.
 pub proof fn lemma_delete_selection_idempotent(model: TextModel)
     requires
         model.wf(),
@@ -812,7 +812,7 @@ pub proof fn lemma_delete_selection_idempotent(model: TextModel)
 {
     if has_selection(model.anchor, model.focus) {
         let m1 = delete_selection(model);
-        // After splice, anchor == focus, so no selection
+        //  After splice, anchor == focus, so no selection
         assert(!has_selection(m1.anchor, m1.focus));
         assert(delete_selection(m1) == m1);
     } else {
@@ -820,11 +820,11 @@ pub proof fn lemma_delete_selection_idempotent(model: TextModel)
     }
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// Commutativity / independence
-// ──────────────────────────────────────────────────────────────────────
+//  ──────────────────────────────────────────────────────────────────────
+//  Commutativity / independence
+//  ──────────────────────────────────────────────────────────────────────
 
-/// apply_style_to_range and toggle_bold commute.
+///  apply_style_to_range and toggle_bold commute.
 pub proof fn lemma_style_commutes_with_toggle(
     model: TextModel,
     start: nat,
@@ -844,7 +844,7 @@ pub proof fn lemma_style_commutes_with_toggle(
     assert(lhs.styles =~= rhs.styles);
 }
 
-/// Toggle italic twice restores the original italic style.
+///  Toggle italic twice restores the original italic style.
 pub proof fn lemma_toggle_italic_involution(model: TextModel)
     requires
         model.typing_style.italic.is_some(),
@@ -860,11 +860,11 @@ pub proof fn lemma_toggle_italic_involution(model: TextModel)
     assert(!!b == b);
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// Bounds and edge cases
-// ──────────────────────────────────────────────────────────────────────
+//  ──────────────────────────────────────────────────────────────────────
+//  Bounds and edge cases
+//  ──────────────────────────────────────────────────────────────────────
 
-/// selection_range always produces an ordered pair.
+///  selection_range always produces an ordered pair.
 pub proof fn lemma_selection_range_ordered(anchor: nat, focus: nat)
     ensures
         ({
@@ -874,7 +874,7 @@ pub proof fn lemma_selection_range_ordered(anchor: nat, focus: nat)
 {
 }
 
-/// delete_backward at position 0 with no selection is a no-op.
+///  delete_backward at position 0 with no selection is a no-op.
 pub proof fn lemma_delete_backward_at_start_noop(model: TextModel)
     requires
         model.wf(),
@@ -885,7 +885,7 @@ pub proof fn lemma_delete_backward_at_start_noop(model: TextModel)
 {
 }
 
-/// delete_forward at the end with no selection is a no-op.
+///  delete_forward at the end with no selection is a no-op.
 pub proof fn lemma_delete_forward_at_end_noop(model: TextModel)
     requires
         model.wf(),
@@ -896,14 +896,14 @@ pub proof fn lemma_delete_forward_at_end_noop(model: TextModel)
 {
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// Bridge: undo params match dispatch result
-// ──────────────────────────────────────────────────────────────────────
+//  ──────────────────────────────────────────────────────────────────────
+//  Bridge: undo params match dispatch result
+//  ──────────────────────────────────────────────────────────────────────
 
-/// The undo splice parameters computed by undo_splice_params_full produce
-/// the same text and styles as the dispatch_key operation.
-/// This bridges the undo system with the dispatch system without requiring
-/// callers to unfold undo_splice_params_full.
+///  The undo splice parameters computed by undo_splice_params_full produce
+///  the same text and styles as the dispatch_key operation.
+///  This bridges the undo system with the dispatch system without requiring
+///  callers to unfold undo_splice_params_full.
 pub proof fn lemma_undo_params_match_dispatch(event: KeyEvent, model: TextModel)
     requires
         is_text_edit_key(event.kind, model),
@@ -922,21 +922,21 @@ pub proof fn lemma_undo_params_match_dispatch(event: KeyEvent, model: TextModel)
     }),
 {
     reveal(undo_splice_params_full);
-    // With undo_splice_params_full revealed and dispatch_key open,
-    // Z3 can verify each text-edit case (Char/Enter/Tab/Backspace/Delete/ComposeCommit)
-    // by seeing that both functions use the same splice parameters.
+    //  With undo_splice_params_full revealed and dispatch_key open,
+    //  Z3 can verify each text-edit case (Char/Enter/Tab/Backspace/Delete/ComposeCommit)
+    //  by seeing that both functions use the same splice parameters.
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// Bridge lemmas: apply_key_to_session field extraction
-// ──────────────────────────────────────────────────────────────────────
+//  ──────────────────────────────────────────────────────────────────────
+//  Bridge lemmas: apply_key_to_session field extraction
+//  ──────────────────────────────────────────────────────────────────────
 //
-// Each lemma reveals apply_key_to_session in a focused context,
-// proving what the 3 output fields (model, last_was_insert, clipboard)
-// are for one specific dispatch arm. This allows exec functions to
-// call a single lemma instead of Z3 unfolding the entire ~140-line spec.
+//  Each lemma reveals apply_key_to_session in a focused context,
+//  proving what the 3 output fields (model, last_was_insert, clipboard)
+//  are for one specific dispatch arm. This allows exec functions to
+//  call a single lemma instead of Z3 unfolding the entire ~140-line spec.
 
-/// Bridge: NewModel + is_text_edit arm.
+///  Bridge: NewModel + is_text_edit arm.
 pub proof fn lemma_apply_key_text_edit(session: TextEditSession, event: KeyEvent)
     requires
         is_text_edit_key(event.kind, session.model),
@@ -957,7 +957,7 @@ pub proof fn lemma_apply_key_text_edit(session: TextEditSession, event: KeyEvent
     reveal(apply_key_to_session);
 }
 
-/// Bridge: NewModel + non-text-edit arm.
+///  Bridge: NewModel + non-text-edit arm.
 pub proof fn lemma_apply_key_non_text_edit(session: TextEditSession, event: KeyEvent)
     requires
         !is_text_edit_key(event.kind, session.model),
@@ -978,7 +978,7 @@ pub proof fn lemma_apply_key_non_text_edit(session: TextEditSession, event: KeyE
     reveal(apply_key_to_session);
 }
 
-/// Bridge: Undo arm (can_undo && no composition).
+///  Bridge: Undo arm (can_undo && no composition).
 pub proof fn lemma_apply_key_undo(session: TextEditSession)
     requires
         can_undo(session.undo_stack),
@@ -994,7 +994,7 @@ pub proof fn lemma_apply_key_undo(session: TextEditSession)
     reveal(apply_key_to_session);
 }
 
-/// Bridge: Redo arm (can_redo && no composition).
+///  Bridge: Redo arm (can_redo && no composition).
 pub proof fn lemma_apply_key_redo(session: TextEditSession)
     requires
         can_redo(session.undo_stack),
@@ -1010,7 +1010,7 @@ pub proof fn lemma_apply_key_redo(session: TextEditSession)
     reveal(apply_key_to_session);
 }
 
-/// Bridge: Copy arm (has selection).
+///  Bridge: Copy arm (has selection).
 pub proof fn lemma_apply_key_copy(session: TextEditSession, event: KeyEvent)
     requires
         has_selection(session.model.anchor, session.model.focus),
@@ -1026,7 +1026,7 @@ pub proof fn lemma_apply_key_copy(session: TextEditSession, event: KeyEvent)
     reveal(apply_key_to_session);
 }
 
-/// Bridge: Cut arm (has selection).
+///  Bridge: Cut arm (has selection).
 pub proof fn lemma_apply_key_cut(session: TextEditSession)
     requires
         has_selection(session.model.anchor, session.model.focus),
@@ -1040,7 +1040,7 @@ pub proof fn lemma_apply_key_cut(session: TextEditSession)
     reveal(apply_key_to_session);
 }
 
-/// Bridge: Paste arm (valid paste).
+///  Bridge: Paste arm (valid paste).
 pub proof fn lemma_apply_key_paste(session: TextEditSession)
     requires ({
         let clean = canonicalize_newlines(filter_permitted(session.clipboard));
@@ -1057,9 +1057,9 @@ pub proof fn lemma_apply_key_paste(session: TextEditSession)
     reveal(apply_key_to_session);
 }
 
-/// Bridge: all noop arms (identity return).
-/// Covers: Copy/Cut without selection, Undo/Redo without preconditions,
-/// Paste noop, Find*, and dispatch None.
+///  Bridge: all noop arms (identity return).
+///  Covers: Copy/Cut without selection, Undo/Redo without preconditions,
+///  Paste noop, Find*, and dispatch None.
 pub proof fn lemma_apply_key_noop(session: TextEditSession, event: KeyEvent)
     requires
         match dispatch_key(session.model, event) {
@@ -1091,10 +1091,10 @@ pub proof fn lemma_apply_key_noop(session: TextEditSession, event: KeyEvent)
     reveal(apply_key_to_session);
 }
 
-/// Bridge: modifiers are irrelevant for Cut/Undo/Redo/Paste events.
-/// The result of apply_key_to_session depends only on event.kind for these.
-/// Used by apply_key_to_session_exec to connect event@ to hardcoded ensures
-/// in session_handle_cut_exec, session_apply_undo_exec, etc.
+///  Bridge: modifiers are irrelevant for Cut/Undo/Redo/Paste events.
+///  The result of apply_key_to_session depends only on event.kind for these.
+///  Used by apply_key_to_session_exec to connect event@ to hardcoded ensures
+///  in session_handle_cut_exec, session_apply_undo_exec, etc.
 pub proof fn lemma_apply_key_kind_determines_result(
     session: TextEditSession, event: KeyEvent, kind: KeyEventKind,
 )
@@ -1115,11 +1115,11 @@ pub proof fn lemma_apply_key_kind_determines_result(
     reveal(apply_key_to_session);
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// Master wf preservation: dispatch_key
-// ──────────────────────────────────────────────────────────────────────
+//  ──────────────────────────────────────────────────────────────────────
+//  Master wf preservation: dispatch_key
+//  ──────────────────────────────────────────────────────────────────────
 
-/// Single-char insert via dispatch_key preserves model wf.
+///  Single-char insert via dispatch_key preserves model wf.
 pub proof fn lemma_dispatch_insert_preserves_wf(model: TextModel, ch: char)
     requires
         model.wf(),
@@ -1133,7 +1133,7 @@ pub proof fn lemma_dispatch_insert_preserves_wf(model: TextModel, ch: char)
     lemma_insert_char_preserves_wf(model, ch);
 }
 
-/// Delete selection via dispatch_key preserves model wf.
+///  Delete selection via dispatch_key preserves model wf.
 pub proof fn lemma_dispatch_delete_selection_preserves_wf(model: TextModel)
     requires
         model.wf(),
@@ -1147,7 +1147,7 @@ pub proof fn lemma_dispatch_delete_selection_preserves_wf(model: TextModel)
     lemma_delete_selection_preserves_wf(model);
 }
 
-/// Delete backward (single grapheme) via dispatch_key preserves model wf.
+///  Delete backward (single grapheme) via dispatch_key preserves model wf.
 pub proof fn lemma_dispatch_delete_backward_preserves_wf(model: TextModel)
     requires
         model.wf(),
@@ -1163,7 +1163,7 @@ pub proof fn lemma_dispatch_delete_backward_preserves_wf(model: TextModel)
     lemma_delete_backward_preserves_wf(model);
 }
 
-/// Delete forward (single grapheme) via dispatch_key preserves model wf.
+///  Delete forward (single grapheme) via dispatch_key preserves model wf.
 pub proof fn lemma_dispatch_delete_forward_preserves_wf(model: TextModel)
     requires
         model.wf(),
@@ -1179,7 +1179,7 @@ pub proof fn lemma_dispatch_delete_forward_preserves_wf(model: TextModel)
     lemma_delete_forward_preserves_wf(model);
 }
 
-/// Cursor movement preserves model wf.
+///  Cursor movement preserves model wf.
 pub proof fn lemma_dispatch_move_preserves_wf(model: TextModel, dir: MoveDirection)
     requires model.wf(),
     ensures move_cursor(model, dir).wf(),
@@ -1189,7 +1189,7 @@ pub proof fn lemma_dispatch_move_preserves_wf(model: TextModel, dir: MoveDirecti
     lemma_move_cursor_preserves_wf(model, dir);
 }
 
-/// Selection extension preserves model wf.
+///  Selection extension preserves model wf.
 pub proof fn lemma_dispatch_extend_selection_preserves_wf(model: TextModel, dir: MoveDirection)
     requires model.wf(),
     ensures extend_selection(model, dir).wf(),
@@ -1199,7 +1199,7 @@ pub proof fn lemma_dispatch_extend_selection_preserves_wf(model: TextModel, dir:
     lemma_extend_selection_preserves_wf(model, dir);
 }
 
-/// Compose commit preserves model wf.
+///  Compose commit preserves model wf.
 pub proof fn lemma_dispatch_compose_commit_preserves_wf(model: TextModel)
     requires
         model.wf(),
@@ -1212,8 +1212,8 @@ pub proof fn lemma_dispatch_compose_commit_preserves_wf(model: TextModel)
     lemma_compose_commit_preserves_wf(model);
 }
 
-/// compose_update preserves model wf.
-/// Only changes composition.provisional and cursor; all other fields unchanged.
+///  compose_update preserves model wf.
+///  Only changes composition.provisional and cursor; all other fields unchanged.
 pub proof fn lemma_compose_update_preserves_wf(
     model: TextModel, provisional: Seq<char>, cursor: nat,
 )
@@ -1224,15 +1224,15 @@ pub proof fn lemma_compose_update_preserves_wf(
     ensures
         compose_update(model, provisional, cursor).wf(),
 {
-    // compose_update returns TextModel { composition: Some(Composition { provisional, cursor, ..c }), ..model }
-    // All wf fields besides composition.provisional and composition.cursor are unchanged:
-    // - text, styles, anchor, focus, focus_affinity, paragraph_styles: unchanged (..model)
-    // - composition.range_start, range_end, original: unchanged (..c)
-    // - composition.cursor <= provisional.len(): from precondition
-    // Z3 can verify field-by-field that wf() holds.
+    //  compose_update returns TextModel { composition: Some(Composition { provisional, cursor, ..c }), ..model }
+    //  All wf fields besides composition.provisional and composition.cursor are unchanged:
+    //  - text, styles, anchor, focus, focus_affinity, paragraph_styles: unchanged (..model)
+    //  - composition.range_start, range_end, original: unchanged (..c)
+    //  - composition.cursor <= provisional.len(): from precondition
+    //  Z3 can verify field-by-field that wf() holds.
 }
 
-/// delete_word_backward preserves model wf.
+///  delete_word_backward preserves model wf.
 pub proof fn lemma_delete_word_backward_preserves_wf(model: TextModel)
     requires
         model.wf(),
@@ -1242,18 +1242,18 @@ pub proof fn lemma_delete_word_backward_preserves_wf(model: TextModel)
     ensures
         delete_word_backward(model).wf(),
 {
-    // delete_word_backward uses prev_boundary_in(word_start_boundaries, focus)
-    // then splice(model, prev, focus, empty, empty, prev)
+    //  delete_word_backward uses prev_boundary_in(word_start_boundaries, focus)
+    //  then splice(model, prev, focus, empty, empty, prev)
     axiom_prev_word_boundary_valid(model.text, model.focus);
     let prev = prev_boundary_in(word_start_boundaries(model.text), model.focus);
-    // prev <= focus, is_grapheme_boundary(text, prev)
-    // focus is a grapheme boundary (from model.wf())
+    //  prev <= focus, is_grapheme_boundary(text, prev)
+    //  focus is a grapheme boundary (from model.wf())
     axiom_splice_wf(model.text, prev, model.focus, Seq::empty());
     lemma_seq_splice_len(model.text, prev as int, model.focus as int, Seq::<char>::empty());
     lemma_splice_preserves_wf(model, prev, model.focus, Seq::empty(), Seq::empty(), prev);
 }
 
-/// delete_word_forward preserves model wf.
+///  delete_word_forward preserves model wf.
 pub proof fn lemma_delete_word_forward_preserves_wf(model: TextModel)
     requires
         model.wf(),
@@ -1263,14 +1263,14 @@ pub proof fn lemma_delete_word_forward_preserves_wf(model: TextModel)
     ensures
         delete_word_forward(model).wf(),
 {
-    // delete_word_forward uses next_boundary_in(word_end_boundaries, focus)
-    // then splice(model, focus, next, empty, empty, focus)
+    //  delete_word_forward uses next_boundary_in(word_end_boundaries, focus)
+    //  then splice(model, focus, next, empty, empty, focus)
     axiom_next_word_boundary_valid(model.text, model.focus);
     let next = next_boundary_in(word_end_boundaries(model.text), model.focus);
-    // next >= focus, next <= text.len(), is_grapheme_boundary(text, next)
+    //  next >= focus, next <= text.len(), is_grapheme_boundary(text, next)
     axiom_splice_wf(model.text, model.focus, next, Seq::empty());
     lemma_seq_splice_len(model.text, model.focus as int, next as int, Seq::<char>::empty());
     lemma_splice_preserves_wf(model, model.focus, next, Seq::empty(), Seq::empty(), model.focus);
 }
 
-} // verus!
+} //  verus!

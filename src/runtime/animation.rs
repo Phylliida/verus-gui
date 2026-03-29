@@ -8,7 +8,7 @@ use crate::node::Node;
 
 verus! {
 
-/// Runtime scalar lerp: (1-t)*a + t*b.
+///  Runtime scalar lerp: (1-t)*a + t*b.
 pub fn scalar_lerp_exec(
     a: &RuntimeRational,
     b: &RuntimeRational,
@@ -22,17 +22,17 @@ pub fn scalar_lerp_exec(
         out.wf_spec(),
         out@ == scalar_lerp::<RationalModel>(a@, b@, t@),
 {
-    // scalar_lerp(a, b, t) = convex(b, a, t) = t*b + (1-t)*a
+    //  scalar_lerp(a, b, t) = convex(b, a, t) = t*b + (1-t)*a
     let one = RuntimeRational::from_int(1);
-    let one_minus_t = one.sub(t);  // 1 - t
+    let one_minus_t = one.sub(t);  //  1 - t
     let t_copy = copy_rational(t);
-    let tb = t_copy.mul(b);        // t * b
-    let oma = one_minus_t.mul(a);   // (1-t) * a
-    let result = tb.add(&oma);      // t*b + (1-t)*a
+    let tb = t_copy.mul(b);        //  t * b
+    let oma = one_minus_t.mul(a);   //  (1-t) * a
+    let result = tb.add(&oma);      //  t*b + (1-t)*a
     result
 }
 
-/// Runtime size lerp: componentwise scalar_lerp on width and height.
+///  Runtime size lerp: componentwise scalar_lerp on width and height.
 pub fn lerp_size_exec(
     a: &RuntimeSize,
     b: &RuntimeSize,
@@ -52,8 +52,8 @@ pub fn lerp_size_exec(
     RuntimeSize::new(w, h)
 }
 
-/// Recursively deep-copy a RuntimeNode. At fuel=1, copies shallowly.
-/// At fuel>1, recurses into children.
+///  Recursively deep-copy a RuntimeNode. At fuel=1, copies shallowly.
+///  At fuel>1, recurses into children.
 pub fn copy_node_deep_exec(a: &RuntimeNode, fuel: u64) -> (out: RuntimeNode)
     requires a.wf_deep(fuel as nat), fuel > 0,
     ensures
@@ -101,9 +101,9 @@ pub fn copy_node_deep_exec(a: &RuntimeNode, fuel: u64) -> (out: RuntimeNode)
     RuntimeNode { x, y, size, children, model: Ghost(a@) }
 }
 
-/// Runtime node lerp: recursive tree interpolation.
-/// Requires wf_deep(fuel) to enable recursive descent into children.
-/// Ensures wf_deep((fuel-1)) for full tree well-formedness.
+///  Runtime node lerp: recursive tree interpolation.
+///  Requires wf_deep(fuel) to enable recursive descent into children.
+///  Ensures wf_deep((fuel-1)) for full tree well-formedness.
 pub fn lerp_node_exec(
     a: &RuntimeNode,
     b: &RuntimeNode,
@@ -121,10 +121,10 @@ pub fn lerp_node_exec(
     decreases fuel,
 {
     if a.children.len() != b.children.len() {
-        // Mismatch: lerp_node returns a. Deep copy preserves wf_deep.
+        //  Mismatch: lerp_node returns a. Deep copy preserves wf_deep.
         copy_node_deep_exec(a, fuel)
     } else {
-        // Matching children: interpolate fields, recurse on children
+        //  Matching children: interpolate fields, recurse on children
         let t1 = copy_rational(t);
         let t2 = copy_rational(t);
         let t3 = copy_rational(t);
@@ -154,7 +154,7 @@ pub fn lerp_node_exec(
                 },
             decreases a.children.len() - idx,
         {
-            // Help Z3: result_spec.children[idx] == lerp_node(a.child[idx], b.child[idx], t, fuel-1)
+            //  Help Z3: result_spec.children[idx] == lerp_node(a.child[idx], b.child[idx], t, fuel-1)
             assert(result_spec.children[idx as int] ==
                 lerp_node::<RationalModel>(
                     a@.children[idx as int], b@.children[idx as int],
@@ -163,7 +163,7 @@ pub fn lerp_node_exec(
 
             let tc = copy_rational(t);
             let child = if fuel > 1 {
-                // wf_deep(fuel) at fuel > 1 gives children wf_deep(fuel-1)
+                //  wf_deep(fuel) at fuel > 1 gives children wf_deep(fuel-1)
                 lerp_node_exec(
                     &a.children[idx],
                     &b.children[idx],
@@ -171,7 +171,7 @@ pub fn lerp_node_exec(
                     fuel - 1,
                 )
             } else {
-                // fuel == 1 → child fuel == 0 → lerp_node returns a.children[idx]
+                //  fuel == 1 → child fuel == 0 → lerp_node returns a.children[idx]
                 assert(a.children@[idx as int].wf_deep((fuel - 1) as nat));
                 assert(a.children@[idx as int].wf_shallow());
                 let cx = copy_rational(&a.children[idx].x);
@@ -199,4 +199,4 @@ pub fn lerp_node_exec(
     }
 }
 
-} // verus!
+} //  verus!

@@ -13,7 +13,7 @@ use crate::widget::*;
 
 verus! {
 
-/// Layout a sized box widget: intersect limits, layout child, wrap result.
+///  Layout a sized box widget: intersect limits, layout child, wrap result.
 pub fn layout_sized_box_widget_exec(
     limits: &RuntimeLimits,
     inner_limits: &RuntimeLimits,
@@ -89,4 +89,4 @@ pub fn layout_sized_box_widget_exec(
     out
 }
 
-} // verus!
+} //  verus!

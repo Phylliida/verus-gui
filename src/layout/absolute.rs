@@ -9,9 +9,9 @@ use crate::padding::Padding;
 
 verus! {
 
-// ── Helper spec functions ───────────────────────────────────────────
+//  ── Helper spec functions ───────────────────────────────────────────
 
-/// Maximum of (x + width) across the first `count` children.
+///  Maximum of (x + width) across the first `count` children.
 pub open spec fn absolute_max_right<T: OrderedRing>(
     child_data: Seq<(T, T, Size<T>)>,
     count: nat,
@@ -29,7 +29,7 @@ pub open spec fn absolute_max_right<T: OrderedRing>(
     }
 }
 
-/// Maximum of (y + height) across the first `count` children.
+///  Maximum of (y + height) across the first `count` children.
 pub open spec fn absolute_max_bottom<T: OrderedRing>(
     child_data: Seq<(T, T, Size<T>)>,
     count: nat,
@@ -47,7 +47,7 @@ pub open spec fn absolute_max_bottom<T: OrderedRing>(
     }
 }
 
-/// The content size of an absolute layout: bounding box of all positioned children.
+///  The content size of an absolute layout: bounding box of all positioned children.
 pub open spec fn absolute_content_size<T: OrderedRing>(
     child_data: Seq<(T, T, Size<T>)>,
 ) -> Size<T> {
@@ -57,10 +57,10 @@ pub open spec fn absolute_content_size<T: OrderedRing>(
     )
 }
 
-// ── Absolute layout ─────────────────────────────────────────────────
+//  ── Absolute layout ─────────────────────────────────────────────────
 
-/// Build the sequence of child Nodes for an absolute layout.
-/// Each child is placed at (padding.left + x, padding.top + y).
+///  Build the sequence of child Nodes for an absolute layout.
+///  Each child is placed at (padding.left + x, padding.top + y).
 pub open spec fn absolute_children<T: OrderedField>(
     padding: Padding<T>,
     child_data: Seq<(T, T, Size<T>)>,
@@ -81,13 +81,13 @@ pub open spec fn absolute_children<T: OrderedField>(
     }
 }
 
-/// Lay out children at absolute positions within padding.
+///  Lay out children at absolute positions within padding.
 ///
-/// Algorithm:
-/// 1. Subtract padding from available space
-/// 2. Content size is the bounding box of all (x + width, y + height)
-/// 3. Each child is placed at (padding.left + x, padding.top + y)
-/// 4. Return parent Node with positioned children
+///  Algorithm:
+///  1. Subtract padding from available space
+///  2. Content size is the bounding box of all (x + width, y + height)
+///  3. Each child is placed at (padding.left + x, padding.top + y)
+///  4. Return parent Node with positioned children
 #[verifier::opaque]
 pub open spec fn absolute_layout<T: OrderedField>(
     limits: Limits<T>,
@@ -102,4 +102,4 @@ pub open spec fn absolute_layout<T: OrderedField>(
     Node { x: T::zero(), y: T::zero(), size: parent_size, children }
 }
 
-} // verus!
+} //  verus!

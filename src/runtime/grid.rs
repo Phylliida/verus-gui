@@ -17,7 +17,7 @@ use crate::layout::grid_proofs::*;
 
 verus! {
 
-/// Compute grid content width at runtime: sum_widths + (ncols-1) * h_spacing.
+///  Compute grid content width at runtime: sum_widths + (ncols-1) * h_spacing.
 pub fn grid_content_width_exec(
     col_widths: &Vec<RuntimeSize>,
     h_spacing: &RuntimeRational,
@@ -72,7 +72,7 @@ pub fn grid_content_width_exec(
     }
 }
 
-/// Compute grid content height at runtime: sum_heights + (nrows-1) * v_spacing.
+///  Compute grid content height at runtime: sum_heights + (nrows-1) * v_spacing.
 pub fn grid_content_height_exec(
     row_heights: &Vec<RuntimeSize>,
     v_spacing: &RuntimeRational,
@@ -127,7 +127,7 @@ pub fn grid_content_height_exec(
     }
 }
 
-/// Execute grid layout: place children in a fixed-width/height grid.
+///  Execute grid layout: place children in a fixed-width/height grid.
 pub fn grid_layout_exec(
     limits: &RuntimeLimits,
     padding: &RuntimePadding,
@@ -177,7 +177,7 @@ pub fn grid_layout_exec(
     let num_cols = col_widths.len();
     let num_rows = row_heights.len();
 
-    // ── Content size + parent size ──
+    //  ── Content size + parent size ──
     let content_width = grid_content_width_exec(col_widths, h_spacing);
     let content_height = grid_content_height_exec(row_heights, v_spacing);
 
@@ -189,7 +189,7 @@ pub fn grid_layout_exec(
     let parent_height = limits.min.height.max(&total_height.min(&limits.max.height));
     let parent_size = RuntimeSize::new(parent_width, parent_height);
 
-    // ── Establish children length ──
+    //  ── Establish children length ──
     let ghost spec_children = grid_all_children(
         padding@, spec_cw, spec_rh, h_spacing@, v_spacing@,
         *h_align, *v_align, spec_cs, 0,
@@ -201,7 +201,7 @@ pub fn grid_layout_exec(
         );
     }
 
-    // ── Build children via nested loops ──
+    //  ── Build children via nested loops ──
     let mut children: Vec<RuntimeNode> = Vec::new();
     let mut sh = RuntimeRational::from_int(0);
     let mut ra_v = RuntimeRational::from_int(0);
@@ -308,7 +308,7 @@ pub fn grid_layout_exec(
             let child_node = RuntimeNode::leaf_exec(child_x, child_y, cs);
 
             proof {
-                // Call the element lemma
+                //  Call the element lemma
                 lemma_grid_all_children_element::<RationalModel>(
                     padding@, spec_cw, spec_rh, h_spacing@, v_spacing@,
                     *h_align, *v_align, spec_cs, r as nat, c as nat,
@@ -318,26 +318,26 @@ pub fn grid_layout_exec(
                 assert(children@.len() == flat_idx);
                 let flat_idx_int: int = flat_idx as int;
 
-                // Lemma postcondition → spec_children connection
+                //  Lemma postcondition → spec_children connection
                 let expected = grid_child::<RationalModel>(
                     padding@, spec_cw, spec_rh, h_spacing@, v_spacing@,
                     *h_align, *v_align, r as nat, c as nat,
                     spec_cs[(r as nat) as int][(c as nat) as int],
                 );
-                // From =~= invariant, spec_children[i] == grid_all_children(...)[i]
+                //  From =~= invariant, spec_children[i] == grid_all_children(...)[i]
                 assert(spec_children[flat_idx_int] == expected);
 
-                // Trigger the forall for this specific (r, c)
+                //  Trigger the forall for this specific (r, c)
                 let cs_rt = child_sizes@[r as int]@[c as int];
                 assert(cs_rt.wf_spec());
                 assert(cs@ == cs_rt@);
                 assert(cs@ == spec_cs[r as int][c as int]);
 
-                // wf_spec: field views match model fields
+                //  wf_spec: field views match model fields
                 assert(cs_w@ == cs_rt@.width);
                 assert(cs_h@ == cs_rt@.height);
 
-                // Cell dimensions and positions
+                //  Cell dimensions and positions
                 assert(cell_w@ == grid_col_width::<RationalModel>(spec_cw, c as nat));
                 assert(cell_h@ == grid_row_height::<RationalModel>(spec_rh, r as nat));
                 assert(cell_x@ == grid_cell_x::<RationalModel>(
@@ -345,7 +345,7 @@ pub fn grid_layout_exec(
                 assert(cell_y@ == grid_cell_y::<RationalModel>(
                     padding@.top, spec_rh, v_spacing@, r as nat));
 
-                // Connect child_node to expected
+                //  Connect child_node to expected
                 assert(child_node@ == expected);
             }
 
@@ -368,7 +368,7 @@ pub fn grid_layout_exec(
         r = r + 1;
     }
 
-    // ── Construct output ──
+    //  ── Construct output ──
     let x = RuntimeRational::from_int(0);
     let y = RuntimeRational::from_int(0);
 
@@ -397,4 +397,4 @@ pub fn grid_layout_exec(
     out
 }
 
-} // verus!
+} //  verus!

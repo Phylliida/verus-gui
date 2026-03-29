@@ -12,9 +12,9 @@ use crate::vulkan_bridge::{draw_command_valid, all_draws_valid};
 
 verus! {
 
-// ── Count preservation ────────────────────────────────────────────────
+//  ── Count preservation ────────────────────────────────────────────────
 
-/// Flattening a node produces exactly node_count draw commands.
+///  Flattening a node produces exactly node_count draw commands.
 pub proof fn lemma_flatten_preserves_count<T: OrderedRing>(
     node: Node<T>,
     offset_x: T,
@@ -28,7 +28,7 @@ pub proof fn lemma_flatten_preserves_count<T: OrderedRing>(
     decreases fuel, 0nat,
 {
     if fuel == 0 {
-        // Base case: single draw command, node_count = 1
+        //  Base case: single draw command, node_count = 1
     } else {
         let abs_x = offset_x.add(node.x);
         let abs_y = offset_y.add(node.y);
@@ -37,7 +37,7 @@ pub proof fn lemma_flatten_preserves_count<T: OrderedRing>(
     }
 }
 
-/// Flattening children produces children_node_count draw commands.
+///  Flattening children produces children_node_count draw commands.
 pub proof fn lemma_flatten_children_preserves_count<T: OrderedRing>(
     children: Seq<Node<T>>,
     parent_abs_x: T,
@@ -52,7 +52,7 @@ pub proof fn lemma_flatten_children_preserves_count<T: OrderedRing>(
     decreases fuel, children.len() - from,
 {
     if from >= children.len() {
-        // Empty: both are 0
+        //  Empty: both are 0
     } else {
         lemma_flatten_preserves_count(
             children[from as int], parent_abs_x, parent_abs_y, start_depth, fuel);
@@ -64,9 +64,9 @@ pub proof fn lemma_flatten_children_preserves_count<T: OrderedRing>(
     }
 }
 
-// ── Depth ordering ────────────────────────────────────────────────────
+//  ── Depth ordering ────────────────────────────────────────────────────
 
-/// The first draw command in a flattened node has the given depth.
+///  The first draw command in a flattened node has the given depth.
 pub proof fn lemma_flatten_first_depth<T: OrderedRing>(
     node: Node<T>,
     offset_x: T,
@@ -78,12 +78,12 @@ pub proof fn lemma_flatten_first_depth<T: OrderedRing>(
         flatten_node_to_draws(node, offset_x, offset_y, depth, fuel).len() > 0,
         flatten_node_to_draws(node, offset_x, offset_y, depth, fuel)[0].depth == depth,
 {
-    // Both fuel==0 and fuel>0 cases produce a first element with the given depth
+    //  Both fuel==0 and fuel>0 cases produce a first element with the given depth
 }
 
-// ── Z-order: draws are strictly depth-ordered ────────────────────────
+//  ── Z-order: draws are strictly depth-ordered ────────────────────────
 
-/// Draws from flatten_node have sequential depths: draws[i].depth == depth + i.
+///  Draws from flatten_node have sequential depths: draws[i].depth == depth + i.
 pub proof fn lemma_flatten_depth_sequential<T: OrderedRing>(
     node: Node<T>, offset_x: T, offset_y: T, depth: nat, fuel: nat,
 )
@@ -95,7 +95,7 @@ pub proof fn lemma_flatten_depth_sequential<T: OrderedRing>(
 {
     let draws = flatten_node_to_draws(node, offset_x, offset_y, depth, fuel);
     if fuel == 0 {
-        // Single draw at depth
+        //  Single draw at depth
     } else {
         let abs_x = offset_x.add(node.x);
         let abs_y = offset_y.add(node.y);
@@ -107,16 +107,16 @@ pub proof fn lemma_flatten_depth_sequential<T: OrderedRing>(
             implies (#[trigger] draws[i]).depth == depth + i
         by {
             if i == 0 {
-                // Self draw at depth
+                //  Self draw at depth
             } else {
-                // Child draw: draws[i] == child_draws[i-1], depth == (depth+1) + (i-1) == depth + i
+                //  Child draw: draws[i] == child_draws[i-1], depth == (depth+1) + (i-1) == depth + i
                 assert(draws[i] == child_draws[i - 1]);
             }
         };
     }
 }
 
-/// Children draws have sequential depths starting at start_depth.
+///  Children draws have sequential depths starting at start_depth.
 proof fn lemma_flatten_children_depth_sequential<T: OrderedRing>(
     children: Seq<Node<T>>, px: T, py: T, start_depth: nat, fuel: nat, from: nat,
 )
@@ -127,7 +127,7 @@ proof fn lemma_flatten_children_depth_sequential<T: OrderedRing>(
     decreases fuel, children.len() - from,
 {
     if from >= children.len() {
-        // Empty
+        //  Empty
     } else {
         let first = flatten_node_to_draws(children[from as int], px, py, start_depth, fuel);
         lemma_flatten_depth_sequential(children[from as int], px, py, start_depth, fuel);
@@ -142,14 +142,14 @@ proof fn lemma_flatten_children_depth_sequential<T: OrderedRing>(
                 assert(full[i] == first[i]);
             } else {
                 assert(full[i] == rest[i - first.len() as int]);
-                // rest[i - first.len()].depth == next_depth + (i - first.len())
-                //   == (start_depth + first.len()) + (i - first.len()) == start_depth + i
+                //  rest[i - first.len()].depth == next_depth + (i - first.len())
+                //    == (start_depth + first.len()) + (i - first.len()) == start_depth + i
             }
         };
     }
 }
 
-/// Corollary: draws from flatten are strictly monotone in depth.
+///  Corollary: draws from flatten are strictly monotone in depth.
 pub proof fn lemma_flatten_depth_monotone<T: OrderedRing>(
     node: Node<T>, offset_x: T, offset_y: T, depth: nat, fuel: nat,
 )
@@ -162,10 +162,10 @@ pub proof fn lemma_flatten_depth_monotone<T: OrderedRing>(
     lemma_flatten_depth_sequential(node, offset_x, offset_y, depth, fuel);
 }
 
-// ── Structural identity ──────────────────────────────────────────────
+//  ── Structural identity ──────────────────────────────────────────────
 
-/// If two nodes are structurally identical, their draw command
-/// sequences are identical.
+///  If two nodes are structurally identical, their draw command
+///  sequences are identical.
 pub proof fn lemma_same_node_same_draws<T: OrderedRing>(
     node1: Node<T>,
     node2: Node<T>,
@@ -180,12 +180,12 @@ pub proof fn lemma_same_node_same_draws<T: OrderedRing>(
         flatten_node_to_draws(node1, offset_x, offset_y, depth, fuel)
             === flatten_node_to_draws(node2, offset_x, offset_y, depth, fuel),
 {
-    // Trivially true: node1 === node2 implies identical function application
+    //  Trivially true: node1 === node2 implies identical function application
 }
 
-// ── Draw command eqv ────────────────────────────────────────────────
+//  ── Draw command eqv ────────────────────────────────────────────────
 
-/// Two draw commands are eqv: coordinates and dimensions are eqv, depth equal.
+///  Two draw commands are eqv: coordinates and dimensions are eqv, depth equal.
 pub open spec fn draw_cmd_eqv<T: OrderedRing>(
     a: DrawCommand<T>, b: DrawCommand<T>,
 ) -> bool {
@@ -194,7 +194,7 @@ pub open spec fn draw_cmd_eqv<T: OrderedRing>(
     && a.depth == b.depth
 }
 
-/// Two draw command sequences are element-wise eqv.
+///  Two draw command sequences are element-wise eqv.
 pub open spec fn draws_eqv<T: OrderedRing>(
     a: Seq<DrawCommand<T>>, b: Seq<DrawCommand<T>>,
 ) -> bool {
@@ -202,9 +202,9 @@ pub open spec fn draws_eqv<T: OrderedRing>(
     && forall|i: int| 0 <= i < a.len() ==> draw_cmd_eqv(a[i], b[i])
 }
 
-// ── Draw congruence ─────────────────────────────────────────────────
+//  ── Draw congruence ─────────────────────────────────────────────────
 
-/// add_congruence helper: a1+b1 eqv a2+b2 when a1 eqv a2 and b1 eqv b2.
+///  add_congruence helper: a1+b1 eqv a2+b2 when a1 eqv a2 and b1 eqv b2.
 proof fn lemma_add_congruence<T: OrderedField>(a1: T, a2: T, b1: T, b2: T)
     requires a1.eqv(a2), b1.eqv(b2),
     ensures a1.add(b1).eqv(a2.add(b2)),
@@ -214,7 +214,7 @@ proof fn lemma_add_congruence<T: OrderedField>(a1: T, a2: T, b1: T, b2: T)
     T::axiom_eqv_transitive(a1.add(b1), a2.add(b1), a2.add(b2));
 }
 
-/// Flattening deeply eqv nodes with eqv offsets produces eqv draw commands.
+///  Flattening deeply eqv nodes with eqv offsets produces eqv draw commands.
 pub proof fn lemma_flatten_congruence<T: OrderedField>(
     n1: Node<T>, n2: Node<T>,
     ox1: T, ox2: T, oy1: T, oy2: T,
@@ -230,7 +230,7 @@ pub proof fn lemma_flatten_congruence<T: OrderedField>(
         ),
     decreases fuel, 0nat,
 {
-    // Self draw command eqv: abs_x = offset_x + node.x, etc.
+    //  Self draw command eqv: abs_x = offset_x + node.x, etc.
     lemma_add_congruence(ox1, ox2, n1.x, n2.x);
     lemma_add_congruence(oy1, oy2, n1.y, n2.y);
     let ax1 = ox1.add(n1.x);
@@ -239,13 +239,13 @@ pub proof fn lemma_flatten_congruence<T: OrderedField>(
     let ay2 = oy2.add(n2.y);
 
     if fuel == 0 {
-        // Single draw command
+        //  Single draw command
         let d1 = flatten_node_to_draws(n1, ox1, oy1, depth, 0);
         let d2 = flatten_node_to_draws(n2, ox2, oy2, depth, 0);
         assert(d1.len() == 1 && d2.len() == 1);
         assert(draw_cmd_eqv(d1[0], d2[0]));
     } else {
-        // Self command + children
+        //  Self command + children
         lemma_flatten_children_congruence(
             n1.children, n2.children,
             ax1, ax2, ay1, ay2,
@@ -254,12 +254,12 @@ pub proof fn lemma_flatten_congruence<T: OrderedField>(
             n1.children, ax1, ay1, depth + 1, (fuel - 1) as nat, 0);
         let child_draws2 = flatten_children_to_draws(
             n2.children, ax2, ay2, depth + 1, (fuel - 1) as nat, 0);
-        // Full sequence: [self_draw] ++ child_draws
+        //  Full sequence: [self_draw] ++ child_draws
         let d1 = flatten_node_to_draws(n1, ox1, oy1, depth, fuel);
         let d2 = flatten_node_to_draws(n2, ox2, oy2, depth, fuel);
-        // d1[0] and d2[0] are the self draw commands (eqv)
+        //  d1[0] and d2[0] are the self draw commands (eqv)
         assert(draw_cmd_eqv(d1[0], d2[0]));
-        // d1[1..] and d2[1..] are child draws (eqv by helper)
+        //  d1[1..] and d2[1..] are child draws (eqv by helper)
         assert forall|i: int| 0 <= i < d1.len() implies draw_cmd_eqv(d1[i], d2[i])
         by {
             if i == 0 {
@@ -271,7 +271,7 @@ pub proof fn lemma_flatten_congruence<T: OrderedField>(
     }
 }
 
-/// Children flattening congruence.
+///  Children flattening congruence.
 proof fn lemma_flatten_children_congruence<T: OrderedField>(
     ch1: Seq<Node<T>>, ch2: Seq<Node<T>>,
     px1: T, px2: T, py1: T, py2: T,
@@ -290,26 +290,26 @@ proof fn lemma_flatten_children_congruence<T: OrderedField>(
     decreases fuel, ch1.len() - from,
 {
     if from >= ch1.len() {
-        // Both empty
+        //  Both empty
     } else {
-        // Flatten this child
+        //  Flatten this child
         lemma_flatten_congruence(ch1[from as int], ch2[from as int],
             px1, px2, py1, py2, start_depth, fuel);
         let first1 = flatten_node_to_draws(ch1[from as int], px1, py1, start_depth, fuel);
         let first2 = flatten_node_to_draws(ch2[from as int], px2, py2, start_depth, fuel);
-        // Count preservation to establish length equality
+        //  Count preservation to establish length equality
         lemma_flatten_preserves_count(ch1[from as int], px1, py1, start_depth, fuel);
         lemma_flatten_preserves_count(ch2[from as int], px2, py2, start_depth, fuel);
-        // first1.len() == first2.len() because node_count depends only on children count
-        // which is the same for deeply eqv nodes
+        //  first1.len() == first2.len() because node_count depends only on children count
+        //  which is the same for deeply eqv nodes
         lemma_node_count_congruence::<T>(ch1[from as int], ch2[from as int], fuel);
         let next_depth = start_depth + first1.len();
-        // Recurse for remaining children
+        //  Recurse for remaining children
         lemma_flatten_children_congruence(ch1, ch2, px1, px2, py1, py2,
             next_depth, fuel, from + 1);
         let rest1 = flatten_children_to_draws(ch1, px1, py1, next_depth, fuel, from + 1);
         let rest2 = flatten_children_to_draws(ch2, px2, py2, next_depth, fuel, from + 1);
-        // Concatenation preserves eqv
+        //  Concatenation preserves eqv
         let full1 = flatten_children_to_draws(ch1, px1, py1, start_depth, fuel, from);
         let full2 = flatten_children_to_draws(ch2, px2, py2, start_depth, fuel, from);
         assert forall|i: int| 0 <= i < full1.len() implies draw_cmd_eqv(full1[i], full2[i])
@@ -325,7 +325,7 @@ proof fn lemma_flatten_children_congruence<T: OrderedField>(
     }
 }
 
-/// node_count is the same for deeply eqv nodes.
+///  node_count is the same for deeply eqv nodes.
 proof fn lemma_node_count_congruence<T: OrderedRing>(
     n1: Node<T>, n2: Node<T>, fuel: nat,
 )
@@ -340,7 +340,7 @@ proof fn lemma_node_count_congruence<T: OrderedRing>(
     }
 }
 
-/// children_node_count is the same for eqv children.
+///  children_node_count is the same for eqv children.
 proof fn lemma_children_node_count_congruence<T: OrderedRing>(
     ch1: Seq<Node<T>>, ch2: Seq<Node<T>>,
     fuel: nat, from: nat,
@@ -361,9 +361,9 @@ proof fn lemma_children_node_count_congruence<T: OrderedRing>(
     }
 }
 
-// ── Draw command validity ────────────────────────────────────────────
+//  ── Draw command validity ────────────────────────────────────────────
 
-/// All nodes in a tree have non-negative sizes.
+///  All nodes in a tree have non-negative sizes.
 pub open spec fn all_sizes_nonneg<T: OrderedRing>(node: Node<T>, fuel: nat) -> bool
     decreases fuel,
 {
@@ -372,7 +372,7 @@ pub open spec fn all_sizes_nonneg<T: OrderedRing>(node: Node<T>, fuel: nat) -> b
         all_sizes_nonneg(node.children[i], (fuel - 1) as nat))
 }
 
-/// If a node has nonneg size, its self-draw is valid.
+///  If a node has nonneg size, its self-draw is valid.
 proof fn lemma_nonneg_implies_self_draw_valid<T: OrderedRing>(
     node: Node<T>, offset_x: T, offset_y: T, depth: nat,
 )
@@ -385,7 +385,7 @@ proof fn lemma_nonneg_implies_self_draw_valid<T: OrderedRing>(
 {
 }
 
-/// If all nodes in a tree have nonneg sizes, flatten produces valid draws.
+///  If all nodes in a tree have nonneg sizes, flatten produces valid draws.
 pub proof fn lemma_flatten_all_valid<T: OrderedRing>(
     node: Node<T>, offset_x: T, offset_y: T, depth: nat, fuel: nat,
 )
@@ -395,7 +395,7 @@ pub proof fn lemma_flatten_all_valid<T: OrderedRing>(
 {
     let draws = flatten_node_to_draws(node, offset_x, offset_y, depth, fuel);
     if fuel == 0 {
-        // Single draw: node.size.is_nonneg() → draw_command_valid
+        //  Single draw: node.size.is_nonneg() → draw_command_valid
         assert forall|i: int| 0 <= i < draws.len()
             implies draw_command_valid(#[trigger] draws[i])
         by {
@@ -404,8 +404,8 @@ pub proof fn lemma_flatten_all_valid<T: OrderedRing>(
     } else {
         let abs_x = offset_x.add(node.x);
         let abs_y = offset_y.add(node.y);
-        // Self draw is valid
-        // Children draws are valid by IH
+        //  Self draw is valid
+        //  Children draws are valid by IH
         lemma_flatten_children_all_valid(
             node.children, abs_x, abs_y, depth + 1, (fuel - 1) as nat, 0);
         let child_draws = flatten_children_to_draws(
@@ -414,16 +414,16 @@ pub proof fn lemma_flatten_all_valid<T: OrderedRing>(
             implies draw_command_valid(#[trigger] draws[i])
         by {
             if i == 0 {
-                // Self draw
+                //  Self draw
             } else {
-                // Child draw: draws[i] == child_draws[i-1]
+                //  Child draw: draws[i] == child_draws[i-1]
                 assert(draws[i] == child_draws[i - 1]);
             }
         };
     }
 }
 
-/// Children flatten all valid.
+///  Children flatten all valid.
 proof fn lemma_flatten_children_all_valid<T: OrderedRing>(
     children: Seq<Node<T>>,
     parent_abs_x: T, parent_abs_y: T,
@@ -463,16 +463,16 @@ proof fn lemma_flatten_children_all_valid<T: OrderedRing>(
     }
 }
 
-/// Resolve with wf limits produces nonneg sizes.
+///  Resolve with wf limits produces nonneg sizes.
 pub proof fn lemma_resolve_nonneg<T: OrderedRing>(
     limits: Limits<T>, size: Size<T>,
 )
     requires limits.wf(),
     ensures limits.resolve(size).is_nonneg(),
 {
-    // resolve.width = clamp(size.width, min.width, max.width) = max(min.width, min(size.width, max.width))
-    // limits.wf() → min.width ≥ 0
-    // max(min.width, _) ≥ min.width ≥ 0
+    //  resolve.width = clamp(size.width, min.width, max.width) = max(min.width, min(size.width, max.width))
+    //  limits.wf() → min.width ≥ 0
+    //  max(min.width, _) ≥ min.width ≥ 0
     verus_algebra::min_max::lemma_max_ge_left::<T>(
         limits.min.width, min::<T>(size.width, limits.max.width));
     T::axiom_le_transitive(
@@ -485,8 +485,8 @@ pub proof fn lemma_resolve_nonneg<T: OrderedRing>(
         max::<T>(limits.min.height, min::<T>(size.height, limits.max.height)));
 }
 
-/// Resolve nonneg from min nonneg (weaker precondition than limits.wf()).
-/// Since resolve = max(min, min(val, max)), and min >= 0 implies max(min, _) >= 0.
+///  Resolve nonneg from min nonneg (weaker precondition than limits.wf()).
+///  Since resolve = max(min, min(val, max)), and min >= 0 implies max(min, _) >= 0.
 proof fn lemma_resolve_nonneg_from_min<T: OrderedRing>(
     limits: Limits<T>, size: Size<T>,
 )
@@ -505,8 +505,8 @@ proof fn lemma_resolve_nonneg_from_min<T: OrderedRing>(
         max::<T>(limits.min.height, min::<T>(size.height, limits.max.height)));
 }
 
-/// all_sizes_nonneg is insensitive to x/y: nodes with the same size and children
-/// have the same all_sizes_nonneg value.
+///  all_sizes_nonneg is insensitive to x/y: nodes with the same size and children
+///  have the same all_sizes_nonneg value.
 proof fn lemma_all_sizes_nonneg_xy_irrelevant<T: OrderedRing>(
     n1: Node<T>, n2: Node<T>, fuel: nat,
 )
@@ -518,17 +518,17 @@ proof fn lemma_all_sizes_nonneg_xy_irrelevant<T: OrderedRing>(
 {
 }
 
-/// THE KEY THEOREM: every node in a layout tree has non-negative sizes.
+///  THE KEY THEOREM: every node in a layout tree has non-negative sizes.
 ///
-/// Proves all_sizes_nonneg(layout_widget(limits, widget, fuel), check_fuel) for ANY
-/// check_fuel, given only limits.min.is_nonneg(). This weak precondition is preserved
-/// by all inner limit constructions (shrink, intersect, zero min, same min).
+///  Proves all_sizes_nonneg(layout_widget(limits, widget, fuel), check_fuel) for ANY
+///  check_fuel, given only limits.min.is_nonneg(). This weak precondition is preserved
+///  by all inner limit constructions (shrink, intersect, zero min, same min).
 ///
-/// Induction on (fuel, check_fuel) with 3-tuple decreases for mutual recursion:
-/// - Main function: decreases (fuel, check_fuel, 3)
-/// - Wrapper helper: decreases (fuel, check_fuel, 2)
-/// - Container helper: decreases (fuel, check_fuel, 2)
-/// - Flex child helper: decreases (fuel, check_fuel, 1)
+///  Induction on (fuel, check_fuel) with 3-tuple decreases for mutual recursion:
+///  - Main function: decreases (fuel, check_fuel, 3)
+///  - Wrapper helper: decreases (fuel, check_fuel, 2)
+///  - Container helper: decreases (fuel, check_fuel, 2)
+///  - Flex child helper: decreases (fuel, check_fuel, 1)
 pub proof fn lemma_layout_widget_all_sizes_nonneg<T: OrderedField>(
     limits: Limits<T>,
     widget: Widget<T>,
@@ -542,12 +542,12 @@ pub proof fn lemma_layout_widget_all_sizes_nonneg<T: OrderedField>(
     if fuel == 0 {
         T::axiom_le_reflexive(T::zero());
     } else if check_fuel == 0 {
-        // all_sizes_nonneg(node, 0) = node.size.is_nonneg()
-        // Root nonneg for leaf/wrapper: direct resolve call
-        // Root nonneg for container: per-variant helper with reveal()
+        //  all_sizes_nonneg(node, 0) = node.size.is_nonneg()
+        //  Root nonneg for leaf/wrapper: direct resolve call
+        //  Root nonneg for container: per-variant helper with reveal()
         lemma_root_size_nonneg(limits, widget, fuel);
     } else {
-        // Root nonneg + children nonneg at check_fuel-1
+        //  Root nonneg + children nonneg at check_fuel-1
         lemma_root_size_nonneg(limits, widget, fuel);
         match widget {
             Widget::Leaf(_) => { /* no children */ },
@@ -561,12 +561,12 @@ pub proof fn lemma_layout_widget_all_sizes_nonneg<T: OrderedField>(
     }
 }
 
-// ── Root size nonneg helpers ──────────────────────────────────────────
-// Each variant's root is limits.resolve(X). resolve(X) >= min >= 0.
-// Container layout functions are #[verifier::opaque] so need reveal().
-// Split into per-variant helpers for rlimit.
+//  ── Root size nonneg helpers ──────────────────────────────────────────
+//  Each variant's root is limits.resolve(X). resolve(X) >= min >= 0.
+//  Container layout functions are #[verifier::opaque] so need reveal().
+//  Split into per-variant helpers for rlimit.
 
-/// Root size nonneg: leaf and wrapper variants (direct resolve).
+///  Root size nonneg: leaf and wrapper variants (direct resolve).
 proof fn lemma_root_size_nonneg<T: OrderedField>(
     limits: Limits<T>, widget: Widget<T>, fuel: nat,
 )
@@ -601,7 +601,7 @@ proof fn lemma_root_size_nonneg<T: OrderedField>(
         Widget::Wrapper(WrapperWidget::ScrollView { viewport, .. }) =>
             { lemma_resolve_nonneg_from_min(limits, viewport); },
         Widget::Container(container) => {
-            // Per-variant with reveals. Each gets own function for rlimit.
+            //  Per-variant with reveals. Each gets own function for rlimit.
             lemma_container_root_nonneg_column(limits, container, fuel);
             lemma_container_root_nonneg_row(limits, container, fuel);
             lemma_container_root_nonneg_stack(limits, container, fuel);
@@ -719,14 +719,14 @@ proof fn lemma_container_root_nonneg_abs<T: OrderedField>(
         let inner = limits.shrink(padding.horizontal(), padding.vertical());
         let cn = absolute_widget_child_nodes(inner, children, (fuel - 1) as nat);
         let offsets = Seq::new(children.len(), |i: int| (children[i].x, children[i].y));
-        // layout_absolute_body constructs child_data internally from cn + offsets
+        //  layout_absolute_body constructs child_data internally from cn + offsets
         let child_data = Seq::new(cn.len(), |i: int| (offsets[i].0, offsets[i].1, cn[i].size));
         let c = crate::layout::absolute::absolute_content_size(child_data);
         let x = Size::new(padding.horizontal().add(c.width), padding.vertical().add(c.height));
-        // absolute_layout(limits, padding, child_data).size == limits.resolve(x)
-        // (from absolute_layout definition, now revealed)
+        //  absolute_layout(limits, padding, child_data).size == limits.resolve(x)
+        //  (from absolute_layout definition, now revealed)
         lemma_resolve_nonneg_from_min(limits, x);
-        // Help Z3 see the chain: layout_container → layout_absolute_body → merge_layout
+        //  Help Z3 see the chain: layout_container → layout_absolute_body → merge_layout
         let layout_node = crate::layout::absolute::absolute_layout(limits, padding, child_data);
         assert(layout_absolute_body(limits, padding, cn, offsets).size == layout_node.size);
     }
@@ -744,9 +744,9 @@ proof fn lemma_container_root_nonneg_listview<T: OrderedField>(
     }
 }
 
-// ── Children nonneg helpers ──────────────────────────────────────────
+//  ── Children nonneg helpers ──────────────────────────────────────────
 
-/// Wrapper children all_sizes_nonneg.
+///  Wrapper children all_sizes_nonneg.
 proof fn lemma_wrapper_children_nonneg<T: OrderedField>(
     limits: Limits<T>, wrapper: WrapperWidget<T>, fuel: nat, check_fuel: nat,
 )
@@ -799,7 +799,7 @@ proof fn lemma_wrapper_children_nonneg<T: OrderedField>(
     }
 }
 
-/// Container children all_sizes_nonneg — dispatches to split helpers.
+///  Container children all_sizes_nonneg — dispatches to split helpers.
 proof fn lemma_container_children_nonneg<T: OrderedField>(
     limits: Limits<T>, container: ContainerWidget<T>, fuel: nat, check_fuel: nat,
 )
@@ -827,7 +827,7 @@ proof fn lemma_container_children_nonneg<T: OrderedField>(
     }
 }
 
-/// Container children nonneg — shrink-pattern (Column/Row/Stack/Wrap/Absolute).
+///  Container children nonneg — shrink-pattern (Column/Row/Stack/Wrap/Absolute).
 proof fn lemma_container_children_nonneg_shrink<T: OrderedField>(
     limits: Limits<T>, container: ContainerWidget<T>, fuel: nat, check_fuel: nat,
 )
@@ -881,7 +881,7 @@ proof fn lemma_container_children_nonneg_shrink<T: OrderedField>(
     }
 }
 
-/// Container children nonneg — complex variants (Flex/Grid/ListView).
+///  Container children nonneg — complex variants (Flex/Grid/ListView).
 proof fn lemma_container_children_nonneg_complex<T: OrderedField>(
     limits: Limits<T>, container: ContainerWidget<T>, fuel: nat, check_fuel: nat,
 )
@@ -912,8 +912,8 @@ proof fn lemma_container_children_nonneg_complex<T: OrderedField>(
             by {
                 lemma_flex_child_nonneg(inner, children, weights, total_weight, available_main, axis, fuel, check_fuel, i);
             };
-            // Help Z3 see node.children[i] has same size/children as cn[i]
-            // through layout_flex_linear_body → merge_layout(flex_layout, cn)
+            //  Help Z3 see node.children[i] has same size/children as cn[i]
+            //  through layout_flex_linear_body → merge_layout(flex_layout, cn)
             let node = layout_widget(limits, Widget::Container(container), fuel);
             assert(node.children.len() == cn.len());
         },
@@ -943,15 +943,15 @@ proof fn lemma_container_children_nonneg_complex<T: OrderedField>(
             by {
                 lemma_layout_widget_all_sizes_nonneg(child_limits, children[(first + i) as int], (fuel - 1) as nat, (check_fuel - 1) as nat);
             };
-            // ListView constructs children directly (not merge_layout)
-            // but with same size/children as cn[i]
+            //  ListView constructs children directly (not merge_layout)
+            //  but with same size/children as cn[i]
             reveal(crate::layout::listview::layout_listview_body);
         },
-        _ => {},  // Column/Row/Stack/Wrap/Absolute handled by caller
+        _ => {},  //  Column/Row/Stack/Wrap/Absolute handled by caller
     }
 }
 
-/// Flex child nonneg — per-index helper for rlimit.
+///  Flex child nonneg — per-index helper for rlimit.
 proof fn lemma_flex_child_nonneg<T: OrderedField>(
     inner: Limits<T>, children: Seq<FlexItem<T>>, weights: Seq<T>,
     total_weight: T, available_main: T, axis: crate::layout::Axis,
@@ -982,10 +982,10 @@ proof fn lemma_flex_child_nonneg<T: OrderedField>(
     }
 }
 
-// ── Memory/allocation bounds ─────────────────────────────────────────
+//  ── Memory/allocation bounds ─────────────────────────────────────────
 
-/// The number of draw commands equals node_count of the layout result.
-/// Combined with lemma_flatten_preserves_count, this gives an exact allocation bound.
+///  The number of draw commands equals node_count of the layout result.
+///  Combined with lemma_flatten_preserves_count, this gives an exact allocation bound.
 pub proof fn lemma_draw_count_bound<T: OrderedField>(
     limits: Limits<T>, widget: Widget<T>, fuel: nat,
     offset_x: T, offset_y: T, depth: nat,
@@ -993,9 +993,9 @@ pub proof fn lemma_draw_count_bound<T: OrderedField>(
     ensures ({
         let node = layout_widget(limits, widget, fuel);
         let draws = flatten_node_to_draws(node, offset_x, offset_y, depth, fuel);
-        // Exact count
+        //  Exact count
         &&& draws.len() == node_count::<T>(node, fuel)
-        // At least one draw
+        //  At least one draw
         &&& draws.len() >= 1
     }),
 {
@@ -1004,14 +1004,14 @@ pub proof fn lemma_draw_count_bound<T: OrderedField>(
     lemma_flatten_first_depth(node, offset_x, offset_y, depth, fuel);
 }
 
-/// node_count is always >= 1 (every node produces at least its self-draw).
+///  node_count is always >= 1 (every node produces at least its self-draw).
 pub proof fn lemma_node_count_ge_one<T: OrderedRing>(node: Node<T>, fuel: nat)
     ensures node_count::<T>(node, fuel) >= 1,
 {
 }
 
-/// Root draw validity: the root-level draw command from layout is always valid.
-/// This proves the root node's dimensions are non-negative.
+///  Root draw validity: the root-level draw command from layout is always valid.
+///  This proves the root node's dimensions are non-negative.
 pub proof fn lemma_layout_root_draw_valid<T: OrderedField>(
     limits: Limits<T>,
     widget: Widget<T>,
@@ -1033,8 +1033,8 @@ pub proof fn lemma_layout_root_draw_valid<T: OrderedField>(
     lemma_flatten_first_depth(node, T::zero(), T::zero(), 0, draw_fuel);
 }
 
-/// Full draw validity: if all nodes in a layout tree have nonneg sizes,
-/// then all draw commands from flattening are valid.
+///  Full draw validity: if all nodes in a layout tree have nonneg sizes,
+///  then all draw commands from flattening are valid.
 pub proof fn lemma_layout_all_draws_valid_from_nonneg<T: OrderedField>(
     limits: Limits<T>,
     widget: Widget<T>,
@@ -1055,4 +1055,4 @@ pub proof fn lemma_layout_all_draws_valid_from_nonneg<T: OrderedField>(
         T::zero(), T::zero(), 0, draw_fuel);
 }
 
-} // verus!
+} //  verus!

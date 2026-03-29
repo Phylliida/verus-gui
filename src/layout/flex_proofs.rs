@@ -7,9 +7,9 @@ use crate::layout::Axis;
 
 verus! {
 
-// ── sum_weights lemmas ──────────────────────────────────────────────
+//  ── sum_weights lemmas ──────────────────────────────────────────────
 
-/// sum_weights(weights, 0) ≡ zero.
+///  sum_weights(weights, 0) ≡ zero.
 pub proof fn lemma_sum_weights_zero<T: OrderedRing>(weights: Seq<T>)
     ensures
         sum_weights(weights, 0).eqv(T::zero()),
@@ -17,7 +17,7 @@ pub proof fn lemma_sum_weights_zero<T: OrderedRing>(weights: Seq<T>)
     T::axiom_eqv_reflexive(T::zero());
 }
 
-/// sum_weights is non-negative when all weights are non-negative.
+///  sum_weights is non-negative when all weights are non-negative.
 pub proof fn lemma_sum_weights_nonneg<T: OrderedRing>(
     weights: Seq<T>,
     n: nat,
@@ -50,9 +50,9 @@ pub proof fn lemma_sum_weights_nonneg<T: OrderedRing>(
     }
 }
 
-// ── flex_main_sum lemmas ────────────────────────────────────────────
+//  ── flex_main_sum lemmas ────────────────────────────────────────────
 
-/// flex_main_sum(weights, tw, avail, 0) ≡ zero.
+///  flex_main_sum(weights, tw, avail, 0) ≡ zero.
 pub proof fn lemma_flex_main_sum_zero<T: OrderedField>(
     weights: Seq<T>,
     total_weight: T,
@@ -64,7 +64,7 @@ pub proof fn lemma_flex_main_sum_zero<T: OrderedField>(
     T::axiom_eqv_reflexive(T::zero());
 }
 
-/// flex_main_sum is non-negative when weights, total_weight, and available are non-negative.
+///  flex_main_sum is non-negative when weights, total_weight, and available are non-negative.
 pub proof fn lemma_flex_main_sum_nonneg<T: OrderedField>(
     weights: Seq<T>,
     total_weight: T,
@@ -85,14 +85,14 @@ pub proof fn lemma_flex_main_sum_nonneg<T: OrderedField>(
     } else {
         lemma_flex_main_sum_nonneg(weights, total_weight, available, (n - 1) as nat);
 
-        // Show 0 <= flex_child_main_size(w, tw, avail) = (w/tw) * avail
+        //  Show 0 <= flex_child_main_size(w, tw, avail) = (w/tw) * avail
         let w = weights[(n - 1) as int];
 
-        // 0 <= w and 0 < tw => 0/tw <= w/tw
+        //  0 <= w and 0 < tw => 0/tw <= w/tw
         verus_algebra::lemmas::ordered_field_lemmas::lemma_le_div_monotone::<T>(
             T::zero(), w, total_weight,
         );
-        // 0/tw ≡ 0
+        //  0/tw ≡ 0
         T::axiom_div_is_mul_recip(T::zero(), total_weight);
         verus_algebra::lemmas::ring_lemmas::lemma_mul_zero_left::<T>(total_weight.recip());
         T::axiom_eqv_transitive(
@@ -103,9 +103,9 @@ pub proof fn lemma_flex_main_sum_nonneg<T: OrderedField>(
         verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
             T::zero().div(total_weight), T::zero(), w.div(total_weight),
         );
-        // 0 <= w/tw
+        //  0 <= w/tw
 
-        // 0 <= w/tw and 0 <= avail => 0 <= (w/tw) * avail
+        //  0 <= w/tw and 0 <= avail => 0 <= (w/tw) * avail
         T::axiom_le_mul_nonneg_monotone(T::zero(), w.div(total_weight), available);
         verus_algebra::lemmas::ring_lemmas::lemma_mul_zero_left::<T>(available);
         T::axiom_eqv_symmetric(T::zero().mul(available), T::zero());
@@ -115,7 +115,7 @@ pub proof fn lemma_flex_main_sum_nonneg<T: OrderedField>(
             w.div(total_weight).mul(available), w.div(total_weight).mul(available),
         );
 
-        // prev_sum >= 0 and child_size >= 0 => sum >= 0
+        //  prev_sum >= 0 and child_size >= 0 => sum >= 0
         verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_add_both::<T>(
             T::zero(), flex_main_sum(weights, total_weight, available, (n - 1) as nat),
             T::zero(), flex_child_main_size(w, total_weight, available),
@@ -132,11 +132,11 @@ pub proof fn lemma_flex_main_sum_nonneg<T: OrderedField>(
     }
 }
 
-// ── flex_main_sum distributes as sum_weights / total_weight * available ──
+//  ── flex_main_sum distributes as sum_weights / total_weight * available ──
 
-/// flex_main_sum(weights, tw, avail, n) ≡ sum_weights(weights, n) / tw * avail.
+///  flex_main_sum(weights, tw, avail, n) ≡ sum_weights(weights, n) / tw * avail.
 ///
-/// The key identity: flex_main_sum is the partial sum of the proportional allocation.
+///  The key identity: flex_main_sum is the partial sum of the proportional allocation.
 pub proof fn lemma_flex_main_sum_identity<T: OrderedField>(
     weights: Seq<T>,
     total_weight: T,
@@ -153,8 +153,8 @@ pub proof fn lemma_flex_main_sum_identity<T: OrderedField>(
     decreases n,
 {
     if n == 0 {
-        // LHS = 0, RHS = 0/tw * avail
-        // 0/tw = 0*recip(tw) ≡ 0
+        //  LHS = 0, RHS = 0/tw * avail
+        //  0/tw = 0*recip(tw) ≡ 0
         T::axiom_div_is_mul_recip(T::zero(), total_weight);
         verus_algebra::lemmas::ring_lemmas::lemma_mul_zero_left::<T>(total_weight.recip());
         T::axiom_eqv_transitive(
@@ -162,7 +162,7 @@ pub proof fn lemma_flex_main_sum_identity<T: OrderedField>(
             T::zero().mul(total_weight.recip()),
             T::zero(),
         );
-        // 0/tw * avail ≡ 0 * avail ≡ 0
+        //  0/tw * avail ≡ 0 * avail ≡ 0
         T::axiom_mul_congruence_left(T::zero().div(total_weight), T::zero(), available);
         verus_algebra::lemmas::ring_lemmas::lemma_mul_zero_left::<T>(available);
         T::axiom_eqv_transitive(
@@ -182,34 +182,34 @@ pub proof fn lemma_flex_main_sum_identity<T: OrderedField>(
         let a = sw.div(tw);
         let b = w.div(tw);
 
-        // IH: flex_main_sum(n-1) ≡ sw/tw * avail
+        //  IH: flex_main_sum(n-1) ≡ sw/tw * avail
         lemma_flex_main_sum_identity(weights, tw, av, (n - 1) as nat);
 
-        // Step A: flex_main_sum(n) = flex_main_sum(n-1) + (w/tw)*avail
-        //       ≡ (sw/tw)*avail + (w/tw)*avail  [by IH + congruence]
+        //  Step A: flex_main_sum(n) = flex_main_sum(n-1) + (w/tw)*avail
+        //        ≡ (sw/tw)*avail + (w/tw)*avail  [by IH + congruence]
         T::axiom_add_congruence_left(
             flex_main_sum(weights, tw, av, (n - 1) as nat),
             a.mul(av),
             b.mul(av),
         );
 
-        // Step B: a*av + b*av ≡ (a+b)*av  [right distributivity, reversed]
+        //  Step B: a*av + b*av ≡ (a+b)*av  [right distributivity, reversed]
         verus_algebra::lemmas::ring_lemmas::lemma_mul_distributes_right::<T>(a, b, av);
         T::axiom_eqv_symmetric(
             a.add(b).mul(av),
             a.mul(av).add(b.mul(av)),
         );
 
-        // Step C: (sw+w)/tw ≡ sw/tw + w/tw  [div distributes over add]
+        //  Step C: (sw+w)/tw ≡ sw/tw + w/tw  [div distributes over add]
         verus_algebra::lemmas::field_lemmas::lemma_div_distributes_over_add::<T>(sw, w, tw);
-        // so sw.add(w).div(tw).eqv(a.add(b))
+        //  so sw.add(w).div(tw).eqv(a.add(b))
 
-        // Step D: (sw+w)/tw ≡ a+b, so (sw+w)/tw * av ≡ (a+b)*av
+        //  Step D: (sw+w)/tw ≡ a+b, so (sw+w)/tw * av ≡ (a+b)*av
         T::axiom_mul_congruence_left(sw.add(w).div(tw), a.add(b), av);
-        // Reverse: (a+b)*av ≡ (sw+w)/tw * av
+        //  Reverse: (a+b)*av ≡ (sw+w)/tw * av
         T::axiom_eqv_symmetric(sw.add(w).div(tw).mul(av), a.add(b).mul(av));
 
-        // Chain: a*av + b*av ≡ (a+b)*av ≡ (sw+w)/tw * av
+        //  Chain: a*av + b*av ≡ (a+b)*av ≡ (sw+w)/tw * av
         T::axiom_eqv_transitive(
             a.mul(av).add(b.mul(av)),
             a.add(b).mul(av),
@@ -223,8 +223,8 @@ pub proof fn lemma_flex_main_sum_identity<T: OrderedField>(
     }
 }
 
-/// When total_weight = sum_weights(n), the flex sizes sum to available:
-/// flex_main_sum(weights, tw, avail, n) ≡ avail.
+///  When total_weight = sum_weights(n), the flex sizes sum to available:
+///  flex_main_sum(weights, tw, avail, n) ≡ avail.
 pub proof fn lemma_flex_sizes_sum_to_available<T: OrderedField>(
     weights: Seq<T>,
     available: T,
@@ -243,21 +243,21 @@ pub proof fn lemma_flex_sizes_sum_to_available<T: OrderedField>(
     let n = weights.len() as nat;
     let tw = sum_weights(weights, n);
 
-    // flex_main_sum(n) ≡ tw/tw * avail
+    //  flex_main_sum(n) ≡ tw/tw * avail
     lemma_flex_main_sum_identity(weights, tw, available, n);
 
-    // tw/tw ≡ 1
+    //  tw/tw ≡ 1
     verus_algebra::lemmas::field_lemmas::lemma_div_self::<T>(tw);
 
-    // tw/tw * avail ≡ 1 * avail
+    //  tw/tw * avail ≡ 1 * avail
     T::axiom_mul_congruence_left(tw.div(tw), T::one(), available);
 
-    // 1 * avail ≡ avail
+    //  1 * avail ≡ avail
     T::axiom_mul_commutative(T::one(), available);
     T::axiom_mul_one_right(available);
     T::axiom_eqv_transitive(T::one().mul(available), available.mul(T::one()), available);
 
-    // Chain: flex_main_sum(n) ≡ tw/tw*avail ≡ 1*avail ≡ avail
+    //  Chain: flex_main_sum(n) ≡ tw/tw*avail ≡ 1*avail ≡ avail
     T::axiom_eqv_transitive(
         tw.div(tw).mul(available),
         T::one().mul(available),
@@ -270,9 +270,9 @@ pub proof fn lemma_flex_sizes_sum_to_available<T: OrderedField>(
     );
 }
 
-// ── Flex children length/element lemmas ───────────────────────────
+//  ── Flex children length/element lemmas ───────────────────────────
 
-/// Length of flex_column_children sequence.
+///  Length of flex_column_children sequence.
 pub proof fn lemma_flex_column_children_len<T: OrderedField>(
     padding: crate::padding::Padding<T>,
     spacing: T,
@@ -302,7 +302,7 @@ pub proof fn lemma_flex_column_children_len<T: OrderedField>(
     }
 }
 
-/// Element access into flex_column_children.
+///  Element access into flex_column_children.
 pub proof fn lemma_flex_column_children_element<T: OrderedField>(
     padding: crate::padding::Padding<T>,
     spacing: T,
@@ -400,7 +400,7 @@ proof fn lemma_flex_column_children_element_shifted<T: OrderedField>(
     }
 }
 
-/// Length of flex_row_children sequence.
+///  Length of flex_row_children sequence.
 pub proof fn lemma_flex_row_children_len<T: OrderedField>(
     padding: crate::padding::Padding<T>,
     spacing: T,
@@ -430,7 +430,7 @@ pub proof fn lemma_flex_row_children_len<T: OrderedField>(
     }
 }
 
-/// Element access into flex_row_children.
+///  Element access into flex_row_children.
 pub proof fn lemma_flex_row_children_element<T: OrderedField>(
     padding: crate::padding::Padding<T>,
     spacing: T,
@@ -528,9 +528,9 @@ proof fn lemma_flex_row_children_element_shifted<T: OrderedField>(
     }
 }
 
-// ── flex_child_main_size non-negativity ─────────────────────────
+//  ── flex_child_main_size non-negativity ─────────────────────────
 
-/// Each flex child's main-axis allocation is non-negative.
+///  Each flex child's main-axis allocation is non-negative.
 pub proof fn lemma_flex_child_main_size_nonneg<T: OrderedField>(
     weight: T,
     total_weight: T,
@@ -543,7 +543,7 @@ pub proof fn lemma_flex_child_main_size_nonneg<T: OrderedField>(
     ensures
         T::zero().le(flex_child_main_size(weight, total_weight, available)),
 {
-    // 0/tw ≡ 0
+    //  0/tw ≡ 0
     T::axiom_lt_iff_le_and_not_eqv(T::zero(), total_weight);
     verus_algebra::lemmas::ordered_field_lemmas::lemma_le_div_monotone::<T>(
         T::zero(), weight, total_weight,
@@ -558,7 +558,7 @@ pub proof fn lemma_flex_child_main_size_nonneg<T: OrderedField>(
     verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
         T::zero().div(total_weight), T::zero(), weight.div(total_weight),
     );
-    // 0 <= weight/tw, 0 <= avail => 0 <= (weight/tw) * avail
+    //  0 <= weight/tw, 0 <= avail => 0 <= (weight/tw) * avail
     T::axiom_le_mul_nonneg_monotone(T::zero(), weight.div(total_weight), available);
     verus_algebra::lemmas::ring_lemmas::lemma_mul_zero_left::<T>(available);
     T::axiom_eqv_symmetric(T::zero().mul(available), T::zero());
@@ -570,9 +570,9 @@ pub proof fn lemma_flex_child_main_size_nonneg<T: OrderedField>(
     );
 }
 
-// ── flex_main_sum monotonicity ────────────────────────────────────
+//  ── flex_main_sum monotonicity ────────────────────────────────────
 
-/// flex_main_sum is monotone: i <= j implies flex_main_sum(i) <= flex_main_sum(j).
+///  flex_main_sum is monotone: i <= j implies flex_main_sum(i) <= flex_main_sum(j).
 pub proof fn lemma_flex_main_sum_monotone<T: OrderedField>(
     weights: Seq<T>,
     total_weight: T,
@@ -595,12 +595,12 @@ pub proof fn lemma_flex_main_sum_monotone<T: OrderedField>(
         T::axiom_le_reflexive(flex_main_sum(weights, total_weight, available, i));
     } else {
         lemma_flex_main_sum_monotone(weights, total_weight, available, i, (j - 1) as nat);
-        // flex_main_sum(j) = flex_main_sum(j-1) + flex_child_main_size(j-1)
-        // Show flex_main_sum(j-1) <= flex_main_sum(j) since the added term is nonneg
+        //  flex_main_sum(j) = flex_main_sum(j-1) + flex_child_main_size(j-1)
+        //  Show flex_main_sum(j-1) <= flex_main_sum(j) since the added term is nonneg
         let prev = flex_main_sum(weights, total_weight, available, (j - 1) as nat);
         let term = flex_child_main_size(weights[(j - 1) as int], total_weight, available);
         lemma_flex_child_main_size_nonneg(weights[(j - 1) as int], total_weight, available);
-        // 0 <= term, so prev <= prev + term
+        //  0 <= term, so prev <= prev + term
         T::axiom_le_add_monotone(T::zero(), term, prev);
         verus_algebra::lemmas::additive_group_lemmas::lemma_add_zero_left::<T>(prev);
         T::axiom_add_commutative(term, prev);
@@ -608,7 +608,7 @@ pub proof fn lemma_flex_main_sum_monotone<T: OrderedField>(
             T::zero().add(prev), prev,
             term.add(prev), prev.add(term),
         );
-        // Chain: flex_main_sum(i) <= prev <= prev + term = flex_main_sum(j)
+        //  Chain: flex_main_sum(i) <= prev <= prev + term = flex_main_sum(j)
         T::axiom_le_transitive(
             flex_main_sum(weights, total_weight, available, i),
             prev,
@@ -617,12 +617,12 @@ pub proof fn lemma_flex_main_sum_monotone<T: OrderedField>(
     }
 }
 
-// ── Flex column CWB ───────────────────────────────────────────────
+//  ── Flex column CWB ───────────────────────────────────────────────
 
-/// Flex column layout has children_within_bounds.
+///  Flex column layout has children_within_bounds.
 ///
-/// Preconditions: padding fits, nonneg spacings/weights, total_weight > 0,
-/// spacing fits, and min.height = 0 (so each child's effective limits are wf).
+///  Preconditions: padding fits, nonneg spacings/weights, total_weight > 0,
+///  spacing fits, and min.height = 0 (so each child's effective limits are wf).
 pub proof fn lemma_flex_column_children_within_bounds<T: OrderedField>(
     limits: crate::limits::Limits<T>,
     padding: crate::padding::Padding<T>,
@@ -667,17 +667,17 @@ pub proof fn lemma_flex_column_children_within_bounds<T: OrderedField>(
     let total_spacing = repeated_add(spacing, (children.len() - 1) as nat);
     let n = children.len() as nat;
 
-    // h >= 0, v >= 0
+    //  h >= 0, v >= 0
     crate::layout::proofs::lemma_nonneg_sum(padding.left, padding.right);
     crate::layout::proofs::lemma_nonneg_sum(padding.top, padding.bottom);
 
-    // inner.wf
+    //  inner.wf
     crate::layout::proofs::lemma_shrink_wf(limits, h, v);
     crate::layout::proofs::lemma_add_comm_le(h, limits.min.width, limits.max.width);
     crate::layout::proofs::lemma_add_comm_le(v, limits.min.height, limits.max.height);
 
-    // min.h ≡ 0 and padding fits → min.h.le(max.h - v), unfolds inner.max.h = max.h - v
-    // v + 0 ≡ v, v + min.h ≡ v, v.le(max.h) from padding fits + min.h ≡ 0
+    //  min.h ≡ 0 and padding fits → min.h.le(max.h - v), unfolds inner.max.h = max.h - v
+    //  v + 0 ≡ v, v + min.h ≡ v, v.le(max.h) from padding fits + min.h ≡ 0
     T::axiom_add_zero_right(v);
     T::axiom_eqv_symmetric(v.add(T::zero()), v);
     T::axiom_add_congruence_left(limits.min.height, T::zero(), v);
@@ -685,16 +685,16 @@ pub proof fn lemma_flex_column_children_within_bounds<T: OrderedField>(
     T::axiom_add_commutative(T::zero(), v);
     T::axiom_eqv_transitive(limits.min.height.add(v), T::zero().add(v), v.add(T::zero()));
     T::axiom_eqv_transitive(limits.min.height.add(v), v.add(T::zero()), v);
-    // limits.min.height.add(v) ≡ v
-    // v ≡ limits.min.height.add(v), so v.le(max.h) from min.h.add(v).le(max.h) + congruence
+    //  limits.min.height.add(v) ≡ v
+    //  v ≡ limits.min.height.add(v), so v.le(max.h) from min.h.add(v).le(max.h) + congruence
     crate::layout::proofs::lemma_add_comm_le(v, limits.min.height, limits.max.height);
-    // limits.min.height.add(v).le(limits.max.height)
+    //  limits.min.height.add(v).le(limits.max.height)
     T::axiom_eqv_symmetric(limits.min.height.add(v), v);
     verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
         limits.min.height.add(v), v, limits.max.height,
     );
-    // v.le(max.h)
-    // 0 <= max.h - v from v <= max.h
+    //  v.le(max.h)
+    //  0 <= max.h - v from v <= max.h
     verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_sub_monotone::<T>(
         v, limits.max.height, v,
     );
@@ -702,41 +702,41 @@ pub proof fn lemma_flex_column_children_within_bounds<T: OrderedField>(
     verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
         v.sub(v), T::zero(), limits.max.height.sub(v),
     );
-    // T::zero().le(max.h.sub(v))
+    //  T::zero().le(max.h.sub(v))
 
-    // min.h.le(max.h - v): min.h ≡ 0 <= max.h - v
+    //  min.h.le(max.h - v): min.h ≡ 0 <= max.h - v
     T::axiom_eqv_symmetric(limits.min.height, T::zero());
     verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
         T::zero(), limits.min.height, limits.max.height.sub(v),
     );
-    // This unfolds inner.max.height = max(min.h, max.h - v) = max.h - v
+    //  This unfolds inner.max.height = max(min.h, max.h - v) = max.h - v
 
-    // avail_h = inner.max.h - total_spacing = max.h - v - total_spacing
+    //  avail_h = inner.max.h - total_spacing = max.h - v - total_spacing
     let avail_h = inner.max.height.sub(total_spacing);
     let avail_w = limits.max.width.sub(h);
 
-    // avail_h >= 0: v + total_spacing <= max.h from precondition
+    //  avail_h >= 0: v + total_spacing <= max.h from precondition
     assert(v.add(total_spacing).le(limits.max.height));
-    // total_spacing <= max.h - v
-    // From precond: v + ts <= max.h → ts + v <= max.h (by comm)
+    //  total_spacing <= max.h - v
+    //  From precond: v + ts <= max.h → ts + v <= max.h (by comm)
     T::axiom_add_commutative(v, total_spacing);
     verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
         v.add(total_spacing), total_spacing.add(v), limits.max.height,
     );
-    // (ts + v) - v <= max.h - v
+    //  (ts + v) - v <= max.h - v
     verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_sub_monotone::<T>(
         total_spacing.add(v), limits.max.height, v,
     );
-    // (ts + v) - v ≡ ts
+    //  (ts + v) - v ≡ ts
     verus_algebra::lemmas::additive_group_lemmas::lemma_add_then_sub_cancel::<T>(total_spacing, v);
-    // ts <= max.h - v
+    //  ts <= max.h - v
     verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
         total_spacing.add(v).sub(v), total_spacing, limits.max.height.sub(v),
     );
-    // total_spacing.le(max.h - v)
-    // Since min.h.le(max.h - v), inner.max.h = max.h - v, so total_spacing.le(inner.max.h)
+    //  total_spacing.le(max.h - v)
+    //  Since min.h.le(max.h - v), inner.max.h = max.h - v, so total_spacing.le(inner.max.h)
 
-    // avail_h = inner.max.h - total_spacing >= 0
+    //  avail_h = inner.max.h - total_spacing >= 0
     verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_sub_monotone::<T>(
         total_spacing, limits.max.height.sub(v), total_spacing,
     );
@@ -744,15 +744,15 @@ pub proof fn lemma_flex_column_children_within_bounds<T: OrderedField>(
     verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
         total_spacing.sub(total_spacing), T::zero(), limits.max.height.sub(v).sub(total_spacing),
     );
-    // T::zero().le(avail_h)
+    //  T::zero().le(avail_h)
 
-    // tw > 0
+    //  tw > 0
     T::axiom_lt_iff_le_and_not_eqv(T::zero(), tw);
     assert(!tw.eqv(T::zero())) by {
         if tw.eqv(T::zero()) { T::axiom_eqv_symmetric(tw, T::zero()); }
     };
 
-    // shrink max bound
+    //  shrink max bound
     crate::layout::proofs::lemma_shrink_max_bound(limits, h, v);
     verus_algebra::lemmas::additive_group_lemmas::lemma_sub_then_add_cancel::<T>(
         limits.max.width, h,
@@ -762,19 +762,19 @@ pub proof fn lemma_flex_column_children_within_bounds<T: OrderedField>(
         inner.max.width.add(h), limits.max.width, avail_w.add(h),
     );
     crate::layout::proofs::lemma_le_add_cancel_right(inner.max.width, avail_w, h);
-    // inner.max.width.le(avail_w)
+    //  inner.max.width.le(avail_w)
 
-    // cn = widget child nodes
+    //  cn = widget child nodes
     let cn = crate::widget::flex_column_widget_child_nodes(
         inner, children, weights, tw, avail_h, (fuel - 1) as nat,
     );
-    // Bridge: layout_widget unfolds through flex_linear_widget_child_nodes dispatch wrapper
+    //  Bridge: layout_widget unfolds through flex_linear_widget_child_nodes dispatch wrapper
     assert(cn === crate::widget::flex_linear_widget_child_nodes(
         inner, children, weights, tw, avail_h, crate::layout::Axis::Vertical, (fuel - 1) as nat,
     ));
     let child_cross_sizes = Seq::new(cn.len(), |i: int| cn[i].size.width);
 
-    // Each child: bound on size
+    //  Each child: bound on size
     assert forall|k: int| 0 <= k < cn.len() implies
         cn[k].size.width.le(avail_w)
         && cn[k].size.height.le(
@@ -784,32 +784,32 @@ pub proof fn lemma_flex_column_children_within_bounds<T: OrderedField>(
     by {
         let main_alloc = flex_child_main_size(weights[k], tw, avail_h);
         lemma_flex_child_main_size_nonneg(weights[k], tw, avail_h);
-        // child_lim = {min: inner.min, max: (inner.max.w, main_alloc)}
+        //  child_lim = {min: inner.min, max: (inner.max.w, main_alloc)}
         let child_lim = crate::limits::Limits {
             min: inner.min,
             max: crate::size::Size::new(inner.max.width, main_alloc),
         };
-        // child_lim.wf: inner.min.w <= inner.max.w (from inner.wf)
-        // inner.min.h = limits.min.h ≡ 0 <= main_alloc
+        //  child_lim.wf: inner.min.w <= inner.max.w (from inner.wf)
+        //  inner.min.h = limits.min.h ≡ 0 <= main_alloc
         T::axiom_eqv_symmetric(limits.min.height, T::zero());
         verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
             T::zero(), limits.min.height, main_alloc,
         );
-        // nonneg for wf
+        //  nonneg for wf
         T::axiom_le_transitive(T::zero(), inner.min.width, inner.max.width);
         crate::layout::proofs::lemma_layout_respects_limits(
             child_lim, children[k].child, (fuel - 1) as nat,
         );
-        // cn[k].size <= child_lim.max
+        //  cn[k].size <= child_lim.max
         T::axiom_le_transitive(cn[k].size.width, inner.max.width, avail_w);
         T::axiom_le_transitive(T::zero(), inner.min.width, cn[k].size.width);
         T::axiom_le_transitive(T::zero(), inner.min.height, cn[k].size.height);
     };
 
-    // parent.size = limits.resolve(limits.max) = limits.max
-    // (resolve(max) = max for wf limits since min <= max)
+    //  parent.size = limits.resolve(limits.max) = limits.max
+    //  (resolve(max) = max for wf limits since min <= max)
 
-    // left + avail_w <= max.w
+    //  left + avail_w <= max.w
     crate::layout::proofs::lemma_le_add_nonneg(padding.left, padding.right);
     T::axiom_le_add_monotone(padding.left, h, avail_w);
     T::axiom_add_commutative(h, avail_w);
@@ -823,17 +823,17 @@ pub proof fn lemma_flex_column_children_within_bounds<T: OrderedField>(
         padding.left.add(avail_w), avail_w.add(h), limits.max.width,
     );
 
-    // top + avail_h + total_spacing <= max.h:
-    // avail_h + total_spacing ≡ inner.max.h = max.h - v (by sub_then_add_cancel)
+    //  top + avail_h + total_spacing <= max.h:
+    //  avail_h + total_spacing ≡ inner.max.h = max.h - v (by sub_then_add_cancel)
     verus_algebra::lemmas::additive_group_lemmas::lemma_sub_then_add_cancel::<T>(
         inner.max.height, total_spacing,
     );
-    // avail_h.add(total_spacing).eqv(inner.max.height) = max.h - v
-    // top + (max.h - v) = max.h - bottom <= max.h
+    //  avail_h.add(total_spacing).eqv(inner.max.height) = max.h - v
+    //  top + (max.h - v) = max.h - bottom <= max.h
     crate::layout::proofs::lemma_le_add_nonneg(padding.top, padding.bottom);
     T::axiom_le_add_monotone(padding.top, v, inner.max.height);
-    // padding.top.add(inner.max.height).le(v.add(inner.max.height))
-    // v + inner.max.h = v + (max.h - v) ≡ max.h
+    //  padding.top.add(inner.max.height).le(v.add(inner.max.height))
+    //  v + inner.max.h = v + (max.h - v) ≡ max.h
     verus_algebra::lemmas::additive_group_lemmas::lemma_sub_then_add_cancel::<T>(
         limits.max.height, v,
     );
@@ -843,13 +843,13 @@ pub proof fn lemma_flex_column_children_within_bounds<T: OrderedField>(
         limits.max.height.sub(v).add(v),
         limits.max.height,
     );
-    // padding.top.add(inner.max.height).le(v.add(inner.max.height))
+    //  padding.top.add(inner.max.height).le(v.add(inner.max.height))
     verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_right::<T>(
         padding.top.add(inner.max.height), v.add(inner.max.height), limits.max.height,
     );
-    // padding.top.add(inner.max.height).le(limits.max.height)
+    //  padding.top.add(inner.max.height).le(limits.max.height)
 
-    // Layout children structure
+    //  Layout children structure
     lemma_flex_column_children_len(
         padding, spacing, alignment, weights, child_cross_sizes,
         tw, avail_w, avail_h, 0,
@@ -859,7 +859,7 @@ pub proof fn lemma_flex_column_children_within_bounds<T: OrderedField>(
         limits, padding, spacing, alignment, weights, child_cross_sizes,
     );
 
-    // Per-child bounds
+    //  Per-child bounds
     assert forall|i: int| 0 <= i < cn.len() implies
         T::zero().le(layout.children[i].x)
         && T::zero().le(layout.children[i].y)
@@ -871,13 +871,13 @@ pub proof fn lemma_flex_column_children_within_bounds<T: OrderedField>(
             tw, avail_w, avail_h, i as nat,
         );
 
-        // X lower: left <= left + align_offset, 0 <= left
+        //  X lower: left <= left + align_offset, 0 <= left
         crate::layout::proofs::lemma_column_child_x_lower_bound(
             padding.left, alignment, avail_w, child_cross_sizes[i],
         );
         T::axiom_le_transitive(T::zero(), padding.left, layout.children[i].x);
 
-        // X upper: left + align_offset + w <= left + avail_w <= max.w
+        //  X upper: left + align_offset + w <= left + avail_w <= max.w
         crate::layout::proofs::lemma_column_child_x_upper_bound(
             padding.left, alignment, avail_w, child_cross_sizes[i],
         );
@@ -887,7 +887,7 @@ pub proof fn lemma_flex_column_children_within_bounds<T: OrderedField>(
             limits.max.width,
         );
 
-        // Y lower: 0 <= top (nonneg padding), flex_main_sum >= 0, repeated_add >= 0
+        //  Y lower: 0 <= top (nonneg padding), flex_main_sum >= 0, repeated_add >= 0
         lemma_flex_main_sum_nonneg(weights, tw, avail_h, i as nat);
         crate::layout::proofs::lemma_repeated_add_nonneg(spacing, i as nat);
         crate::layout::proofs::lemma_nonneg_sum(
@@ -898,13 +898,13 @@ pub proof fn lemma_flex_column_children_within_bounds<T: OrderedField>(
             padding.top.add(flex_main_sum(weights, tw, avail_h, i as nat)),
             repeated_add(spacing, i as nat),
         );
-        // 0 <= y_i
+        //  0 <= y_i
 
-        // Y upper bound: y_i + cn[i].size.height <= max.h
-        // Strategy: y_i + h_i <= y_i + fms_i (child bound)
-        //   y_i + fms_i = top + sum(i+1) + rep(i) (algebra)
-        //   top + sum(i+1) + rep(i) <= top + sum(n) + rep(n-1) (monotone)
-        //   = top + avail_h + total_spacing = top + inner.max.h <= max.h
+        //  Y upper bound: y_i + cn[i].size.height <= max.h
+        //  Strategy: y_i + h_i <= y_i + fms_i (child bound)
+        //    y_i + fms_i = top + sum(i+1) + rep(i) (algebra)
+        //    top + sum(i+1) + rep(i) <= top + sum(n) + rep(n-1) (monotone)
+        //    = top + avail_h + total_spacing = top + inner.max.h <= max.h
 
         let fms_i = flex_child_main_size(weights[i], tw, avail_h);
         let sum_i = flex_main_sum(weights, tw, avail_h, i as nat);
@@ -912,8 +912,8 @@ pub proof fn lemma_flex_column_children_within_bounds<T: OrderedField>(
         let sum_n = flex_main_sum(weights, tw, avail_h, n);
         let rep_i = repeated_add(spacing, i as nat);
 
-        // Step 1: y_i + cn[i].size.height <= y_i + fms_i
-        // le_add_monotone gives h+y <= fms+y; flip to y+h <= y+fms
+        //  Step 1: y_i + cn[i].size.height <= y_i + fms_i
+        //  le_add_monotone gives h+y <= fms+y; flip to y+h <= y+fms
         T::axiom_le_add_monotone(cn[i].size.height, fms_i, layout.children[i].y);
         T::axiom_add_commutative(cn[i].size.height, layout.children[i].y);
         T::axiom_add_commutative(fms_i, layout.children[i].y);
@@ -924,15 +924,15 @@ pub proof fn lemma_flex_column_children_within_bounds<T: OrderedField>(
             layout.children[i].y.add(fms_i),
         );
 
-        // Step 2: y_i + fms_i ≡ top + sum(i+1) + rep(i) via algebra
-        // y_i = top + sum_i + rep_i, so y_i + fms_i = (top + sum_i + rep_i) + fms_i
-        // = (top + sum_i) + rep_i + fms_i [by assoc of padding.top.add(sum_i)]
-        // = (top + sum_i) + fms_i + rep_i [comm rep_i, fms_i]
-        // = top + (sum_i + fms_i) + rep_i [assoc]
-        // = top + sum_i1 + rep_i [definitional: sum_i + fms_i = sum_i1]
+        //  Step 2: y_i + fms_i ≡ top + sum(i+1) + rep(i) via algebra
+        //  y_i = top + sum_i + rep_i, so y_i + fms_i = (top + sum_i + rep_i) + fms_i
+        //  = (top + sum_i) + rep_i + fms_i [by assoc of padding.top.add(sum_i)]
+        //  = (top + sum_i) + fms_i + rep_i [comm rep_i, fms_i]
+        //  = top + (sum_i + fms_i) + rep_i [assoc]
+        //  = top + sum_i1 + rep_i [definitional: sum_i + fms_i = sum_i1]
         let yi_fms = layout.children[i].y.add(fms_i);
-        // Rearrange: (A + B) + C = A + (B + C) = A + (C + B) = (A + C) + B
-        // where A = top + sum_i, B = rep_i, C = fms_i
+        //  Rearrange: (A + B) + C = A + (B + C) = A + (C + B) = (A + C) + B
+        //  where A = top + sum_i, B = rep_i, C = fms_i
         T::axiom_add_associative(padding.top.add(sum_i), rep_i, fms_i);
         T::axiom_add_commutative(rep_i, fms_i);
         T::axiom_eqv_reflexive(padding.top.add(sum_i));
@@ -955,8 +955,8 @@ pub proof fn lemma_flex_column_children_within_bounds<T: OrderedField>(
             padding.top.add(sum_i).add(fms_i.add(rep_i)),
             padding.top.add(sum_i).add(fms_i).add(rep_i),
         );
-        // yi_fms ≡ (top + sum_i + fms_i) + rep_i
-        // sum_i + fms_i == sum_i1 (definitional), top + sum_i + fms_i ≡ top + sum_i1
+        //  yi_fms ≡ (top + sum_i + fms_i) + rep_i
+        //  sum_i + fms_i == sum_i1 (definitional), top + sum_i + fms_i ≡ top + sum_i1
         T::axiom_add_associative(padding.top, sum_i, fms_i);
         T::axiom_add_congruence_left(
             padding.top.add(sum_i).add(fms_i), padding.top.add(sum_i1), rep_i,
@@ -966,9 +966,9 @@ pub proof fn lemma_flex_column_children_within_bounds<T: OrderedField>(
             padding.top.add(sum_i).add(fms_i).add(rep_i),
             padding.top.add(sum_i1).add(rep_i),
         );
-        // yi_fms ≡ top + sum_i1 + rep_i
+        //  yi_fms ≡ top + sum_i1 + rep_i
 
-        // Step 3: top + sum(i+1) + rep(i) <= top + sum(n) + total_spacing
+        //  Step 3: top + sum(i+1) + rep(i) <= top + sum(n) + total_spacing
         lemma_flex_main_sum_monotone(weights, tw, avail_h, (i + 1) as nat, n);
         crate::layout::proofs::lemma_repeated_add_monotone(spacing, i as nat, (n - 1) as nat);
         verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_add_both::<T>(
@@ -977,15 +977,15 @@ pub proof fn lemma_flex_column_children_within_bounds<T: OrderedField>(
         T::axiom_le_add_monotone(
             sum_i1.add(rep_i), sum_n.add(total_spacing), padding.top,
         );
-        // Flip: (a)+top <= (b)+top → top+(a) <= top+(b) via commutativity
+        //  Flip: (a)+top <= (b)+top → top+(a) <= top+(b) via commutativity
         T::axiom_add_commutative(sum_i1.add(rep_i), padding.top);
         T::axiom_add_commutative(sum_n.add(total_spacing), padding.top);
         T::axiom_le_congruence(
             sum_i1.add(rep_i).add(padding.top), padding.top.add(sum_i1.add(rep_i)),
             sum_n.add(total_spacing).add(padding.top), padding.top.add(sum_n.add(total_spacing)),
         );
-        // top.add(sum_i1.add(rep_i)).le(top.add(sum_n.add(total_spacing)))
-        // Congruence: top.add(sum_i1.add(rep_i)) → top + sum_i1 + rep_i
+        //  top.add(sum_i1.add(rep_i)).le(top.add(sum_n.add(total_spacing)))
+        //  Congruence: top.add(sum_i1.add(rep_i)) → top + sum_i1 + rep_i
         T::axiom_add_associative(padding.top, sum_i1, rep_i);
         T::axiom_eqv_symmetric(
             padding.top.add(sum_i1).add(rep_i),
@@ -996,7 +996,7 @@ pub proof fn lemma_flex_column_children_within_bounds<T: OrderedField>(
             padding.top.add(sum_i1).add(rep_i),
             padding.top.add(sum_n.add(total_spacing)),
         );
-        // and top.add(sum_n.add(total_spacing)) → top + sum_n + total_spacing
+        //  and top.add(sum_n.add(total_spacing)) → top + sum_n + total_spacing
         T::axiom_add_associative(padding.top, sum_n, total_spacing);
         T::axiom_eqv_symmetric(
             padding.top.add(sum_n).add(total_spacing),
@@ -1008,14 +1008,14 @@ pub proof fn lemma_flex_column_children_within_bounds<T: OrderedField>(
             padding.top.add(sum_n).add(total_spacing),
         );
 
-        // Step 4: sum_n ≡ avail_h → top + sum_n + ts ≡ top + avail_h + ts
+        //  Step 4: sum_n ≡ avail_h → top + sum_n + ts ≡ top + avail_h + ts
         lemma_flex_sizes_sum_to_available(weights, avail_h);
-        // top.add(sum_n).eqv(top.add(avail_h)) via lemma_add_congruence
+        //  top.add(sum_n).eqv(top.add(avail_h)) via lemma_add_congruence
         T::axiom_eqv_reflexive(padding.top);
         verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence::<T>(
             padding.top, padding.top, sum_n, avail_h,
         );
-        // top.add(sum_n).add(ts).eqv(top.add(avail_h).add(ts))
+        //  top.add(sum_n).add(ts).eqv(top.add(avail_h).add(ts))
         T::axiom_add_congruence_left(
             padding.top.add(sum_n), padding.top.add(avail_h), total_spacing,
         );
@@ -1025,17 +1025,17 @@ pub proof fn lemma_flex_column_children_within_bounds<T: OrderedField>(
             padding.top.add(avail_h).add(total_spacing),
         );
 
-        // Step 5: top + avail_h + ts ≡ top + inner.max.h <= max.h
-        // avail_h + ts ≡ inner.max.h (sub_then_add_cancel from outer scope)
-        // top + (avail_h + ts) ≡ top + inner.max.h
+        //  Step 5: top + avail_h + ts ≡ top + inner.max.h <= max.h
+        //  avail_h + ts ≡ inner.max.h (sub_then_add_cancel from outer scope)
+        //  top + (avail_h + ts) ≡ top + inner.max.h
         T::axiom_eqv_reflexive(padding.top);
         verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence::<T>(
             padding.top, padding.top,
             avail_h.add(total_spacing), inner.max.height,
         );
-        // top.add(avail_h).add(ts) ≡ top.add(avail_h.add(ts)) by assoc
+        //  top.add(avail_h).add(ts) ≡ top.add(avail_h.add(ts)) by assoc
         T::axiom_add_associative(padding.top, avail_h, total_spacing);
-        // Chain: top+avail_h+ts ≡ top+(avail_h+ts) ≡ top+inner.max.h
+        //  Chain: top+avail_h+ts ≡ top+(avail_h+ts) ≡ top+inner.max.h
         T::axiom_eqv_transitive(
             padding.top.add(avail_h).add(total_spacing),
             padding.top.add(avail_h.add(total_spacing)),
@@ -1047,11 +1047,11 @@ pub proof fn lemma_flex_column_children_within_bounds<T: OrderedField>(
             padding.top.add(inner.max.height),
         );
 
-        // Full chain: y_i + cn[i].h <= yi_fms ≡ top+sum_i1+rep_i <= top+inner.max.h <= max.h
-        // We have: yi_fms.eqv(top+sum_i1+rep_i) from Step 2
-        // Symmetric: top+sum_i1+rep_i.eqv(yi_fms)
+        //  Full chain: y_i + cn[i].h <= yi_fms ≡ top+sum_i1+rep_i <= top+inner.max.h <= max.h
+        //  We have: yi_fms.eqv(top+sum_i1+rep_i) from Step 2
+        //  Symmetric: top+sum_i1+rep_i.eqv(yi_fms)
         T::axiom_eqv_symmetric(yi_fms, padding.top.add(sum_i1).add(rep_i));
-        // le_congruence_left: top+sum_i1+rep_i ≡ yi_fms AND top+sum_i1+rep_i ≤ top+inner.max.h → yi_fms ≤ top+inner.max.h
+        //  le_congruence_left: top+sum_i1+rep_i ≡ yi_fms AND top+sum_i1+rep_i ≤ top+inner.max.h → yi_fms ≤ top+inner.max.h
         verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
             padding.top.add(sum_i1).add(rep_i), yi_fms,
             padding.top.add(inner.max.height),
@@ -1067,18 +1067,18 @@ pub proof fn lemma_flex_column_children_within_bounds<T: OrderedField>(
             limits.max.height,
         );
 
-        // Connect cn[i].size to child_cross_sizes[i]
+        //  Connect cn[i].size to child_cross_sizes[i]
         assert(child_cross_sizes[i] === cn[i].size.width);
     };
 
     crate::layout::proofs::lemma_merge_layout_cwb(layout, cn);
 }
 
-// ── Flex row CWB ─────────────────────────────────────────────────
+//  ── Flex row CWB ─────────────────────────────────────────────────
 
-/// Flex row layout has children_within_bounds.
+///  Flex row layout has children_within_bounds.
 ///
-/// Symmetric to column: main axis = width (X), cross axis = height (Y).
+///  Symmetric to column: main axis = width (X), cross axis = height (Y).
 pub proof fn lemma_flex_row_children_within_bounds<T: OrderedField>(
     limits: crate::limits::Limits<T>,
     padding: crate::padding::Padding<T>,
@@ -1123,16 +1123,16 @@ pub proof fn lemma_flex_row_children_within_bounds<T: OrderedField>(
     let total_spacing = repeated_add(spacing, (children.len() - 1) as nat);
     let n = children.len() as nat;
 
-    // h >= 0, v >= 0
+    //  h >= 0, v >= 0
     crate::layout::proofs::lemma_nonneg_sum(padding.left, padding.right);
     crate::layout::proofs::lemma_nonneg_sum(padding.top, padding.bottom);
 
-    // inner.wf
+    //  inner.wf
     crate::layout::proofs::lemma_shrink_wf(limits, h, v);
     crate::layout::proofs::lemma_add_comm_le(h, limits.min.width, limits.max.width);
     crate::layout::proofs::lemma_add_comm_le(v, limits.min.height, limits.max.height);
 
-    // min.w ≡ 0 → min.w.le(max.w - h), so inner.max.w = max.w - h
+    //  min.w ≡ 0 → min.w.le(max.w - h), so inner.max.w = max.w - h
     T::axiom_add_zero_right(h);
     T::axiom_eqv_symmetric(h.add(T::zero()), h);
     T::axiom_add_congruence_left(limits.min.width, T::zero(), h);
@@ -1145,7 +1145,7 @@ pub proof fn lemma_flex_row_children_within_bounds<T: OrderedField>(
     verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
         limits.min.width.add(h), h, limits.max.width,
     );
-    // h.le(max.w)
+    //  h.le(max.w)
     verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_sub_monotone::<T>(
         h, limits.max.width, h,
     );
@@ -1153,18 +1153,18 @@ pub proof fn lemma_flex_row_children_within_bounds<T: OrderedField>(
     verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
         h.sub(h), T::zero(), limits.max.width.sub(h),
     );
-    // 0 <= max.w - h
+    //  0 <= max.w - h
     T::axiom_eqv_symmetric(limits.min.width, T::zero());
     verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
         T::zero(), limits.min.width, limits.max.width.sub(h),
     );
-    // min.w.le(max.w - h) → inner.max.w = max.w - h
+    //  min.w.le(max.w - h) → inner.max.w = max.w - h
 
-    // avail_w = inner.max.w - total_spacing, avail_h = inner.max.h
+    //  avail_w = inner.max.w - total_spacing, avail_h = inner.max.h
     let avail_w = inner.max.width.sub(total_spacing);
     let avail_h = limits.max.height.sub(v);
 
-    // avail_w >= 0: h + total_spacing <= max.w from precondition
+    //  avail_w >= 0: h + total_spacing <= max.w from precondition
     assert(h.add(total_spacing).le(limits.max.width));
     T::axiom_add_commutative(h, total_spacing);
     verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
@@ -1177,7 +1177,7 @@ pub proof fn lemma_flex_row_children_within_bounds<T: OrderedField>(
     verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
         total_spacing.add(h).sub(h), total_spacing, limits.max.width.sub(h),
     );
-    // total_spacing.le(max.w - h) = total_spacing.le(inner.max.w)
+    //  total_spacing.le(max.w - h) = total_spacing.le(inner.max.w)
 
     verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_sub_monotone::<T>(
         total_spacing, limits.max.width.sub(h), total_spacing,
@@ -1186,15 +1186,15 @@ pub proof fn lemma_flex_row_children_within_bounds<T: OrderedField>(
     verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
         total_spacing.sub(total_spacing), T::zero(), limits.max.width.sub(h).sub(total_spacing),
     );
-    // 0 <= avail_w
+    //  0 <= avail_w
 
-    // tw > 0
+    //  tw > 0
     T::axiom_lt_iff_le_and_not_eqv(T::zero(), tw);
     assert(!tw.eqv(T::zero())) by {
         if tw.eqv(T::zero()) { T::axiom_eqv_symmetric(tw, T::zero()); }
     };
 
-    // shrink max bound (height side)
+    //  shrink max bound (height side)
     crate::layout::proofs::lemma_shrink_max_bound(limits, h, v);
     verus_algebra::lemmas::additive_group_lemmas::lemma_sub_then_add_cancel::<T>(
         limits.max.height, v,
@@ -1204,19 +1204,19 @@ pub proof fn lemma_flex_row_children_within_bounds<T: OrderedField>(
         inner.max.height.add(v), limits.max.height, avail_h.add(v),
     );
     crate::layout::proofs::lemma_le_add_cancel_right(inner.max.height, avail_h, v);
-    // inner.max.height.le(avail_h)
+    //  inner.max.height.le(avail_h)
 
-    // cn = widget child nodes
+    //  cn = widget child nodes
     let cn = crate::widget::flex_row_widget_child_nodes(
         inner, children, weights, tw, avail_w, (fuel - 1) as nat,
     );
-    // Bridge: layout_widget unfolds through flex_linear_widget_child_nodes dispatch wrapper
+    //  Bridge: layout_widget unfolds through flex_linear_widget_child_nodes dispatch wrapper
     assert(cn === crate::widget::flex_linear_widget_child_nodes(
         inner, children, weights, tw, avail_w, crate::layout::Axis::Horizontal, (fuel - 1) as nat,
     ));
     let child_cross_sizes = Seq::new(cn.len(), |i: int| cn[i].size.height);
 
-    // Each child: bound on size
+    //  Each child: bound on size
     assert forall|k: int| 0 <= k < cn.len() implies
         cn[k].size.height.le(avail_h)
         && cn[k].size.width.le(
@@ -1230,7 +1230,7 @@ pub proof fn lemma_flex_row_children_within_bounds<T: OrderedField>(
             min: inner.min,
             max: crate::size::Size::new(main_alloc, inner.max.height),
         };
-        // child_lim.wf: inner.min.w ≡ 0 <= main_alloc
+        //  child_lim.wf: inner.min.w ≡ 0 <= main_alloc
         T::axiom_eqv_symmetric(limits.min.width, T::zero());
         verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
             T::zero(), limits.min.width, main_alloc,
@@ -1244,7 +1244,7 @@ pub proof fn lemma_flex_row_children_within_bounds<T: OrderedField>(
         T::axiom_le_transitive(T::zero(), inner.min.height, cn[k].size.height);
     };
 
-    // top + avail_h <= max.h
+    //  top + avail_h <= max.h
     crate::layout::proofs::lemma_le_add_nonneg(padding.top, padding.bottom);
     T::axiom_le_add_monotone(padding.top, v, avail_h);
     T::axiom_add_commutative(v, limits.max.height.sub(v));
@@ -1260,17 +1260,17 @@ pub proof fn lemma_flex_row_children_within_bounds<T: OrderedField>(
     verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_right::<T>(
         padding.top.add(inner.max.height), v.add(inner.max.height), limits.max.height,
     );
-    // padding.top.add(inner.max.height).le(limits.max.height)
+    //  padding.top.add(inner.max.height).le(limits.max.height)
 
-    // left + avail_w + total_spacing <= max.w:
+    //  left + avail_w + total_spacing <= max.w:
     verus_algebra::lemmas::additive_group_lemmas::lemma_sub_then_add_cancel::<T>(
         inner.max.width, total_spacing,
     );
-    // avail_w.add(total_spacing).eqv(inner.max.width)
+    //  avail_w.add(total_spacing).eqv(inner.max.width)
     crate::layout::proofs::lemma_le_add_nonneg(padding.left, padding.right);
     T::axiom_le_add_monotone(padding.left, h, inner.max.width);
-    // left.add(inner.max.w).le(h.add(inner.max.w))
-    // h + inner.max.w = h + (max.w - h) ≡ max.w
+    //  left.add(inner.max.w).le(h.add(inner.max.w))
+    //  h + inner.max.w = h + (max.w - h) ≡ max.w
     verus_algebra::lemmas::additive_group_lemmas::lemma_sub_then_add_cancel::<T>(
         limits.max.width, h,
     );
@@ -1283,9 +1283,9 @@ pub proof fn lemma_flex_row_children_within_bounds<T: OrderedField>(
     verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_right::<T>(
         padding.left.add(inner.max.width), h.add(inner.max.width), limits.max.width,
     );
-    // padding.left.add(inner.max.width).le(limits.max.width)
+    //  padding.left.add(inner.max.width).le(limits.max.width)
 
-    // Layout children structure
+    //  Layout children structure
     lemma_flex_row_children_len(
         padding, spacing, alignment, weights, child_cross_sizes,
         tw, avail_w, avail_h, 0,
@@ -1295,7 +1295,7 @@ pub proof fn lemma_flex_row_children_within_bounds<T: OrderedField>(
         limits, padding, spacing, alignment, weights, child_cross_sizes,
     );
 
-    // Per-child bounds
+    //  Per-child bounds
     assert forall|i: int| 0 <= i < cn.len() implies
         T::zero().le(layout.children[i].x)
         && T::zero().le(layout.children[i].y)
@@ -1307,13 +1307,13 @@ pub proof fn lemma_flex_row_children_within_bounds<T: OrderedField>(
             tw, avail_w, avail_h, i as nat,
         );
 
-        // Y lower: top <= top + align_offset, 0 <= top
+        //  Y lower: top <= top + align_offset, 0 <= top
         crate::layout::proofs::lemma_row_child_y_lower_bound(
             padding.top, alignment, avail_h, child_cross_sizes[i],
         );
         T::axiom_le_transitive(T::zero(), padding.top, layout.children[i].y);
 
-        // Y upper: top + align_offset + h <= top + avail_h <= max.h
+        //  Y upper: top + align_offset + h <= top + avail_h <= max.h
         crate::layout::proofs::lemma_row_child_y_upper_bound(
             padding.top, alignment, avail_h, child_cross_sizes[i],
         );
@@ -1323,7 +1323,7 @@ pub proof fn lemma_flex_row_children_within_bounds<T: OrderedField>(
             limits.max.height,
         );
 
-        // X lower: 0 <= left (nonneg padding), flex_main_sum >= 0, repeated_add >= 0
+        //  X lower: 0 <= left (nonneg padding), flex_main_sum >= 0, repeated_add >= 0
         lemma_flex_main_sum_nonneg(weights, tw, avail_w, i as nat);
         crate::layout::proofs::lemma_repeated_add_nonneg(spacing, i as nat);
         crate::layout::proofs::lemma_nonneg_sum(
@@ -1334,16 +1334,16 @@ pub proof fn lemma_flex_row_children_within_bounds<T: OrderedField>(
             padding.left.add(flex_main_sum(weights, tw, avail_w, i as nat)),
             repeated_add(spacing, i as nat),
         );
-        // 0 <= x_i
+        //  0 <= x_i
 
-        // X upper bound: x_i + cn[i].size.width <= max.w
+        //  X upper bound: x_i + cn[i].size.width <= max.w
         let fms_i = flex_child_main_size(weights[i], tw, avail_w);
         let sum_i = flex_main_sum(weights, tw, avail_w, i as nat);
         let sum_i1 = flex_main_sum(weights, tw, avail_w, (i + 1) as nat);
         let sum_n = flex_main_sum(weights, tw, avail_w, n);
         let rep_i = repeated_add(spacing, i as nat);
 
-        // Step 1: x_i + cn[i].size.width <= x_i + fms_i
+        //  Step 1: x_i + cn[i].size.width <= x_i + fms_i
         T::axiom_le_add_monotone(cn[i].size.width, fms_i, layout.children[i].x);
         T::axiom_add_commutative(cn[i].size.width, layout.children[i].x);
         T::axiom_add_commutative(fms_i, layout.children[i].x);
@@ -1354,7 +1354,7 @@ pub proof fn lemma_flex_row_children_within_bounds<T: OrderedField>(
             layout.children[i].x.add(fms_i),
         );
 
-        // Step 2: x_i + fms_i ≡ left + sum(i+1) + rep(i)
+        //  Step 2: x_i + fms_i ≡ left + sum(i+1) + rep(i)
         let xi_fms = layout.children[i].x.add(fms_i);
         T::axiom_add_associative(padding.left.add(sum_i), rep_i, fms_i);
         T::axiom_add_commutative(rep_i, fms_i);
@@ -1388,7 +1388,7 @@ pub proof fn lemma_flex_row_children_within_bounds<T: OrderedField>(
             padding.left.add(sum_i1).add(rep_i),
         );
 
-        // Step 3: left + sum(i+1) + rep(i) <= left + sum(n) + total_spacing
+        //  Step 3: left + sum(i+1) + rep(i) <= left + sum(n) + total_spacing
         lemma_flex_main_sum_monotone(weights, tw, avail_w, (i + 1) as nat, n);
         crate::layout::proofs::lemma_repeated_add_monotone(spacing, i as nat, (n - 1) as nat);
         verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_add_both::<T>(
@@ -1424,7 +1424,7 @@ pub proof fn lemma_flex_row_children_within_bounds<T: OrderedField>(
             padding.left.add(sum_n).add(total_spacing),
         );
 
-        // Step 4: sum_n ≡ avail_w → left + sum_n + ts ≡ left + avail_w + ts
+        //  Step 4: sum_n ≡ avail_w → left + sum_n + ts ≡ left + avail_w + ts
         lemma_flex_sizes_sum_to_available(weights, avail_w);
         T::axiom_eqv_reflexive(padding.left);
         verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence::<T>(
@@ -1439,7 +1439,7 @@ pub proof fn lemma_flex_row_children_within_bounds<T: OrderedField>(
             padding.left.add(avail_w).add(total_spacing),
         );
 
-        // Step 5: left + avail_w + ts ≡ left + inner.max.w <= max.w
+        //  Step 5: left + avail_w + ts ≡ left + inner.max.w <= max.w
         T::axiom_eqv_reflexive(padding.left);
         verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence::<T>(
             padding.left, padding.left,
@@ -1457,7 +1457,7 @@ pub proof fn lemma_flex_row_children_within_bounds<T: OrderedField>(
             padding.left.add(inner.max.width),
         );
 
-        // Full chain: x_i + w <= xi_fms ≡ left+sum_i1+rep_i <= left+inner.max.w <= max.w
+        //  Full chain: x_i + w <= xi_fms ≡ left+sum_i1+rep_i <= left+inner.max.w <= max.w
         T::axiom_eqv_symmetric(xi_fms, padding.left.add(sum_i1).add(rep_i));
         verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
             padding.left.add(sum_i1).add(rep_i), xi_fms,
@@ -1474,16 +1474,16 @@ pub proof fn lemma_flex_row_children_within_bounds<T: OrderedField>(
             limits.max.width,
         );
 
-        // Connect cn[i].size to child_cross_sizes[i]
+        //  Connect cn[i].size to child_cross_sizes[i]
         assert(child_cross_sizes[i] === cn[i].size.height);
     };
 
     crate::layout::proofs::lemma_merge_layout_cwb(layout, cn);
 }
 
-// ── Unified flex linear children proofs ──────────────────────────
+//  ── Unified flex linear children proofs ──────────────────────────
 
-/// Length of flex_linear_children sequence.
+///  Length of flex_linear_children sequence.
 pub proof fn lemma_flex_linear_children_len<T: OrderedField>(
     padding: crate::padding::Padding<T>,
     spacing: T,
@@ -1514,7 +1514,7 @@ pub proof fn lemma_flex_linear_children_len<T: OrderedField>(
     }
 }
 
-/// Element access into flex_linear_children (shifted start).
+///  Element access into flex_linear_children (shifted start).
 proof fn lemma_flex_linear_children_element_shifted<T: OrderedField>(
     padding: crate::padding::Padding<T>,
     spacing: T,
@@ -1580,7 +1580,7 @@ proof fn lemma_flex_linear_children_element_shifted<T: OrderedField>(
     }
 }
 
-/// Element access into flex_linear_children at index k from the beginning.
+///  Element access into flex_linear_children at index k from the beginning.
 pub proof fn lemma_flex_linear_children_element<T: OrderedField>(
     padding: crate::padding::Padding<T>,
     spacing: T,
@@ -1623,11 +1623,11 @@ pub proof fn lemma_flex_linear_children_element<T: OrderedField>(
     );
 }
 
-// ── Flex conservation (axis-parameterized) ──────────────────────
+//  ── Flex conservation (axis-parameterized) ──────────────────────
 
-/// Flex sizes sum to available in the axis-parameterized form.
-/// Since flex_linear_children dispatches to the same flex_child_main_size
-/// as flex_column/row_children, the conservation identity holds for any axis.
+///  Flex sizes sum to available in the axis-parameterized form.
+///  Since flex_linear_children dispatches to the same flex_child_main_size
+///  as flex_column/row_children, the conservation identity holds for any axis.
 pub proof fn lemma_flex_linear_sizes_sum_to_available<T: OrderedField>(
     weights: Seq<T>,
     available: T,
@@ -1643,10 +1643,10 @@ pub proof fn lemma_flex_linear_sizes_sum_to_available<T: OrderedField>(
             weights.len() as nat,
         ).eqv(available),
 {
-    // flex_main_sum is axis-independent — it only uses flex_child_main_size
-    // which is the same function for column, row, and linear variants.
-    // Direct delegation to the existing proof.
+    //  flex_main_sum is axis-independent — it only uses flex_child_main_size
+    //  which is the same function for column, row, and linear variants.
+    //  Direct delegation to the existing proof.
     lemma_flex_sizes_sum_to_available(weights, available);
 }
 
-} // verus!
+} //  verus!

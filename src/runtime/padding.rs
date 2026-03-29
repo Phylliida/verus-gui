@@ -6,7 +6,7 @@ use crate::layout::Axis;
 
 verus! {
 
-/// Runtime-backed Padding with rational coordinates.
+///  Runtime-backed Padding with rational coordinates.
 pub struct RuntimePadding {
     pub top: RuntimeRational,
     pub right: RuntimeRational,
@@ -24,7 +24,7 @@ impl View for RuntimePadding {
 }
 
 impl RuntimePadding {
-    /// Well-formedness.
+    ///  Well-formedness.
     pub open spec fn wf_spec(&self) -> bool {
         &&& self.top.wf_spec()
         &&& self.right.wf_spec()
@@ -36,7 +36,7 @@ impl RuntimePadding {
         &&& self.left@ == self@.left
     }
 
-    /// Construct from four sides.
+    ///  Construct from four sides.
     pub fn new(
         top: RuntimeRational,
         right: RuntimeRational,
@@ -59,7 +59,7 @@ impl RuntimePadding {
         RuntimePadding { top, right, bottom, left, model: Ghost(model) }
     }
 
-    /// Check semantic equality of two paddings.
+    ///  Check semantic equality of two paddings.
     pub fn eq_exec(&self, rhs: &Self) -> (out: bool)
         requires
             self.wf_spec(),
@@ -76,7 +76,7 @@ impl RuntimePadding {
         self.bottom.eq(&rhs.bottom) && self.left.eq(&rhs.left)
     }
 
-    /// Compute horizontal padding (left + right).
+    ///  Compute horizontal padding (left + right).
     pub fn horizontal_exec(&self) -> (out: RuntimeRational)
         requires
             self.wf_spec(),
@@ -87,7 +87,7 @@ impl RuntimePadding {
         self.left.add(&self.right)
     }
 
-    /// Compute vertical padding (top + bottom).
+    ///  Compute vertical padding (top + bottom).
     pub fn vertical_exec(&self) -> (out: RuntimeRational)
         requires
             self.wf_spec(),
@@ -98,7 +98,7 @@ impl RuntimePadding {
         self.top.add(&self.bottom)
     }
 
-    /// Main-axis padding at runtime.
+    ///  Main-axis padding at runtime.
     pub fn main_padding_exec(&self, axis: &Axis) -> (out: RuntimeRational)
         requires
             self.wf_spec(),
@@ -112,7 +112,7 @@ impl RuntimePadding {
         }
     }
 
-    /// Cross-axis padding at runtime.
+    ///  Cross-axis padding at runtime.
     pub fn cross_padding_exec(&self, axis: &Axis) -> (out: RuntimeRational)
         requires
             self.wf_spec(),
@@ -126,7 +126,7 @@ impl RuntimePadding {
         }
     }
 
-    /// Main-axis start padding at runtime.
+    ///  Main-axis start padding at runtime.
     pub fn main_start_exec(&self, axis: &Axis) -> (out: RuntimeRational)
         requires
             self.wf_spec(),
@@ -140,7 +140,7 @@ impl RuntimePadding {
         }
     }
 
-    /// Cross-axis start padding at runtime.
+    ///  Cross-axis start padding at runtime.
     pub fn cross_start_exec(&self, axis: &Axis) -> (out: RuntimeRational)
         requires
             self.wf_spec(),
@@ -154,7 +154,7 @@ impl RuntimePadding {
         }
     }
 
-    /// Normalize all rational fields.
+    ///  Normalize all rational fields.
     pub fn normalize_exec(self) -> (out: Self)
         requires self.wf_spec(),
         ensures
@@ -179,4 +179,4 @@ impl RuntimePadding {
     }
 }
 
-} // verus!
+} //  verus!

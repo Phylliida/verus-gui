@@ -17,14 +17,14 @@ use crate::text_input::TextInputConfig;
 
 verus! {
 
-/// Flex layout direction.
+///  Flex layout direction.
 pub enum FlexDirection {
     Column,
     Row,
 }
 
 impl FlexDirection {
-    /// Convert flex direction to layout axis.
+    ///  Convert flex direction to layout axis.
     pub open spec fn axis(self) -> Axis {
         match self {
             FlexDirection::Column => Axis::Vertical,
@@ -33,14 +33,14 @@ impl FlexDirection {
     }
 }
 
-/// A flex child with a weight.
+///  A flex child with a weight.
 #[verifier::reject_recursive_types(T)]
 pub struct FlexItem<T: OrderedRing> {
     pub weight: T,
     pub child: Widget<T>,
 }
 
-/// An absolutely-positioned child with explicit (x, y) offset.
+///  An absolutely-positioned child with explicit (x, y) offset.
 #[verifier::reject_recursive_types(T)]
 pub struct AbsoluteChild<T: OrderedRing> {
     pub x: T,
@@ -48,14 +48,14 @@ pub struct AbsoluteChild<T: OrderedRing> {
     pub child: Widget<T>,
 }
 
-/// Leaf widgets: no children, size determined by content or configuration.
+///  Leaf widgets: no children, size determined by content or configuration.
 #[verifier::reject_recursive_types(T)]
 pub enum LeafWidget<T: OrderedRing> {
     Leaf { size: Size<T> },
     TextInput { preferred_size: Size<T>, text_input_id: nat, config: TextInputConfig },
 }
 
-/// Wrapper widgets: exactly one child, modified layout constraints.
+///  Wrapper widgets: exactly one child, modified layout constraints.
 #[verifier::reject_recursive_types(T)]
 pub enum WrapperWidget<T: OrderedRing> {
     Margin { margin: Padding<T>, child: Box<Widget<T>> },
@@ -65,7 +65,7 @@ pub enum WrapperWidget<T: OrderedRing> {
     ScrollView { viewport: Size<T>, scroll_x: T, scroll_y: T, child: Box<Widget<T>> },
 }
 
-/// Container widgets: multiple children with layout strategy.
+///  Container widgets: multiple children with layout strategy.
 #[allow(inconsistent_fields)]
 #[verifier::reject_recursive_types(T)]
 pub enum ContainerWidget<T: OrderedRing> {
@@ -80,8 +80,8 @@ pub enum ContainerWidget<T: OrderedRing> {
     ListView { spacing: T, scroll_y: T, viewport: Size<T>, children: Seq<Widget<T>> },
 }
 
-/// A composable layout widget that can nest heterogeneous layout strategies.
-/// Split into Leaf/Wrapper/Container sub-enums for efficient dispatch.
+///  A composable layout widget that can nest heterogeneous layout strategies.
+///  Split into Leaf/Wrapper/Container sub-enums for efficient dispatch.
 #[verifier::reject_recursive_types(T)]
 pub enum Widget<T: OrderedRing> {
     Leaf(LeafWidget<T>),
@@ -89,9 +89,9 @@ pub enum Widget<T: OrderedRing> {
     Container(ContainerWidget<T>),
 }
 
-// ── Convenience constructors ──────────────────────────────────────
+//  ── Convenience constructors ──────────────────────────────────────
 
-/// Center a single child (stack with center alignment, no padding).
+///  Center a single child (stack with center alignment, no padding).
 pub open spec fn center_widget<T: OrderedRing>(child: Widget<T>) -> Widget<T> {
     Widget::Container(ContainerWidget::Stack {
         padding: Padding { top: T::zero(), right: T::zero(), bottom: T::zero(), left: T::zero() },
@@ -101,7 +101,7 @@ pub open spec fn center_widget<T: OrderedRing>(child: Widget<T>) -> Widget<T> {
     })
 }
 
-/// Align a single child with explicit h/v alignment (stack wrapper).
+///  Align a single child with explicit h/v alignment (stack wrapper).
 pub open spec fn align_widget<T: OrderedRing>(h: Alignment, v: Alignment, child: Widget<T>) -> Widget<T> {
     Widget::Container(ContainerWidget::Stack {
         padding: Padding { top: T::zero(), right: T::zero(), bottom: T::zero(), left: T::zero() },
@@ -111,10 +111,10 @@ pub open spec fn align_widget<T: OrderedRing>(h: Alignment, v: Alignment, child:
     })
 }
 
-// ── Variant body helpers ───────────────────────────────────────────
-// Extracted from layout_widget to enable shallow unfolding in proofs.
+//  ── Variant body helpers ───────────────────────────────────────────
+//  Extracted from layout_widget to enable shallow unfolding in proofs.
 
-/// Column layout body: given pre-computed child nodes, run column_layout and merge.
+///  Column layout body: given pre-computed child nodes, run column_layout and merge.
 pub open spec fn layout_column_body<T: OrderedField>(
     limits: Limits<T>,
     padding: Padding<T>,
@@ -127,7 +127,7 @@ pub open spec fn layout_column_body<T: OrderedField>(
     merge_layout(layout, child_nodes)
 }
 
-/// Row layout body.
+///  Row layout body.
 pub open spec fn layout_row_body<T: OrderedField>(
     limits: Limits<T>,
     padding: Padding<T>,
@@ -140,7 +140,7 @@ pub open spec fn layout_row_body<T: OrderedField>(
     merge_layout(layout, child_nodes)
 }
 
-/// Unified linear layout body: axis-parameterized column/row.
+///  Unified linear layout body: axis-parameterized column/row.
 pub open spec fn layout_linear_body<T: OrderedField>(
     limits: Limits<T>,
     padding: Padding<T>,
@@ -154,7 +154,7 @@ pub open spec fn layout_linear_body<T: OrderedField>(
     merge_layout(layout, child_nodes)
 }
 
-/// Stack layout body.
+///  Stack layout body.
 pub open spec fn layout_stack_body<T: OrderedField>(
     limits: Limits<T>,
     padding: Padding<T>,
@@ -167,7 +167,7 @@ pub open spec fn layout_stack_body<T: OrderedField>(
     merge_layout(layout, child_nodes)
 }
 
-/// Wrap layout body.
+///  Wrap layout body.
 pub open spec fn layout_wrap_body<T: OrderedField>(
     limits: Limits<T>,
     padding: Padding<T>,
@@ -180,8 +180,8 @@ pub open spec fn layout_wrap_body<T: OrderedField>(
     merge_layout(layout, child_nodes)
 }
 
-/// Flex column layout body: given pre-computed child nodes, run flex_column_layout and merge.
-/// Cross-axis = width for column direction.
+///  Flex column layout body: given pre-computed child nodes, run flex_column_layout and merge.
+///  Cross-axis = width for column direction.
 pub open spec fn layout_flex_column_body<T: OrderedField>(
     limits: Limits<T>,
     padding: Padding<T>,
@@ -195,7 +195,7 @@ pub open spec fn layout_flex_column_body<T: OrderedField>(
     merge_layout(layout, child_nodes)
 }
 
-/// Flex row layout body. Cross-axis = height for row direction.
+///  Flex row layout body. Cross-axis = height for row direction.
 pub open spec fn layout_flex_row_body<T: OrderedField>(
     limits: Limits<T>,
     padding: Padding<T>,
@@ -209,7 +209,7 @@ pub open spec fn layout_flex_row_body<T: OrderedField>(
     merge_layout(layout, child_nodes)
 }
 
-/// Flex linear layout body (axis-parameterized): dispatches to column/row body based on axis.
+///  Flex linear layout body (axis-parameterized): dispatches to column/row body based on axis.
 pub open spec fn layout_flex_linear_body<T: OrderedField>(
     limits: Limits<T>,
     padding: Padding<T>,
@@ -225,7 +225,7 @@ pub open spec fn layout_flex_linear_body<T: OrderedField>(
     }
 }
 
-/// Grid layout body: given pre-computed child nodes (flat, row-major), run grid_layout and merge.
+///  Grid layout body: given pre-computed child nodes (flat, row-major), run grid_layout and merge.
 pub open spec fn layout_grid_body<T: OrderedField>(
     limits: Limits<T>,
     padding: Padding<T>,
@@ -249,8 +249,8 @@ pub open spec fn layout_grid_body<T: OrderedField>(
     merge_layout(layout, child_nodes)
 }
 
-/// Absolute layout body: given pre-computed child nodes and offsets, run absolute_layout.
-/// No merge needed — absolute_layout positions children directly at their offsets.
+///  Absolute layout body: given pre-computed child nodes and offsets, run absolute_layout.
+///  No merge needed — absolute_layout positions children directly at their offsets.
 pub open spec fn layout_absolute_body<T: OrderedField>(
     limits: Limits<T>,
     padding: Padding<T>,
@@ -264,7 +264,7 @@ pub open spec fn layout_absolute_body<T: OrderedField>(
     merge_layout(layout, child_nodes)
 }
 
-/// Compute child nodes from children widgets at a given fuel.
+///  Compute child nodes from children widgets at a given fuel.
 pub open spec fn widget_child_nodes<T: OrderedField>(
     inner_limits: Limits<T>,
     children: Seq<Widget<T>>,
@@ -275,7 +275,7 @@ pub open spec fn widget_child_nodes<T: OrderedField>(
     Seq::new(children.len(), |i: int| layout_widget(inner_limits, children[i], fuel))
 }
 
-/// Compute child nodes for a flex column: each child gets per-weight limits.
+///  Compute child nodes for a flex column: each child gets per-weight limits.
 pub open spec fn flex_column_widget_child_nodes<T: OrderedField>(
     inner: Limits<T>,
     children: Seq<FlexItem<T>>,
@@ -296,7 +296,7 @@ pub open spec fn flex_column_widget_child_nodes<T: OrderedField>(
     })
 }
 
-/// Compute child nodes for a flex row: each child gets per-weight limits.
+///  Compute child nodes for a flex row: each child gets per-weight limits.
 pub open spec fn flex_row_widget_child_nodes<T: OrderedField>(
     inner: Limits<T>,
     children: Seq<FlexItem<T>>,
@@ -317,8 +317,8 @@ pub open spec fn flex_row_widget_child_nodes<T: OrderedField>(
     })
 }
 
-/// Compute child nodes for a flex linear layout (axis-parameterized).
-/// Dispatches to column/row widget child nodes based on axis.
+///  Compute child nodes for a flex linear layout (axis-parameterized).
+///  Dispatches to column/row widget child nodes based on axis.
 pub open spec fn flex_linear_widget_child_nodes<T: OrderedField>(
     inner: Limits<T>,
     children: Seq<FlexItem<T>>,
@@ -340,7 +340,7 @@ pub open spec fn flex_linear_widget_child_nodes<T: OrderedField>(
     }
 }
 
-/// Compute child nodes for a grid: each child gets cell-sized limits.
+///  Compute child nodes for a grid: each child gets cell-sized limits.
 pub open spec fn grid_widget_child_nodes<T: OrderedField>(
     inner: Limits<T>,
     col_widths: Seq<Size<T>>,
@@ -362,7 +362,7 @@ pub open spec fn grid_widget_child_nodes<T: OrderedField>(
     })
 }
 
-/// Compute child nodes for absolute layout: each child uses the same inner limits.
+///  Compute child nodes for absolute layout: each child uses the same inner limits.
 pub open spec fn absolute_widget_child_nodes<T: OrderedField>(
     inner_limits: Limits<T>,
     children: Seq<AbsoluteChild<T>>,
@@ -373,11 +373,11 @@ pub open spec fn absolute_widget_child_nodes<T: OrderedField>(
     Seq::new(children.len(), |i: int| layout_widget(inner_limits, children[i].child, fuel))
 }
 
-// ── Main layout function ───────────────────────────────────────────
+//  ── Main layout function ───────────────────────────────────────────
 
-/// Recursively lay out a widget tree, producing a positioned Node tree.
+///  Recursively lay out a widget tree, producing a positioned Node tree.
 ///
-/// Uses fuel-based recursion (fuel must exceed tree depth).
+///  Uses fuel-based recursion (fuel must exceed tree depth).
 pub open spec fn layout_widget<T: OrderedField>(
     limits: Limits<T>,
     widget: Widget<T>,
@@ -401,7 +401,7 @@ pub open spec fn layout_widget<T: OrderedField>(
     }
 }
 
-/// Lay out a leaf widget (no children).
+///  Lay out a leaf widget (no children).
 pub open spec fn layout_leaf<T: OrderedField>(
     limits: Limits<T>,
     leaf: LeafWidget<T>,
@@ -426,7 +426,7 @@ pub open spec fn layout_leaf<T: OrderedField>(
     }
 }
 
-/// Lay out a wrapper widget (single child).
+///  Lay out a wrapper widget (single child).
 pub open spec fn layout_wrapper<T: OrderedField>(
     limits: Limits<T>,
     wrapper: WrapperWidget<T>,
@@ -541,7 +541,7 @@ pub open spec fn layout_wrapper<T: OrderedField>(
     }
 }
 
-/// Lay out a container widget (multiple children).
+///  Lay out a container widget (multiple children).
 pub open spec fn layout_container<T: OrderedField>(
     limits: Limits<T>,
     container: ContainerWidget<T>,
@@ -627,7 +627,7 @@ pub open spec fn layout_container<T: OrderedField>(
     }
 }
 
-/// Merge positions from a layout result with recursively-computed child Nodes.
+///  Merge positions from a layout result with recursively-computed child Nodes.
 pub open spec fn merge_layout<T: OrderedRing>(
     layout: Node<T>,
     child_nodes: Seq<Node<T>>,
@@ -645,9 +645,9 @@ pub open spec fn merge_layout<T: OrderedRing>(
     }
 }
 
-// ── Widget depth and canonical entry point ─────────────────────────
+//  ── Widget depth and canonical entry point ─────────────────────────
 
-/// Extract the children sequence from any Widget variant.
+///  Extract the children sequence from any Widget variant.
 pub open spec fn get_children<T: OrderedRing>(widget: Widget<T>) -> Seq<Widget<T>> {
     match widget {
         Widget::Leaf(_) => Seq::empty(),
@@ -673,7 +673,7 @@ pub open spec fn get_children<T: OrderedRing>(widget: Widget<T>) -> Seq<Widget<T
     }
 }
 
-/// Max widget_depth across children[0..count].
+///  Max widget_depth across children[0..count].
 pub open spec fn max_child_widget_depth<T: OrderedRing>(
     children: Seq<Widget<T>>,
     fuel: nat,
@@ -690,7 +690,7 @@ pub open spec fn max_child_widget_depth<T: OrderedRing>(
     }
 }
 
-/// Compute the depth of a widget tree (fuel-bounded).
+///  Compute the depth of a widget tree (fuel-bounded).
 pub open spec fn widget_depth<T: OrderedRing>(widget: Widget<T>, fuel: nat) -> nat
     decreases fuel, 0nat,
 {
@@ -706,7 +706,7 @@ pub open spec fn widget_depth<T: OrderedRing>(widget: Widget<T>, fuel: nat) -> n
     }
 }
 
-/// Canonical entry point: lay out a widget with sufficient fuel.
+///  Canonical entry point: lay out a widget with sufficient fuel.
 pub open spec fn layout_widget_full<T: OrderedField>(
     limits: Limits<T>,
     widget: Widget<T>,
@@ -715,12 +715,12 @@ pub open spec fn layout_widget_full<T: OrderedField>(
     layout_widget(limits, widget, widget_depth(widget, fuel_bound) + 1)
 }
 
-// ── Fuel convergence ───────────────────────────────────────────────
+//  ── Fuel convergence ───────────────────────────────────────────────
 
-/// Whether the widget tree has converged at the given fuel level.
+///  Whether the widget tree has converged at the given fuel level.
 ///
-/// A leaf always converges (at fuel >= 1). A container converges when
-/// all its children have converged at fuel-1.
+///  A leaf always converges (at fuel >= 1). A container converges when
+///  all its children have converged at fuel-1.
 pub open spec fn widget_converged<T: OrderedRing>(widget: Widget<T>, fuel: nat) -> bool
     decreases fuel,
 {
@@ -737,7 +737,7 @@ pub open spec fn widget_converged<T: OrderedRing>(widget: Widget<T>, fuel: nat) 
     }
 }
 
-/// Extra fuel doesn't change child_nodes when children have converged.
+///  Extra fuel doesn't change child_nodes when children have converged.
 proof fn lemma_child_nodes_fuel_monotone<T: OrderedField>(
     inner_limits: Limits<T>,
     children: Seq<Widget<T>>,
@@ -761,7 +761,7 @@ proof fn lemma_child_nodes_fuel_monotone<T: OrderedField>(
         =~= widget_child_nodes(inner_limits, children, fuel + 1));
 }
 
-/// Flex column child nodes are fuel-monotone.
+///  Flex column child nodes are fuel-monotone.
 proof fn lemma_flex_column_child_nodes_fuel_monotone<T: OrderedField>(
     inner: Limits<T>,
     children: Seq<FlexItem<T>>,
@@ -793,7 +793,7 @@ proof fn lemma_flex_column_child_nodes_fuel_monotone<T: OrderedField>(
     assert(old_cn =~= new_cn);
 }
 
-/// Flex row child nodes are fuel-monotone.
+///  Flex row child nodes are fuel-monotone.
 proof fn lemma_flex_row_child_nodes_fuel_monotone<T: OrderedField>(
     inner: Limits<T>,
     children: Seq<FlexItem<T>>,
@@ -825,7 +825,7 @@ proof fn lemma_flex_row_child_nodes_fuel_monotone<T: OrderedField>(
     assert(old_cn =~= new_cn);
 }
 
-/// Flex linear child nodes are fuel-monotone (axis-parameterized).
+///  Flex linear child nodes are fuel-monotone (axis-parameterized).
 proof fn lemma_flex_linear_child_nodes_fuel_monotone<T: OrderedField>(
     inner: Limits<T>,
     children: Seq<FlexItem<T>>,
@@ -857,7 +857,7 @@ proof fn lemma_flex_linear_child_nodes_fuel_monotone<T: OrderedField>(
     }
 }
 
-/// Absolute child nodes are fuel-monotone.
+///  Absolute child nodes are fuel-monotone.
 proof fn lemma_absolute_child_nodes_fuel_monotone<T: OrderedField>(
     inner_limits: Limits<T>,
     children: Seq<AbsoluteChild<T>>,
@@ -881,7 +881,7 @@ proof fn lemma_absolute_child_nodes_fuel_monotone<T: OrderedField>(
     assert(old_cn =~= new_cn);
 }
 
-/// Grid child nodes are fuel-monotone.
+///  Grid child nodes are fuel-monotone.
 proof fn lemma_grid_child_nodes_fuel_monotone<T: OrderedField>(
     inner: Limits<T>,
     col_widths: Seq<Size<T>>,
@@ -898,7 +898,7 @@ proof fn lemma_grid_child_nodes_fuel_monotone<T: OrderedField>(
             == grid_widget_child_nodes(inner, col_widths, row_heights, children, num_cols, fuel + 1),
     decreases fuel, 1nat,
 {
-    // Prove each child layout is unchanged by extra fuel
+    //  Prove each child layout is unchanged by extra fuel
     let ghost old_cn = grid_widget_child_nodes(inner, col_widths, row_heights, children, num_cols, fuel);
     let ghost new_cn = grid_widget_child_nodes(inner, col_widths, row_heights, children, num_cols, fuel + 1);
     assert forall|i: int| 0 <= i < children.len() implies
@@ -915,7 +915,7 @@ proof fn lemma_grid_child_nodes_fuel_monotone<T: OrderedField>(
     assert(old_cn =~= new_cn);
 }
 
-/// Extra fuel doesn't change the result when the widget has converged.
+///  Extra fuel doesn't change the result when the widget has converged.
 pub proof fn lemma_layout_widget_fuel_monotone<T: OrderedField>(
     limits: Limits<T>,
     widget: Widget<T>,
@@ -927,7 +927,7 @@ pub proof fn lemma_layout_widget_fuel_monotone<T: OrderedField>(
         layout_widget(limits, widget, fuel) == layout_widget(limits, widget, fuel + 1),
     decreases fuel, 0nat,
 {
-    // widget_converged(widget, fuel) implies fuel >= 1
+    //  widget_converged(widget, fuel) implies fuel >= 1
     assert(fuel >= 1nat);
     match widget {
         Widget::Leaf(_) => {},
@@ -950,7 +950,7 @@ pub proof fn lemma_layout_widget_fuel_monotone<T: OrderedField>(
                     }
                     lemma_layout_widget_fuel_monotone(limits, *child, (fuel - 1) as nat);
                 } else {
-                    // !visible: no recursion, both fuel levels produce same zero-size leaf
+                    //  !visible: no recursion, both fuel levels produce same zero-size leaf
                 }
             },
             WrapperWidget::SizedBox { inner_limits, child } => {
@@ -1100,8 +1100,8 @@ pub proof fn lemma_layout_widget_fuel_monotone<T: OrderedField>(
                 min: Size::zero_size(),
                 max: Size::new(viewport.width, viewport.height),
             };
-            // Show measure_children at fuel-1 == measure_children at fuel
-            // (since all children are converged at fuel-1)
+            //  Show measure_children at fuel-1 == measure_children at fuel
+            //  (since all children are converged at fuel-1)
             let cs1 = crate::measure::measure_children(child_limits, children, (fuel - 1) as nat);
             let cs2 = crate::measure::measure_children(child_limits, children, fuel);
             assert forall|j: int| 0 <= j < children.len() implies
@@ -1112,14 +1112,14 @@ pub proof fn lemma_layout_widget_fuel_monotone<T: OrderedField>(
                 crate::measure::lemma_measure_fuel_monotone(child_limits, children[j], (fuel - 1) as nat);
             };
             assert(cs1 =~= cs2);
-            // With same child_sizes, visible range is the same
+            //  With same child_sizes, visible range is the same
             let first = listview_first_visible(cs1, spacing, scroll_y);
             let end = listview_end_visible(cs1, spacing, scroll_y, viewport.height);
-            // Prove bounds on first and end
+            //  Prove bounds on first and end
             crate::layout::listview_proofs::lemma_first_visible_bounded(cs1, spacing, scroll_y);
             crate::layout::listview_proofs::lemma_end_visible_bounded(cs1, spacing, scroll_y, viewport.height);
             let count: nat = if end >= first { (end - first) as nat } else { 0 };
-            // Each visible child is converged at fuel-1, so layout(fuel-1) == layout(fuel)
+            //  Each visible child is converged at fuel-1, so layout(fuel-1) == layout(fuel)
             assert forall|i: int| 0 <= i < (count as int) implies
                 (#[trigger] layout_widget(
                     child_limits, children[(first + i) as int], (fuel - 1) as nat,
@@ -1134,8 +1134,8 @@ pub proof fn lemma_layout_widget_fuel_monotone<T: OrderedField>(
                 assert(widget_converged(children[ci], (fuel - 1) as nat));
                 lemma_layout_widget_fuel_monotone(child_limits, children[ci], (fuel - 1) as nat);
             };
-            // The visible child node sequences are equal
-            // listview_widget_child_nodes wraps Seq::new — unfold both sides
+            //  The visible child node sequences are equal
+            //  listview_widget_child_nodes wraps Seq::new — unfold both sides
             let cn1 = listview_widget_child_nodes(child_limits, children, first, end, (fuel - 1) as nat);
             let cn2 = listview_widget_child_nodes(child_limits, children, first, end, fuel);
             assert(cn1.len() == cn2.len());
@@ -1154,9 +1154,9 @@ pub proof fn lemma_layout_widget_fuel_monotone<T: OrderedField>(
     }
 }
 
-// ── Idempotence completion ─────────────────────────────────────────
+//  ── Idempotence completion ─────────────────────────────────────────
 
-/// Convergence is monotone in fuel: if converged at fuel1, then converged at fuel2 >= fuel1.
+///  Convergence is monotone in fuel: if converged at fuel1, then converged at fuel2 >= fuel1.
 pub proof fn lemma_widget_converged_monotone<T: OrderedRing>(
     widget: Widget<T>,
     fuel1: nat,
@@ -1170,30 +1170,30 @@ pub proof fn lemma_widget_converged_monotone<T: OrderedRing>(
     decreases fuel2,
 {
     if fuel2 == fuel1 {
-        // trivial
+        //  trivial
     } else {
-        // fuel2 > fuel1 >= 1 (since widget_converged(_, 0) is false, fuel1 >= 1)
+        //  fuel2 > fuel1 >= 1 (since widget_converged(_, 0) is false, fuel1 >= 1)
         assert(fuel1 >= 1nat);
         assert(fuel2 >= 2nat);
         let children = get_children(widget);
         if children.len() == 0 {
-            // widget_converged(widget, fuel2) is trivially true for leaflike widgets
+            //  widget_converged(widget, fuel2) is trivially true for leaflike widgets
         } else {
-            // Need: forall|i| widget_converged(children[i], (fuel2 - 1))
-            // We have: forall|i| widget_converged(children[i], (fuel1 - 1))
+            //  Need: forall|i| widget_converged(children[i], (fuel2 - 1))
+            //  We have: forall|i| widget_converged(children[i], (fuel1 - 1))
             assert forall|i: int| 0 <= i < children.len() implies
                 widget_converged(children[i], (fuel2 - 1) as nat)
             by {
-                // children[i] is converged at (fuel1 - 1)
+                //  children[i] is converged at (fuel1 - 1)
                 assert(widget_converged(children[i], (fuel1 - 1) as nat));
-                // By induction: converged at (fuel2 - 1) >= (fuel1 - 1)
+                //  By induction: converged at (fuel2 - 1) >= (fuel1 - 1)
                 lemma_widget_converged_monotone(children[i], (fuel1 - 1) as nat, (fuel2 - 1) as nat);
             }
         }
     }
 }
 
-/// Helper: max_child_widget_depth bounds each child's depth.
+///  Helper: max_child_widget_depth bounds each child's depth.
 proof fn lemma_max_child_depth_bounds<T: OrderedRing>(
     children: Seq<Widget<T>>,
     fuel: nat,
@@ -1208,14 +1208,14 @@ proof fn lemma_max_child_depth_bounds<T: OrderedRing>(
     decreases count,
 {
     if i == count - 1 {
-        // cur = widget_depth(children[count-1], fuel), max = if cur >= prev { cur } else { prev } >= cur
+        //  cur = widget_depth(children[count-1], fuel), max = if cur >= prev { cur } else { prev } >= cur
     } else {
         lemma_max_child_depth_bounds::<T>(children, fuel, (count - 1) as nat, i);
     }
 }
 
-/// Sufficient fuel implies convergence.
-/// If fuel exceeds the estimated depth, the widget has converged.
+///  Sufficient fuel implies convergence.
+///  If fuel exceeds the estimated depth, the widget has converged.
 pub proof fn lemma_sufficient_fuel_converges<T: OrderedRing>(
     widget: Widget<T>,
     fuel: nat,
@@ -1228,17 +1228,17 @@ pub proof fn lemma_sufficient_fuel_converges<T: OrderedRing>(
 {
     let children = get_children(widget);
     if fuel == 0 {
-        // widget_depth(widget, 0) = 0, so fuel > 0 contradicts fuel == 0
+        //  widget_depth(widget, 0) = 0, so fuel > 0 contradicts fuel == 0
     } else if children.len() == 0 {
-        // fuel >= 1, widget_converged(leaflike, fuel) = true
+        //  fuel >= 1, widget_converged(leaflike, fuel) = true
     } else {
-        // fuel > 0, children.len() > 0
-        // widget_depth(widget, fuel) = 1 + max_child_widget_depth(children, fuel-1, children.len())
-        // So fuel > 1 + max_child_widget_depth(...)
-        // For each child i:
-        //   widget_depth(children[i], fuel-1) <= max_child_widget_depth(children, fuel-1, children.len())
-        //   So fuel - 1 > widget_depth(children[i], fuel-1)
-        // By induction: widget_converged(children[i], fuel-1)
+        //  fuel > 0, children.len() > 0
+        //  widget_depth(widget, fuel) = 1 + max_child_widget_depth(children, fuel-1, children.len())
+        //  So fuel > 1 + max_child_widget_depth(...)
+        //  For each child i:
+        //    widget_depth(children[i], fuel-1) <= max_child_widget_depth(children, fuel-1, children.len())
+        //    So fuel - 1 > widget_depth(children[i], fuel-1)
+        //  By induction: widget_converged(children[i], fuel-1)
         assert forall|i: int| 0 <= i < children.len() implies
             widget_converged(children[i], (fuel - 1) as nat)
         by {
@@ -1248,10 +1248,10 @@ pub proof fn lemma_sufficient_fuel_converges<T: OrderedRing>(
     }
 }
 
-// ── Widget path navigation ──────────────────────────────────────
+//  ── Widget path navigation ──────────────────────────────────────
 
-/// Walk the widget tree following a path of child indices.
-/// Returns the widget at the given path, or None if any index is out of bounds.
+///  Walk the widget tree following a path of child indices.
+///  Returns the widget at the given path, or None if any index is out of bounds.
 pub open spec fn widget_at_path<T: OrderedRing>(
     widget: Widget<T>, path: Seq<nat>,
 ) -> Option<Widget<T>>
@@ -1270,7 +1270,7 @@ pub open spec fn widget_at_path<T: OrderedRing>(
     }
 }
 
-/// If the widget at the given path is a TextInput, return its text_input_id.
+///  If the widget at the given path is a TextInput, return its text_input_id.
 pub open spec fn focused_text_input_id<T: OrderedRing>(
     widget: Widget<T>, path: Seq<nat>,
 ) -> Option<nat> {
@@ -1280,7 +1280,7 @@ pub open spec fn focused_text_input_id<T: OrderedRing>(
     }
 }
 
-/// If the widget at the given path is a TextInput, return its config.
+///  If the widget at the given path is a TextInput, return its config.
 pub open spec fn focused_text_input_config<T: OrderedRing>(
     widget: Widget<T>, path: Seq<nat>,
 ) -> Option<TextInputConfig> {
@@ -1290,27 +1290,27 @@ pub open spec fn focused_text_input_config<T: OrderedRing>(
     }
 }
 
-/// widget_at_path for empty path always returns Some.
+///  widget_at_path for empty path always returns Some.
 pub proof fn lemma_widget_at_path_empty<T: OrderedRing>(widget: Widget<T>)
     ensures widget_at_path(widget, Seq::empty()) == Some(widget),
 {}
 
-/// widget_at_path respects path_valid: valid path implies Some result.
+///  widget_at_path respects path_valid: valid path implies Some result.
 pub proof fn lemma_widget_at_path_valid<T: OrderedRing>(
     widget: Widget<T>, path: Seq<nat>, fuel: nat,
 )
     requires
         fuel > widget_depth(widget, fuel),
     ensures
-        // Note: path_valid is on Node, but widget_at_path is on Widget.
-        // This lemma just proves non-None for in-bounds indices.
+        //  Note: path_valid is on Node, but widget_at_path is on Widget.
+        //  This lemma just proves non-None for in-bounds indices.
         path.len() == 0 ==> widget_at_path(widget, path).is_some(),
 {}
 
-/// Layout is deterministic: once fuel exceeds the widget tree depth,
-/// the result is independent of the specific fuel value.
-/// Generalizes lemma_layout_widget_fuel_monotone from fuel vs fuel+1
-/// to any two converged fuel levels.
+///  Layout is deterministic: once fuel exceeds the widget tree depth,
+///  the result is independent of the specific fuel value.
+///  Generalizes lemma_layout_widget_fuel_monotone from fuel vs fuel+1
+///  to any two converged fuel levels.
 pub proof fn lemma_layout_deterministic<T: OrderedField>(
     limits: Limits<T>,
     widget: Widget<T>,
@@ -1323,17 +1323,17 @@ pub proof fn lemma_layout_deterministic<T: OrderedField>(
     ensures
         layout_widget(limits, widget, fuel1) == layout_widget(limits, widget, fuel2),
 {
-    // WLOG fuel1 <= fuel2 — prove both directions by induction on the smaller.
-    // Step up from min(fuel1,fuel2) to max(fuel1,fuel2) one step at a time.
+    //  WLOG fuel1 <= fuel2 — prove both directions by induction on the smaller.
+    //  Step up from min(fuel1,fuel2) to max(fuel1,fuel2) one step at a time.
     let lo = if fuel1 <= fuel2 { fuel1 } else { fuel2 };
     let hi = if fuel1 <= fuel2 { fuel2 } else { fuel1 };
-    // Both converged at lo (since converged at both fuel1 and fuel2, and lo is one of them)
+    //  Both converged at lo (since converged at both fuel1 and fuel2, and lo is one of them)
     lemma_layout_deterministic_helper(limits, widget, lo, hi);
-    // layout(lo) == layout(hi)
-    // Since lo and hi are fuel1/fuel2 in some order, result follows.
+    //  layout(lo) == layout(hi)
+    //  Since lo and hi are fuel1/fuel2 in some order, result follows.
 }
 
-/// Helper: proves layout(lo) == layout(hi) when lo <= hi and widget converged at lo.
+///  Helper: proves layout(lo) == layout(hi) when lo <= hi and widget converged at lo.
 proof fn lemma_layout_deterministic_helper<T: OrderedField>(
     limits: Limits<T>,
     widget: Widget<T>,
@@ -1348,21 +1348,21 @@ proof fn lemma_layout_deterministic_helper<T: OrderedField>(
     decreases hi - lo,
 {
     if lo == hi {
-        // trivial
+        //  trivial
     } else {
         lemma_layout_widget_fuel_monotone(limits, widget, lo);
-        // layout(lo) == layout(lo+1)
+        //  layout(lo) == layout(lo+1)
         lemma_widget_converged_monotone(widget, lo, lo + 1);
-        // converged at lo+1
+        //  converged at lo+1
         lemma_layout_deterministic_helper(limits, widget, lo + 1, hi);
-        // layout(lo+1) == layout(hi), chain: layout(lo) == layout(hi)
+        //  layout(lo+1) == layout(hi), chain: layout(lo) == layout(hi)
     }
 }
 
-// ── widget_at_path composition and properties ───────────────────
+//  ── widget_at_path composition and properties ───────────────────
 
-/// widget_at_path composes: navigating path1 ++ path2 is the same as
-/// navigating path1 first, then path2 from the result.
+///  widget_at_path composes: navigating path1 ++ path2 is the same as
+///  navigating path1 first, then path2 from the result.
 pub proof fn lemma_widget_at_path_compose<T: OrderedRing>(
     widget: Widget<T>,
     path1: Seq<nat>,
@@ -1382,27 +1382,27 @@ pub proof fn lemma_widget_at_path_compose<T: OrderedRing>(
         let children = get_children(widget);
         let idx = path1[0];
         if idx >= children.len() {
-            // widget_at_path(widget, path1) = None
-            // widget_at_path(widget, path1 + path2) = None (first step fails)
+            //  widget_at_path(widget, path1) = None
+            //  widget_at_path(widget, path1 + path2) = None (first step fails)
             let combined = path1 + path2;
             assert(combined[0] == path1[0]);
             assert(combined.len() > 0);
         } else {
             let rest1 = path1.subrange(1, path1.len() as int);
             let combined = path1 + path2;
-            // combined[0] == path1[0] = idx
+            //  combined[0] == path1[0] = idx
             assert(combined[0] == idx);
-            // combined.subrange(1, ..) == rest1 + path2
+            //  combined.subrange(1, ..) == rest1 + path2
             assert(combined.subrange(1, combined.len() as int) =~= rest1 + path2);
-            // IH: widget_at_path(children[idx], rest1 + path2) ==
-            //     match widget_at_path(children[idx], rest1) { Some(w) => widget_at_path(w, path2), None => None }
+            //  IH: widget_at_path(children[idx], rest1 + path2) ==
+            //      match widget_at_path(children[idx], rest1) { Some(w) => widget_at_path(w, path2), None => None }
             lemma_widget_at_path_compose(children[idx as int], rest1, path2);
         }
     }
 }
 
-/// widget_at_path is deterministic: same inputs → same output.
-/// (This is trivially true for spec functions, but worth stating.)
+///  widget_at_path is deterministic: same inputs → same output.
+///  (This is trivially true for spec functions, but worth stating.)
 pub proof fn lemma_widget_at_path_deterministic<T: OrderedRing>(
     w1: Widget<T>, w2: Widget<T>,
     path1: Seq<nat>, path2: Seq<nat>,
@@ -1411,7 +1411,7 @@ pub proof fn lemma_widget_at_path_deterministic<T: OrderedRing>(
     ensures widget_at_path(w1, path1) === widget_at_path(w2, path2),
 {}
 
-/// Single-step navigation: widget_at_path with a one-element path.
+///  Single-step navigation: widget_at_path with a one-element path.
 pub proof fn lemma_widget_at_path_single<T: OrderedRing>(
     widget: Widget<T>, idx: nat,
 )
@@ -1426,7 +1426,7 @@ pub proof fn lemma_widget_at_path_single<T: OrderedRing>(
         == Some(get_children(widget)[idx as int]));
 }
 
-/// widget_at_path returns None when path index is out of bounds.
+///  widget_at_path returns None when path index is out of bounds.
 pub proof fn lemma_widget_at_path_oob<T: OrderedRing>(
     widget: Widget<T>, path: Seq<nat>,
 )
@@ -1437,4 +1437,4 @@ pub proof fn lemma_widget_at_path_oob<T: OrderedRing>(
         widget_at_path(widget, path).is_none(),
 {}
 
-} // verus!
+} //  verus!

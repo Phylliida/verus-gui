@@ -16,8 +16,8 @@ use crate::layout::proofs::*;
 
 verus! {
 
-/// Execute stack layout: build a parent Node with all children overlapping,
-/// each independently aligned on both axes.
+///  Execute stack layout: build a parent Node with all children overlapping,
+///  each independently aligned on both axes.
 pub fn stack_layout_exec(
     limits: &RuntimeLimits,
     padding: &RuntimePadding,
@@ -41,12 +41,12 @@ pub fn stack_layout_exec(
 
     let n = child_sizes.len();
 
-    // Compute content size: max_width x max_height
+    //  Compute content size: max_width x max_height
     let mut max_w = RuntimeRational::from_int(0);
     let mut max_h = RuntimeRational::from_int(0);
     let mut i: usize = 0;
 
-    // Reveal initial step: max_width(spec_sizes, 0) == T::zero()
+    //  Reveal initial step: max_width(spec_sizes, 0) == T::zero()
     proof {
         reveal(max_width);
         reveal(max_height);
@@ -65,7 +65,7 @@ pub fn stack_layout_exec(
         decreases n - i,
     {
         proof {
-            // Unfold one step: max_width(sizes, i+1) == max(max_width(sizes, i), sizes[i].width)
+            //  Unfold one step: max_width(sizes, i+1) == max(max_width(sizes, i), sizes[i].width)
             reveal(max_width);
             reveal(max_height);
         }
@@ -74,7 +74,7 @@ pub fn stack_layout_exec(
         i = i + 1;
     }
 
-    // Compute total size and resolve
+    //  Compute total size and resolve
     let pad_h = padding.horizontal_exec();
     let pad_v = padding.vertical_exec();
     let total_width = pad_h.add(&max_w);
@@ -84,11 +84,11 @@ pub fn stack_layout_exec(
     let parent_height = limits.min.height.max(&total_height.min(&limits.max.height));
     let parent_size = RuntimeSize::new(parent_width, parent_height);
 
-    // Available space for alignment
+    //  Available space for alignment
     let available_width = limits.max.width.sub(&padding.horizontal_exec());
     let available_height = limits.max.height.sub(&padding.vertical_exec());
 
-    // Establish children sequence length
+    //  Establish children sequence length
     proof {
         lemma_stack_children_len::<RationalModel>(
             padding@, *h_align, *v_align, spec_sizes,
@@ -96,7 +96,7 @@ pub fn stack_layout_exec(
         );
     }
 
-    // Build children — each independently aligned, no cumulative position
+    //  Build children — each independently aligned, no cumulative position
     let mut children: Vec<RuntimeNode> = Vec::new();
     let mut k: usize = 0;
 
@@ -177,4 +177,4 @@ pub fn stack_layout_exec(
     out
 }
 
-} // verus!
+} //  verus!

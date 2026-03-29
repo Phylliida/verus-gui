@@ -14,7 +14,7 @@ use crate::runtime::event_helpers::*;
 
 verus! {
 
-// ── Runtime event types ────────────────────────────────────────────
+//  ── Runtime event types ────────────────────────────────────────────
 
 pub enum RuntimePointerEventKind {
     Down,
@@ -22,21 +22,21 @@ pub enum RuntimePointerEventKind {
     Move,
 }
 
-/// Runtime pointer event with rational coordinates.
+///  Runtime pointer event with rational coordinates.
 pub struct RuntimePointerEvent {
     pub kind: RuntimePointerEventKind,
     pub x: RuntimeRational,
     pub y: RuntimeRational,
 }
 
-/// Runtime focus state tracking the focused path.
+///  Runtime focus state tracking the focused path.
 pub struct RuntimeFocusState {
     pub focused_path: Option<Vec<usize>>,
 }
 
-// ── Dispatch exec ──────────────────────────────────────────────────
+//  ── Dispatch exec ──────────────────────────────────────────────────
 
-/// Runtime event dispatch — wraps hit_test_exec.
+///  Runtime event dispatch — wraps hit_test_exec.
 pub fn dispatch_pointer_exec(
     root: &RuntimeNode,
     event: &RuntimePointerEvent,
@@ -63,7 +63,7 @@ pub fn dispatch_pointer_exec(
     hit_test_exec(root, &event.x, &event.y, depth)
 }
 
-/// Update focus on pointer down.
+///  Update focus on pointer down.
 pub fn update_focus_exec(
     state: &mut RuntimeFocusState,
     root: &RuntimeNode,
@@ -83,9 +83,9 @@ pub fn update_focus_exec(
     }
 }
 
-// ── Bubble path exec ───────────────────────────────────────────────
+//  ── Bubble path exec ───────────────────────────────────────────────
 
-/// Compute bubble path: sequence of prefixes from full path to empty.
+///  Compute bubble path: sequence of prefixes from full path to empty.
 pub fn bubble_path_exec(path: &Vec<usize>) -> (out: Vec<Vec<usize>>)
     ensures
         out@.len() == path@.len() + 1,
@@ -101,7 +101,7 @@ pub fn bubble_path_exec(path: &Vec<usize>) -> (out: Vec<Vec<usize>>)
             result@.len() == (n - len) as nat,
         decreases len,
     {
-        // Copy path[0..len]
+        //  Copy path[0..len]
         let mut prefix: Vec<usize> = Vec::new();
         let mut j: usize = 0;
         while j < len
@@ -120,12 +120,12 @@ pub fn bubble_path_exec(path: &Vec<usize>) -> (out: Vec<Vec<usize>>)
         len = len - 1;
     }
 
-    // Push empty path (root)
+    //  Push empty path (root)
     result.push(Vec::new());
     result
 }
 
-// ── Runtime keyboard event types ──────────────────────────────────
+//  ── Runtime keyboard event types ──────────────────────────────────
 
 pub struct RuntimeModifiers {
     pub shift: bool,
@@ -213,21 +213,21 @@ impl View for RuntimeKeyEvent {
     }
 }
 
-/// Runtime result of key dispatch.
+///  Runtime result of key dispatch.
 pub enum RuntimeKeyAction {
     NewModel(RuntimeTextModel),
     External(ExternalAction),
     None,
 }
 
-// ── Key dispatch exec ────────────────────────────────────────────
+//  ── Key dispatch exec ────────────────────────────────────────────
 
-/// Dispatch a keyboard event to the text model.
-/// Returns None for events not handled, External for undo/clipboard,
-/// or NewModel with the updated model.
+///  Dispatch a keyboard event to the text model.
+///  Returns None for events not handled, External for undo/clipboard,
+///  or NewModel with the updated model.
 ///
-/// Verified against the spec `dispatch_key`. Delegates to per-category
-/// helpers to keep each function within rlimit.
+///  Verified against the spec `dispatch_key`. Delegates to per-category
+///  helpers to keep each function within rlimit.
 pub fn dispatch_key_exec(
     model: RuntimeTextModel,
     event: &RuntimeKeyEvent,
@@ -317,4 +317,4 @@ pub fn dispatch_key_exec(
     }
 }
 
-} // verus!
+} //  verus!

@@ -130,4 +130,4 @@ pub fn layout_aspect_ratio_widget_exec(
     out
 }
 
-} // verus!
+} //  verus!

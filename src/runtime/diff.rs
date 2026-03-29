@@ -8,7 +8,7 @@ use crate::diff::{DiffResult, diff_nodes, diff_children};
 
 verus! {
 
-/// Runtime diff result.
+///  Runtime diff result.
 pub enum RuntimeDiffResult {
     Same,
     PositionChanged,
@@ -17,7 +17,7 @@ pub enum RuntimeDiffResult {
     ChildrenChanged { diffs: Vec<(usize, RuntimeDiffResult)> },
 }
 
-/// Check if two RuntimeRationals are equivalent (a <= b && b <= a).
+///  Check if two RuntimeRationals are equivalent (a <= b && b <= a).
 fn rational_eqv(a: &RuntimeRational, b: &RuntimeRational) -> (out: bool)
     requires a.wf_spec(), b.wf_spec(),
     ensures out == a@.eqv(b@),
@@ -25,7 +25,7 @@ fn rational_eqv(a: &RuntimeRational, b: &RuntimeRational) -> (out: bool)
     a.le(b) && b.le(a)
 }
 
-/// Compare two runtime nodes.
+///  Compare two runtime nodes.
 pub fn diff_nodes_exec(
     old: &RuntimeNode,
     new: &RuntimeNode,
@@ -94,4 +94,4 @@ pub fn diff_nodes_exec(
     }
 }
 
-} // verus!
+} //  verus!

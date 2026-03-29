@@ -11,9 +11,9 @@ use crate::layout::Axis;
 
 verus! {
 
-// ── Helper spec functions ───────────────────────────────────────────
+//  ── Helper spec functions ───────────────────────────────────────────
 
-/// Sum of the first `count` weights.
+///  Sum of the first `count` weights.
 pub open spec fn sum_weights<T: OrderedRing>(
     weights: Seq<T>,
     count: nat,
@@ -27,8 +27,8 @@ pub open spec fn sum_weights<T: OrderedRing>(
     }
 }
 
-/// Size allocated to a single flex child on the main axis:
-/// weight / total_weight * available.
+///  Size allocated to a single flex child on the main axis:
+///  weight / total_weight * available.
 pub open spec fn flex_child_main_size<T: OrderedField>(
     weight: T,
     total_weight: T,
@@ -37,8 +37,8 @@ pub open spec fn flex_child_main_size<T: OrderedField>(
     weight.div(total_weight).mul(available)
 }
 
-/// Sum of main-axis sizes for children 0..count in a flex layout:
-/// Σ (weights[i] / total_weight * available) for i in 0..count.
+///  Sum of main-axis sizes for children 0..count in a flex layout:
+///  Σ (weights[i] / total_weight * available) for i in 0..count.
 pub open spec fn flex_main_sum<T: OrderedField>(
     weights: Seq<T>,
     total_weight: T,
@@ -55,10 +55,10 @@ pub open spec fn flex_main_sum<T: OrderedField>(
     }
 }
 
-// ── Flex column layout ──────────────────────────────────────────────
+//  ── Flex column layout ──────────────────────────────────────────────
 
-/// Y-position of child at `index` in a flex column:
-/// padding_top + Σ(flex sizes for 0..index) + index * spacing.
+///  Y-position of child at `index` in a flex column:
+///  padding_top + Σ(flex sizes for 0..index) + index * spacing.
 pub open spec fn flex_column_child_y<T: OrderedField>(
     padding_top: T,
     weights: Seq<T>,
@@ -72,7 +72,7 @@ pub open spec fn flex_column_child_y<T: OrderedField>(
         .add(repeated_add(spacing, index))
 }
 
-/// Build child Nodes for a flex column layout.
+///  Build child Nodes for a flex column layout.
 pub open spec fn flex_column_children<T: OrderedField>(
     padding: Padding<T>,
     spacing: T,
@@ -105,10 +105,10 @@ pub open spec fn flex_column_children<T: OrderedField>(
     }
 }
 
-/// Lay out children in a flex column (proportional vertical distribution).
+///  Lay out children in a flex column (proportional vertical distribution).
 ///
-/// Each child gets a fraction of the available height proportional to its weight.
-/// The cross-axis (horizontal) uses alignment.
+///  Each child gets a fraction of the available height proportional to its weight.
+///  The cross-axis (horizontal) uses alignment.
 #[verifier::opaque]
 pub open spec fn flex_column_layout<T: OrderedField>(
     limits: Limits<T>,
@@ -134,9 +134,9 @@ pub open spec fn flex_column_layout<T: OrderedField>(
     Node { x: T::zero(), y: T::zero(), size: parent_size, children }
 }
 
-// ── Flex row layout ─────────────────────────────────────────────────
+//  ── Flex row layout ─────────────────────────────────────────────────
 
-/// X-position of child at `index` in a flex row.
+///  X-position of child at `index` in a flex row.
 pub open spec fn flex_row_child_x<T: OrderedField>(
     padding_left: T,
     weights: Seq<T>,
@@ -150,7 +150,7 @@ pub open spec fn flex_row_child_x<T: OrderedField>(
         .add(repeated_add(spacing, index))
 }
 
-/// Build child Nodes for a flex row layout.
+///  Build child Nodes for a flex row layout.
 pub open spec fn flex_row_children<T: OrderedField>(
     padding: Padding<T>,
     spacing: T,
@@ -183,7 +183,7 @@ pub open spec fn flex_row_children<T: OrderedField>(
     }
 }
 
-/// Lay out children in a flex row (proportional horizontal distribution).
+///  Lay out children in a flex row (proportional horizontal distribution).
 #[verifier::opaque]
 pub open spec fn flex_row_layout<T: OrderedField>(
     limits: Limits<T>,
@@ -209,10 +209,10 @@ pub open spec fn flex_row_layout<T: OrderedField>(
     Node { x: T::zero(), y: T::zero(), size: parent_size, children }
 }
 
-// ── Unified flex linear layout ─────────────────────────────────────
+//  ── Unified flex linear layout ─────────────────────────────────────
 
-/// Main-axis position of child at `index` in a flex linear layout.
-/// Replaces flex_column_child_y (Vertical) and flex_row_child_x (Horizontal).
+///  Main-axis position of child at `index` in a flex linear layout.
+///  Replaces flex_column_child_y (Vertical) and flex_row_child_x (Horizontal).
 pub open spec fn flex_linear_child_main_position<T: OrderedField>(
     main_start: T,
     weights: Seq<T>,
@@ -226,8 +226,8 @@ pub open spec fn flex_linear_child_main_position<T: OrderedField>(
         .add(repeated_add(spacing, index))
 }
 
-/// Build child Nodes for a flex linear layout (axis-parameterized).
-/// Replaces flex_column_children (Vertical) and flex_row_children (Horizontal).
+///  Build child Nodes for a flex linear layout (axis-parameterized).
+///  Replaces flex_column_children (Vertical) and flex_row_children (Horizontal).
 pub open spec fn flex_linear_children<T: OrderedField>(
     padding: Padding<T>,
     spacing: T,
@@ -265,8 +265,8 @@ pub open spec fn flex_linear_children<T: OrderedField>(
     }
 }
 
-/// Lay out children in a flex linear layout (axis-parameterized).
-/// Replaces flex_column_layout (Vertical) and flex_row_layout (Horizontal).
+///  Lay out children in a flex linear layout (axis-parameterized).
+///  Replaces flex_column_layout (Vertical) and flex_row_layout (Horizontal).
 #[verifier::opaque]
 pub open spec fn flex_linear_layout<T: OrderedField>(
     limits: Limits<T>,
@@ -293,4 +293,4 @@ pub open spec fn flex_linear_layout<T: OrderedField>(
     Node { x: T::zero(), y: T::zero(), size: parent_size, children }
 }
 
-} // verus!
+} //  verus!

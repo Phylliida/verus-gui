@@ -14,9 +14,9 @@ use crate::runtime::session_helpers::*;
 
 verus! {
 
-// ──────────────────────────────────────────────────────────────────────
-// Runtime text edit session
-// ──────────────────────────────────────────────────────────────────────
+//  ──────────────────────────────────────────────────────────────────────
+//  Runtime text edit session
+//  ──────────────────────────────────────────────────────────────────────
 
 pub struct RuntimeTextEditSession {
     pub model: RuntimeTextModel,
@@ -46,10 +46,10 @@ impl RuntimeTextEditSession {
     }
 }
 
-// ── Non-text-edit helper ────────────────────────────────────────────
+//  ── Non-text-edit helper ────────────────────────────────────────────
 
-/// Handle a non-text-modifying NewModel operation (compose_start/update/cancel,
-/// select_all, move_cursor, extend_selection). No undo entry is pushed.
+///  Handle a non-text-modifying NewModel operation (compose_start/update/cancel,
+///  select_all, move_cursor, extend_selection). No undo entry is pushed.
 fn session_handle_non_text_edit_exec(
     session: RuntimeTextEditSession,
     event: &RuntimeKeyEvent,
@@ -105,9 +105,9 @@ fn session_handle_non_text_edit_exec(
     }
 }
 
-// ── Text-edit helper ───────────────────────────────────────────────
+//  ── Text-edit helper ───────────────────────────────────────────────
 
-/// Handle a text-modifying NewModel operation with correct undo entry.
+///  Handle a text-modifying NewModel operation with correct undo entry.
 fn session_handle_text_edit_exec(
     session: RuntimeTextEditSession,
     event: &RuntimeKeyEvent,
@@ -121,7 +121,7 @@ fn session_handle_text_edit_exec(
                 + session.model@.composition.unwrap().provisional.len()
                 < usize::MAX,
         is_text_edit_key(event@.kind, session.model@),
-        // dispatch returns NewModel (caller checked dispatch_none):
+        //  dispatch returns NewModel (caller checked dispatch_none):
         match dispatch_key(session.model@, event@) {
             KeyAction::NewModel(_) => true,
             _ => false,
@@ -170,18 +170,18 @@ fn session_handle_text_edit_exec(
             let ghost new_style_history = update_style_history_for_push(
                 old_stack, old_style_history, entry@, new_model@.styles, merge);
             proof {
-                // Bridge: apply_key_to_session output fields
+                //  Bridge: apply_key_to_session output fields
                 lemma_apply_key_text_edit(session.view_session(), event@);
-                // Bridge: undo params produce same text/styles as dispatch
+                //  Bridge: undo params produce same text/styles as dispatch
                 lemma_undo_params_match_dispatch(event@, old_model);
-                // Prove entry_describes_transition
+                //  Prove entry_describes_transition
                 lemma_entry_for_splice_describes_transition(
                     old_model, undo_start as nat, undo_end as nat,
                     ins_text@, style_seq_view(ins_styles@), new_model@.focus);
-                // Prove push_or_merge maintains history validity
+                //  Prove push_or_merge maintains history validity
                 lemma_push_or_merge_history_valid(
                     old_stack, old_history, entry@, new_model@.text, merge);
-                // Style history
+                //  Style history
                 lemma_entry_for_splice_describes_style_transition(
                     old_model, undo_start as nat, undo_end as nat,
                     ins_text@, style_seq_view(ins_styles@), new_model@.focus);
@@ -204,12 +204,12 @@ fn session_handle_text_edit_exec(
     }
 }
 
-// ── Input event handler (non-external-action) ───────────────────────
+//  ── Input event handler (non-external-action) ───────────────────────
 
-/// Handle input events (not Copy/Cut/Undo/Redo/Paste).
-/// Checks for dispatch-none, classifies text-edit vs non-text-edit,
-/// and dispatches to the appropriate handler.
-/// Separated from `apply_key_to_session_exec` to reduce Z3 path explosion.
+///  Handle input events (not Copy/Cut/Undo/Redo/Paste).
+///  Checks for dispatch-none, classifies text-edit vs non-text-edit,
+///  and dispatches to the appropriate handler.
+///  Separated from `apply_key_to_session_exec` to reduce Z3 path explosion.
 fn session_handle_input_exec(
     session: RuntimeTextEditSession,
     event: &RuntimeKeyEvent,
@@ -222,7 +222,7 @@ fn session_handle_input_exec(
             session.model@.text.len()
                 + session.model@.composition.unwrap().provisional.len()
                 < usize::MAX,
-        // dispatch_key does not return External for this event
+        //  dispatch_key does not return External for this event
         match dispatch_key(session.model@, event@) {
             KeyAction::External(_) => false,
             _ => true,
@@ -237,7 +237,7 @@ fn session_handle_input_exec(
         result.model.wf_spec(),
         result.wf_spec(),
 {
-    // Pre-check: will dispatch return None? If so, return unchanged.
+    //  Pre-check: will dispatch return None? If so, return unchanged.
     let dispatch_none = match &event.kind {
         RuntimeKeyEventKind::Char(ch) => {
             let c = *ch;
@@ -271,7 +271,7 @@ fn session_handle_input_exec(
         return session;
     }
 
-    // Determine if this is a text-modifying operation that needs an undo entry.
+    //  Determine if this is a text-modifying operation that needs an undo entry.
     let is_text_edit = match &event.kind {
         RuntimeKeyEventKind::Char(_)
         | RuntimeKeyEventKind::Enter
@@ -289,11 +289,11 @@ fn session_handle_input_exec(
     }
 }
 
-// ── Main session dispatch ───────────────────────────────────────────
+//  ── Main session dispatch ───────────────────────────────────────────
 
-/// Apply a key event to the session.
+///  Apply a key event to the session.
 ///
-/// Fully verified including Undo/Redo via ghost history tracking.
+///  Fully verified including Undo/Redo via ghost history tracking.
 pub fn apply_key_to_session_exec(
     session: RuntimeTextEditSession,
     event: &RuntimeKeyEvent,
@@ -332,4 +332,4 @@ pub fn apply_key_to_session_exec(
     session_handle_input_exec(session, event)
 }
 
-} // verus!
+} //  verus!

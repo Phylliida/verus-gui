@@ -7,9 +7,9 @@ use crate::size::Size;
 
 verus! {
 
-// ── Runtime drag constraints ────────────────────────────────────────
+//  ── Runtime drag constraints ────────────────────────────────────────
 
-/// Runtime-backed drag constraints with rational coordinates.
+///  Runtime-backed drag constraints with rational coordinates.
 pub struct RuntimeDragConstraints {
     pub min_x: RuntimeRational,
     pub max_x: RuntimeRational,
@@ -39,9 +39,9 @@ impl RuntimeDragConstraints {
     }
 }
 
-// ── Runtime resize constraints ──────────────────────────────────────
+//  ── Runtime resize constraints ──────────────────────────────────────
 
-/// Runtime-backed resize constraints.
+///  Runtime-backed resize constraints.
 pub struct RuntimeResizeConstraints {
     pub min_size: RuntimeSize,
     pub max_size: RuntimeSize,
@@ -65,10 +65,10 @@ impl RuntimeResizeConstraints {
     }
 }
 
-// ── Exec: apply_drag ────────────────────────────────────────────────
+//  ── Exec: apply_drag ────────────────────────────────────────────────
 
-/// Apply drag delta to position, clamping to constraints.
-/// Returns (new_x, new_y).
+///  Apply drag delta to position, clamping to constraints.
+///  Returns (new_x, new_y).
 pub fn apply_drag_exec(
     constraints: &RuntimeDragConstraints,
     x: &RuntimeRational,
@@ -92,20 +92,20 @@ pub fn apply_drag_exec(
         &&& ry@ == sy
     }),
 {
-    // new_x = clamp(x + dx, min_x, max_x) = max(min_x, min(x + dx, max_x))
+    //  new_x = clamp(x + dx, min_x, max_x) = max(min_x, min(x + dx, max_x))
     let sum_x = x.add(dx);
     let clamped_x = constraints.min_x.max(&sum_x.min(&constraints.max_x));
 
-    // new_y = clamp(y + dy, min_y, max_y) = max(min_y, min(y + dy, max_y))
+    //  new_y = clamp(y + dy, min_y, max_y) = max(min_y, min(y + dy, max_y))
     let sum_y = y.add(dy);
     let clamped_y = constraints.min_y.max(&sum_y.min(&constraints.max_y));
 
     (clamped_x, clamped_y)
 }
 
-// ── Exec: apply_resize ──────────────────────────────────────────────
+//  ── Exec: apply_resize ──────────────────────────────────────────────
 
-/// Apply resize delta to size, clamping to constraints.
+///  Apply resize delta to size, clamping to constraints.
 pub fn apply_resize_exec(
     constraints: &RuntimeResizeConstraints,
     size: &RuntimeSize,
@@ -122,12 +122,12 @@ pub fn apply_resize_exec(
         out.wf_spec(),
         out@ == apply_resize(constraints@, size@, dw@, dh@),
 {
-    // width = clamp(w + dw, min_w, max_w) = max(min_w, min(w + dw, max_w))
+    //  width = clamp(w + dw, min_w, max_w) = max(min_w, min(w + dw, max_w))
     let sum_w = size.width.add(dw);
     let clamped_w = constraints.min_size.width.max(
         &sum_w.min(&constraints.max_size.width));
 
-    // height = clamp(h + dh, min_h, max_h) = max(min_h, min(h + dh, max_h))
+    //  height = clamp(h + dh, min_h, max_h) = max(min_h, min(h + dh, max_h))
     let sum_h = size.height.add(dh);
     let clamped_h = constraints.min_size.height.max(
         &sum_h.min(&constraints.max_size.height));
@@ -135,4 +135,4 @@ pub fn apply_resize_exec(
     RuntimeSize::new(clamped_w, clamped_h)
 }
 
-} // verus!
+} //  verus!

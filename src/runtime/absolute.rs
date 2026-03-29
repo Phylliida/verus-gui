@@ -13,8 +13,8 @@ use crate::layout::absolute_proofs::*;
 
 verus! {
 
-/// Execute absolute layout: position each child at (padding.left + x, padding.top + y),
-/// compute bounding box for content size.
+///  Execute absolute layout: position each child at (padding.left + x, padding.top + y),
+///  compute bounding box for content size.
 pub fn absolute_layout_exec(
     limits: &RuntimeLimits,
     padding: &RuntimePadding,
@@ -45,7 +45,7 @@ pub fn absolute_layout_exec(
 
     let n = child_sizes.len();
 
-    // Compute bounding box: max of (x + width) and max of (y + height)
+    //  Compute bounding box: max of (x + width) and max of (y + height)
     let mut max_right = RuntimeRational::from_int(0);
     let mut max_bottom = RuntimeRational::from_int(0);
     let mut i: usize = 0;
@@ -74,7 +74,7 @@ pub fn absolute_layout_exec(
         i = i + 1;
     }
 
-    // Compute total size and resolve
+    //  Compute total size and resolve
     let pad_h = padding.horizontal_exec();
     let pad_v = padding.vertical_exec();
     let total_width = pad_h.add(&max_right);
@@ -82,7 +82,7 @@ pub fn absolute_layout_exec(
 
     let parent_size = limits.resolve_exec(RuntimeSize::new(total_width, total_height));
 
-    // Build children nodes: each at (padding.left + x, padding.top + y)
+    //  Build children nodes: each at (padding.left + x, padding.top + y)
     proof {
         lemma_absolute_children_len::<RationalModel>(padding@, spec_data, 0);
     }
@@ -153,4 +153,4 @@ pub fn absolute_layout_exec(
     out
 }
 
-} // verus!
+} //  verus!

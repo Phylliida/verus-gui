@@ -4,23 +4,23 @@ use super::cursor::*;
 
 verus! {
 
-// ──────────────────────────────────────────────────────────────────────
-// Selection rectangles
-// ──────────────────────────────────────────────────────────────────────
+//  ──────────────────────────────────────────────────────────────────────
+//  Selection rectangles
+//  ──────────────────────────────────────────────────────────────────────
 
-/// Sentinel value meaning "to end of line" for end_col.
+///  Sentinel value meaning "to end of line" for end_col.
 pub open spec fn LINE_END_SENTINEL() -> nat { 0xFFFF_FFFF }
 
-/// A rectangle covering part of a line in the selection highlight.
+///  A rectangle covering part of a line in the selection highlight.
 pub struct SelectionRect {
     pub line: nat,
     pub start_col: nat,
     pub end_col: nat,
 }
 
-/// Compute highlight rectangles for the selection between `anchor` and `focus`.
-/// Returns one rect per line the selection spans.
-/// Empty selection → empty sequence.
+///  Compute highlight rectangles for the selection between `anchor` and `focus`.
+///  Returns one rect per line the selection spans.
+///  Empty selection → empty sequence.
 pub open spec fn selection_rects(
     text: Seq<char>, anchor: nat, focus: nat,
 ) -> Seq<SelectionRect> {
@@ -31,20 +31,20 @@ pub open spec fn selection_rects(
         let (start_line, start_col) = text_pos_to_visual(text, sel_start, Affinity::Downstream);
         let (end_line, end_col) = text_pos_to_visual(text, sel_end, Affinity::Upstream);
         if start_line == end_line {
-            // Single line selection
+            //  Single line selection
             seq![SelectionRect { line: start_line, start_col, end_col }]
         } else {
-            // Multi-line: first partial + full middle lines + last partial
+            //  Multi-line: first partial + full middle lines + last partial
             selection_rects_multiline(
                 text, start_line, start_col, end_line, end_col)
         }
     }
 }
 
-/// Build rects for a multi-line selection.
-/// First line: start_col to end of line (sentinel).
-/// Middle lines: full line.
-/// Last line: start of line to end_col.
+///  Build rects for a multi-line selection.
+///  First line: start_col to end of line (sentinel).
+///  Middle lines: full line.
+///  Last line: start of line to end_col.
 pub open spec fn selection_rects_multiline(
     text: Seq<char>,
     start_line: nat,
@@ -58,7 +58,7 @@ pub open spec fn selection_rects_multiline(
     if start_line >= end_line {
         Seq::empty()
     } else if start_line + 1 == end_line {
-        // Just two lines: first partial + last partial
+        //  Just two lines: first partial + last partial
         seq![
             SelectionRect {
                 line: start_line,
@@ -72,7 +72,7 @@ pub open spec fn selection_rects_multiline(
             },
         ]
     } else {
-        // First line + recurse for middle + last
+        //  First line + recurse for middle + last
         seq![SelectionRect {
             line: start_line,
             start_col,
@@ -84,7 +84,7 @@ pub open spec fn selection_rects_multiline(
     }
 }
 
-/// Number of lines the selection spans.
+///  Number of lines the selection spans.
 pub open spec fn selection_line_count(
     text: Seq<char>, anchor: nat, focus: nat,
 ) -> nat {
@@ -102,11 +102,11 @@ pub open spec fn selection_line_count(
     }
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// Selection geometry proofs
-// ──────────────────────────────────────────────────────────────────────
+//  ──────────────────────────────────────────────────────────────────────
+//  Selection geometry proofs
+//  ──────────────────────────────────────────────────────────────────────
 
-/// Empty selection produces empty rects.
+///  Empty selection produces empty rects.
 pub proof fn lemma_empty_selection_empty_rects(
     text: Seq<char>, pos: nat,
 )
@@ -114,8 +114,8 @@ pub proof fn lemma_empty_selection_empty_rects(
 {
 }
 
-/// selection_rects_multiline produces end_line - start_line + 1 rects
-/// when start_line < end_line.
+///  selection_rects_multiline produces end_line - start_line + 1 rects
+///  when start_line < end_line.
 pub proof fn lemma_multiline_rect_count(
     text: Seq<char>,
     start_line: nat, start_col: nat,
@@ -128,14 +128,14 @@ pub proof fn lemma_multiline_rect_count(
     decreases end_line - start_line,
 {
     if start_line + 1 == end_line {
-        // Two rects
+        //  Two rects
     } else {
         lemma_multiline_rect_count(text, start_line + 1, 0, end_line, end_col);
-        // 1 + (end_line - (start_line+1) + 1) = end_line - start_line + 1
+        //  1 + (end_line - (start_line+1) + 1) = end_line - start_line + 1
     }
 }
 
-/// First rect in multiline selection has the start_line and start_col.
+///  First rect in multiline selection has the start_line and start_col.
 pub proof fn lemma_multiline_first_rect(
     text: Seq<char>,
     start_line: nat, start_col: nat,
@@ -152,13 +152,13 @@ pub proof fn lemma_multiline_first_rect(
     decreases end_line - start_line,
 {
     if start_line + 1 == end_line {
-        // Directly two rects, first is start_line
+        //  Directly two rects, first is start_line
     } else {
-        // First element is seq![...start_line...], rest is recursive
+        //  First element is seq![...start_line...], rest is recursive
     }
 }
 
-/// Last rect in multiline selection has the end_line and end_col.
+///  Last rect in multiline selection has the end_line and end_col.
 pub proof fn lemma_multiline_last_rect(
     text: Seq<char>,
     start_line: nat, start_col: nat,
@@ -175,7 +175,7 @@ pub proof fn lemma_multiline_last_rect(
     decreases end_line - start_line,
 {
     if start_line + 1 == end_line {
-        // Two rects, last is end_line
+        //  Two rects, last is end_line
     } else {
         lemma_multiline_last_rect(text, start_line + 1, 0, end_line, end_col);
         lemma_multiline_rect_count(text, start_line + 1, 0, end_line, end_col);
@@ -184,12 +184,12 @@ pub proof fn lemma_multiline_last_rect(
             line: start_line, start_col,
             end_col: LINE_END_SENTINEL(),
         }].add(rest);
-        // full.last() == rest.last()
+        //  full.last() == rest.last()
         assert(full[full.len() - 1] == rest[rest.len() - 1]);
     }
 }
 
-/// All rects in multiline selection have lines in [start_line, end_line].
+///  All rects in multiline selection have lines in [start_line, end_line].
 pub proof fn lemma_multiline_lines_in_range(
     text: Seq<char>,
     start_line: nat, start_col: nat,
@@ -226,7 +226,7 @@ pub proof fn lemma_multiline_lines_in_range(
     }
 }
 
-/// Lines in multiline selection rects are monotonically non-decreasing.
+///  Lines in multiline selection rects are monotonically non-decreasing.
 pub proof fn lemma_multiline_lines_monotone(
     text: Seq<char>,
     start_line: nat, start_col: nat,
@@ -245,7 +245,7 @@ pub proof fn lemma_multiline_lines_monotone(
 {
     let rects = selection_rects_multiline(text, start_line, start_col, end_line, end_col);
     if start_line + 1 == end_line {
-        // Two rects: start_line <= end_line
+        //  Two rects: start_line <= end_line
     } else {
         lemma_multiline_lines_monotone(text, start_line + 1, 0, end_line, end_col);
         lemma_multiline_lines_in_range(text, start_line + 1, 0, end_line, end_col);
@@ -257,11 +257,11 @@ pub proof fn lemma_multiline_lines_monotone(
             if i == 0 {
                 if j == 0 {
                 } else {
-                    // rects[0].line == start_line, rects[j].line >= start_line + 1
+                    //  rects[0].line == start_line, rects[j].line >= start_line + 1
                     assert(rest[j - 1].line >= start_line + 1);
                 }
             } else {
-                // Both in rest
+                //  Both in rest
                 assert(rects[i] == rest[i - 1]);
                 assert(rects[j] == rest[j - 1]);
             }
@@ -269,7 +269,7 @@ pub proof fn lemma_multiline_lines_monotone(
     }
 }
 
-/// selection_line_count matches actual rect count for single-line selections.
+///  selection_line_count matches actual rect count for single-line selections.
 pub proof fn lemma_selection_line_count_single(
     text: Seq<char>, anchor: nat, focus: nat,
 )
@@ -287,11 +287,11 @@ pub proof fn lemma_selection_line_count_single(
     let (sel_start, sel_end) = selection_range(anchor, focus);
     let (start_line, _) = text_pos_to_visual(text, sel_start, Affinity::Downstream);
     let (end_line, _) = text_pos_to_visual(text, sel_end, Affinity::Upstream);
-    // end_line == start_line → (end_line - start_line) + 1 = 1
+    //  end_line == start_line → (end_line - start_line) + 1 = 1
 }
 
-/// Each rect in a multiline selection covers a distinct line:
-/// rect[i].line == start_line + i.
+///  Each rect in a multiline selection covers a distinct line:
+///  rect[i].line == start_line + i.
 pub proof fn lemma_multiline_rect_line_identity(
     text: Seq<char>,
     start_line: nat, start_col: nat,
@@ -327,7 +327,7 @@ pub proof fn lemma_multiline_rect_line_identity(
     }
 }
 
-/// Strict monotonicity: consecutive rects have strictly increasing line numbers.
+///  Strict monotonicity: consecutive rects have strictly increasing line numbers.
 pub proof fn lemma_multiline_lines_strictly_increasing(
     text: Seq<char>,
     start_line: nat, start_col: nat,
@@ -344,7 +344,7 @@ pub proof fn lemma_multiline_lines_strictly_increasing(
                     text, start_line, start_col, end_line, end_col)[j].line,
 {
     lemma_multiline_rect_line_identity(text, start_line, start_col, end_line, end_col);
-    // rect[i].line = start_line + i < start_line + j = rect[j].line when i < j
+    //  rect[i].line = start_line + i < start_line + j = rect[j].line when i < j
 }
 
-} // verus!
+} //  verus!

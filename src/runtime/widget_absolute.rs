@@ -19,7 +19,7 @@ use crate::layout::absolute_proofs::*;
 
 verus! {
 
-/// Layout an absolute widget: each child at explicit (x, y) offsets.
+///  Layout an absolute widget: each child at explicit (x, y) offsets.
 pub fn layout_absolute_widget_exec(
     limits: &RuntimeLimits,
     padding: &RuntimePadding,
@@ -54,7 +54,7 @@ pub fn layout_absolute_widget_exec(
     let inner = limits.shrink_exec(&pad_h, &pad_v);
     let n = children.len();
 
-    // Recursively layout each child, collecting child nodes + sizes + offsets
+    //  Recursively layout each child, collecting child nodes + sizes + offsets
     let mut child_nodes: Vec<RuntimeNode> = Vec::new();
     let mut child_sizes: Vec<RuntimeSize> = Vec::new();
     let mut offsets_x: Vec<RuntimeRational> = Vec::new();
@@ -106,7 +106,7 @@ pub fn layout_absolute_widget_exec(
         i = i + 1;
     }
 
-    // Assert preconditions for absolute_layout_exec
+    //  Assert preconditions for absolute_layout_exec
     proof {
         assert forall|j: int| 0 <= j < child_sizes@.len() implies
             (#[trigger] child_sizes@[j]).wf_spec()
@@ -122,7 +122,7 @@ pub fn layout_absolute_widget_exec(
     let layout_result = absolute_layout_exec(limits, padding, &child_sizes,
         &offsets_x, &offsets_y);
 
-    // Merge
+    //  Merge
     let ghost cn_models: Seq<Node<RationalModel>> =
         Seq::new(n as nat, |j: int| child_nodes@[j]@);
 
@@ -139,12 +139,12 @@ pub fn layout_absolute_widget_exec(
 
     let merged = merge_layout_exec(layout_result, child_nodes, Ghost(cn_models));
 
-    // Connect to spec
+    //  Connect to spec
     proof {
         let inner_spec = limits@.shrink(padding@.horizontal(), padding@.vertical());
         let spec_cn = absolute_widget_child_nodes(inner_spec, spec_ac, (fuel - 1) as nat);
 
-        // cn_models =~= spec_cn
+        //  cn_models =~= spec_cn
         assert(cn_models.len() == spec_cn.len());
         assert forall|j: int| 0 <= j < cn_models.len() as int implies
             cn_models[j] == spec_cn[j]
@@ -155,7 +155,7 @@ pub fn layout_absolute_widget_exec(
         }
         assert(cn_models =~= spec_cn);
 
-        // child_sizes view matches spec
+        //  child_sizes view matches spec
         let sizes_view: Seq<Size<RationalModel>> =
             Seq::new(child_sizes@.len() as nat, |i: int| child_sizes@[i]@);
         let spec_sizes: Seq<Size<RationalModel>> =
@@ -166,20 +166,20 @@ pub fn layout_absolute_widget_exec(
             by {}
         }
 
-        // offsets match spec
+        //  offsets match spec
         let ox_view: Seq<RationalModel> =
             Seq::new(offsets_x@.len() as nat, |i: int| offsets_x@[i]@);
         let oy_view: Seq<RationalModel> =
             Seq::new(offsets_y@.len() as nat, |i: int| offsets_y@[i]@);
 
-        // Build spec child_data from spec_ac
+        //  Build spec child_data from spec_ac
         let body_offsets: Seq<(RationalModel, RationalModel)> =
             Seq::new(spec_ac.len(), |i: int| (spec_ac[i].x, spec_ac[i].y));
         let body_data: Seq<(RationalModel, RationalModel, Size<RationalModel>)> =
             Seq::new(spec_cn.len(), |i: int|
                 (body_offsets[i].0, body_offsets[i].1, spec_cn[i].size));
 
-        // layout_result data matches body_data
+        //  layout_result data matches body_data
         let exec_data: Seq<(RationalModel, RationalModel, Size<RationalModel>)> =
             Seq::new(child_sizes@.len() as nat, |i: int|
                 (offsets_x@[i]@, offsets_y@[i]@, child_sizes@[i]@));
@@ -196,4 +196,4 @@ pub fn layout_absolute_widget_exec(
     merged
 }
 
-} // verus!
+} //  verus!

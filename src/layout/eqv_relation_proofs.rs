@@ -8,15 +8,15 @@ use crate::layout::congruence_proofs::*;
 
 verus! {
 
-// ══════════════════════════════════════════════════════════════════════
-// widget_eqv IS AN EQUIVALENCE RELATION
+//  ══════════════════════════════════════════════════════════════════════
+//  widget_eqv IS AN EQUIVALENCE RELATION
 //
-// Symmetry:    widget_eqv(w1, w2, f) ==> widget_eqv(w2, w1, f)
-// Transitivity: widget_eqv(w1, w2, f) && widget_eqv(w2, w3, f) ==> widget_eqv(w1, w3, f)
-// Reflexivity: widget_eqv(w1, w2, f) ==> widget_eqv(w1, w1, f)  (derived)
-// ══════════════════════════════════════════════════════════════════════
+//  Symmetry:    widget_eqv(w1, w2, f) ==> widget_eqv(w2, w1, f)
+//  Transitivity: widget_eqv(w1, w2, f) && widget_eqv(w2, w3, f) ==> widget_eqv(w1, w3, f)
+//  Reflexivity: widget_eqv(w1, w2, f) ==> widget_eqv(w1, w1, f)  (derived)
+//  ══════════════════════════════════════════════════════════════════════
 
-// ── Component helpers ────────────────────────────────────────────────
+//  ── Component helpers ────────────────────────────────────────────────
 
 proof fn lemma_size_eqv_symmetric<T: OrderedRing>(a: Size<T>, b: Size<T>)
     requires size_eqv(a, b),
@@ -111,9 +111,9 @@ proof fn lemma_sizes_eqv_transitive<T: OrderedRing>(a: Seq<Size<T>>, b: Seq<Size
     by { lemma_size_eqv_transitive(a[i], b[i], c[i]); };
 }
 
-// ── Symmetry ─────────────────────────────────────────────────────────
+//  ── Symmetry ─────────────────────────────────────────────────────────
 
-/// widget_eqv is symmetric: w1 ≡ w2 implies w2 ≡ w1.
+///  widget_eqv is symmetric: w1 ≡ w2 implies w2 ≡ w1.
 pub proof fn theorem_widget_eqv_symmetric<T: OrderedField>(
     w1: Widget<T>, w2: Widget<T>, fuel: nat,
 )
@@ -179,8 +179,8 @@ proof fn lemma_wrapper_eqv_symmetric<T: OrderedField>(
         (WrapperWidget::AspectRatio { ratio: r1, child: c1 },
          WrapperWidget::AspectRatio { ratio: r2, child: c2 }) => {
             T::axiom_eqv_symmetric(r1, r2);
-            // !r1.eqv(zero) and r1.eqv(r2) → !r2.eqv(zero)
-            // Proof: if r2.eqv(zero), then r1.eqv(r2).eqv(zero) → r1.eqv(zero), contradiction
+            //  !r1.eqv(zero) and r1.eqv(r2) → !r2.eqv(zero)
+            //  Proof: if r2.eqv(zero), then r1.eqv(r2).eqv(zero) → r1.eqv(zero), contradiction
             if r2.eqv(T::zero()) {
                 T::axiom_eqv_transitive(r1, r2, T::zero());
             }
@@ -241,7 +241,7 @@ proof fn lemma_container_eqv_symmetric<T: OrderedField>(
          ContainerWidget::Flex { padding: p2, spacing: s2, alignment: a2, direction: d2, children: ch2 }) => {
             lemma_padding_eqv_symmetric(p1, p2);
             T::axiom_eqv_symmetric(s1, s2);
-            // sum_weights congruence: !sw1.eqv(zero), sw1.eqv(sw2) → !sw2.eqv(zero)
+            //  sum_weights congruence: !sw1.eqv(zero), sw1.eqv(sw2) → !sw2.eqv(zero)
             let w1s = Seq::new(ch1.len(), |i: int| ch1[i].weight);
             let w2s = Seq::new(ch2.len(), |i: int| ch2[i].weight);
             let sw1 = crate::layout::flex::sum_weights(w1s, w1s.len() as nat);
@@ -298,9 +298,9 @@ proof fn lemma_container_eqv_symmetric<T: OrderedField>(
     }
 }
 
-// ── Transitivity ─────────────────────────────────────────────────────
+//  ── Transitivity ─────────────────────────────────────────────────────
 
-/// widget_eqv is transitive: w1 ≡ w2 and w2 ≡ w3 implies w1 ≡ w3.
+///  widget_eqv is transitive: w1 ≡ w2 and w2 ≡ w3 implies w1 ≡ w3.
 pub proof fn theorem_widget_eqv_transitive<T: OrderedField>(
     w1: Widget<T>, w2: Widget<T>, w3: Widget<T>, fuel: nat,
 )
@@ -510,10 +510,10 @@ proof fn lemma_container_eqv_transitive<T: OrderedField>(
     }
 }
 
-// ── Reflexivity (derived from symmetry + transitivity) ───────────────
+//  ── Reflexivity (derived from symmetry + transitivity) ───────────────
 
-/// widget_eqv reflexivity for participating widgets:
-/// if w is eqv to anything, it's eqv to itself.
+///  widget_eqv reflexivity for participating widgets:
+///  if w is eqv to anything, it's eqv to itself.
 pub proof fn theorem_widget_eqv_reflexive<T: OrderedField>(
     w1: Widget<T>, w2: Widget<T>, fuel: nat,
 )
@@ -524,4 +524,4 @@ pub proof fn theorem_widget_eqv_reflexive<T: OrderedField>(
     theorem_widget_eqv_transitive(w1, w2, w1, fuel);
 }
 
-} // verus!
+} //  verus!

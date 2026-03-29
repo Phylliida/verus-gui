@@ -4,22 +4,22 @@ use verus_algebra::convex::two;
 
 verus! {
 
-/// Cross-axis alignment strategy.
+///  Cross-axis alignment strategy.
 pub enum Alignment {
-    /// Align to the start (left for columns, top for rows).
+    ///  Align to the start (left for columns, top for rows).
     Start,
-    /// Align to the center: (available - used) / 2.
+    ///  Align to the center: (available - used) / 2.
     Center,
-    /// Align to the end (right for columns, bottom for rows).
+    ///  Align to the end (right for columns, bottom for rows).
     End,
 }
 
-/// Compute the cross-axis offset for a child given alignment, available space,
-/// and the child's extent along that axis.
+///  Compute the cross-axis offset for a child given alignment, available space,
+///  and the child's extent along that axis.
 ///
-/// - Start  => 0
-/// - Center => (available - used) / 2
-/// - End    => available - used
+///  - Start  => 0
+///  - Center => (available - used) / 2
+///  - End    => available - used
 #[verifier::opaque]
 pub open spec fn align_offset<T: OrderedField>(
     alignment: Alignment,
@@ -33,4 +33,4 @@ pub open spec fn align_offset<T: OrderedField>(
     }
 }
 
-} // verus!
+} //  verus!

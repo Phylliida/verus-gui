@@ -14,7 +14,7 @@ use crate::widget::*;
 
 verus! {
 
-/// Layout a scroll view widget: child at (-scroll_x, -scroll_y) with viewport limits.
+///  Layout a scroll view widget: child at (-scroll_x, -scroll_y) with viewport limits.
 pub fn layout_scroll_view_exec(
     limits: &RuntimeLimits,
     viewport: &RuntimeSize,
@@ -43,7 +43,7 @@ pub fn layout_scroll_view_exec(
         }),
     decreases fuel, 0nat,
 {
-    // Child gets limits (zero_min, viewport)
+    //  Child gets limits (zero_min, viewport)
     let child_min = RuntimeSize::zero_exec();
     let child_max = viewport.copy_size();
     let child_limits = RuntimeLimits::new(child_min, child_max);
@@ -110,4 +110,4 @@ pub fn layout_scroll_view_exec(
     out
 }
 
-} // verus!
+} //  verus!

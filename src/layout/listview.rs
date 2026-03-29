@@ -9,12 +9,12 @@ use crate::widget::Widget;
 
 verus! {
 
-// ── Cumulative position helpers ──────────────────────────────────────
+//  ── Cumulative position helpers ──────────────────────────────────────
 
-/// Y-position of the i-th item in a variable-height ListView.
+///  Y-position of the i-th item in a variable-height ListView.
 ///
-/// listview_child_y(sizes, sp, 0) = 0
-/// listview_child_y(sizes, sp, i+1) = child_y(i) + sizes[i].height + spacing
+///  listview_child_y(sizes, sp, 0) = 0
+///  listview_child_y(sizes, sp, i+1) = child_y(i) + sizes[i].height + spacing
 pub open spec fn listview_child_y<T: OrderedRing>(
     child_sizes: Seq<Size<T>>,
     spacing: T,
@@ -31,7 +31,7 @@ pub open spec fn listview_child_y<T: OrderedRing>(
     }
 }
 
-/// Bottom edge of the i-th item: y + sizes[i].height.
+///  Bottom edge of the i-th item: y + sizes[i].height.
 pub open spec fn listview_child_bottom<T: OrderedRing>(
     child_sizes: Seq<Size<T>>,
     spacing: T,
@@ -40,10 +40,10 @@ pub open spec fn listview_child_bottom<T: OrderedRing>(
     listview_child_y(child_sizes, spacing, i).add(child_sizes[i as int].height)
 }
 
-// ── Visible range computation ────────────────────────────────────────
+//  ── Visible range computation ────────────────────────────────────────
 
-/// First visible index: smallest i in [0, total) where bottom > scroll_y.
-/// Returns child_sizes.len() if no child is visible.
+///  First visible index: smallest i in [0, total) where bottom > scroll_y.
+///  Returns child_sizes.len() if no child is visible.
 pub open spec fn listview_first_visible<T: OrderedRing>(
     child_sizes: Seq<Size<T>>,
     spacing: T,
@@ -52,7 +52,7 @@ pub open spec fn listview_first_visible<T: OrderedRing>(
     listview_first_visible_from(child_sizes, spacing, scroll_y, 0)
 }
 
-/// Linear scan for first visible starting from `from`.
+///  Linear scan for first visible starting from `from`.
 pub open spec fn listview_first_visible_from<T: OrderedRing>(
     child_sizes: Seq<Size<T>>,
     spacing: T,
@@ -70,8 +70,8 @@ pub open spec fn listview_first_visible_from<T: OrderedRing>(
     }
 }
 
-/// End-of-visible index: smallest i in [0, total] where top >= scroll_bottom.
-/// Returns child_sizes.len() if all remaining children are visible.
+///  End-of-visible index: smallest i in [0, total] where top >= scroll_bottom.
+///  Returns child_sizes.len() if all remaining children are visible.
 pub open spec fn listview_end_visible<T: OrderedRing>(
     child_sizes: Seq<Size<T>>,
     spacing: T,
@@ -81,7 +81,7 @@ pub open spec fn listview_end_visible<T: OrderedRing>(
     listview_end_visible_from(child_sizes, spacing, scroll_y, viewport_h, 0)
 }
 
-/// Linear scan for end-of-visible starting from `from`.
+///  Linear scan for end-of-visible starting from `from`.
 pub open spec fn listview_end_visible_from<T: OrderedRing>(
     child_sizes: Seq<Size<T>>,
     spacing: T,
@@ -103,9 +103,9 @@ pub open spec fn listview_end_visible_from<T: OrderedRing>(
     }
 }
 
-// ── Layout assembly ──────────────────────────────────────────────────
+//  ── Layout assembly ──────────────────────────────────────────────────
 
-/// Number of visible children.
+///  Number of visible children.
 pub open spec fn listview_visible_count<T: OrderedRing>(
     child_sizes: Seq<Size<T>>,
     spacing: T,
@@ -117,10 +117,10 @@ pub open spec fn listview_visible_count<T: OrderedRing>(
     if end >= first { (end - first) as nat } else { 0 }
 }
 
-/// Assemble a ListView Node from pre-computed visible child nodes.
+///  Assemble a ListView Node from pre-computed visible child nodes.
 ///
-/// Each child is positioned at (0, child_y(first + i) - scroll_y).
-/// Output size = limits.resolve(viewport).
+///  Each child is positioned at (0, child_y(first + i) - scroll_y).
+///  Output size = limits.resolve(viewport).
 #[verifier::opaque]
 pub open spec fn layout_listview_body<T: OrderedField>(
     limits: Limits<T>,
@@ -145,9 +145,9 @@ pub open spec fn layout_listview_body<T: OrderedField>(
     }
 }
 
-// ── Widget child node helpers for visible range ──────────────────────
+//  ── Widget child node helpers for visible range ──────────────────────
 
-/// Lay out visible children from children[first..end].
+///  Lay out visible children from children[first..end].
 pub open spec fn listview_widget_child_nodes<T: OrderedField>(
     child_limits: Limits<T>,
     children: Seq<Widget<T>>,
@@ -163,4 +163,4 @@ pub open spec fn listview_widget_child_nodes<T: OrderedField>(
     )
 }
 
-} // verus!
+} //  verus!

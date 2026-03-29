@@ -8,8 +8,8 @@ use crate::hit_test::{hit_test, hit_test_inner, hit_test_scan, point_in_node};
 
 verus! {
 
-/// Runtime hit-test: find deepest node at (px, py).
-/// Returns Some(path) as Vec<usize> or None.
+///  Runtime hit-test: find deepest node at (px, py).
+///  Returns Some(path) as Vec<usize> or None.
 pub fn hit_test_exec(
     node: &RuntimeNode,
     px: &RuntimeRational,
@@ -34,7 +34,7 @@ pub fn hit_test_exec(
     hit_test_inner_exec(node, px, py, depth)
 }
 
-/// Inner hit-test exec: check bounds, then scan children.
+///  Inner hit-test exec: check bounds, then scan children.
 fn hit_test_inner_exec(
     node: &RuntimeNode,
     px: &RuntimeRational,
@@ -57,7 +57,7 @@ fn hit_test_inner_exec(
         },
     decreases depth, node.children.len() + 1,
 {
-    // Check point in bounds
+    //  Check point in bounds
     let zero1 = RuntimeRational::from_int(0);
     let zero2 = RuntimeRational::from_int(0);
     if !(zero1.le(px) && px.le(&node.size.width)) {
@@ -69,7 +69,7 @@ fn hit_test_inner_exec(
 
     let n = node.children.len();
     if depth == 0 || n == 0 {
-        // No children to check, or no depth budget — this node is the hit
+        //  No children to check, or no depth budget — this node is the hit
         return Some(Vec::new());
     }
 
@@ -80,7 +80,7 @@ fn hit_test_inner_exec(
     }
 }
 
-/// Scan children in reverse [0..index).
+///  Scan children in reverse [0..index).
 fn hit_test_scan_exec(
     node: &RuntimeNode,
     px: &RuntimeRational,
@@ -111,21 +111,21 @@ fn hit_test_scan_exec(
     }
     let i = index - 1;
 
-    // Child wf from parent's wf_deep
+    //  Child wf from parent's wf_deep
     assert(node.children@[i as int].wf_deep((depth - 1) as nat));
 
-    // Get child's position
+    //  Get child's position
     let child_x = copy_rational(&node.children[i].x);
     let child_y = copy_rational(&node.children[i].y);
 
-    // Transform to local coordinates
+    //  Transform to local coordinates
     let local_x = px.sub(&child_x);
     let local_y = py.sub(&child_y);
 
     let result = hit_test_inner_exec(&node.children[i], &local_x, &local_y, depth - 1);
     match result {
         Some(sub_path) => {
-            // Build path: [i] ++ sub_path
+            //  Build path: [i] ++ sub_path
             let mut path: Vec<usize> = Vec::new();
             path.push(i);
             let mut j: usize = 0;
@@ -149,4 +149,4 @@ fn hit_test_scan_exec(
     }
 }
 
-} // verus!
+} //  verus!

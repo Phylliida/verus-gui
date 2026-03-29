@@ -10,11 +10,11 @@ use crate::layout::*;
 
 verus! {
 
-// ── Theorem 1: Fuel convergence stability ────────────────────────
+//  ── Theorem 1: Fuel convergence stability ────────────────────────
 
-/// Once a widget has converged at fuel1, the layout result is identical
-/// for all fuel2 >= fuel1. Generalizes lemma_layout_widget_fuel_monotone
-/// (which only proves fuel → fuel+1) to arbitrary fuel gaps.
+///  Once a widget has converged at fuel1, the layout result is identical
+///  for all fuel2 >= fuel1. Generalizes lemma_layout_widget_fuel_monotone
+///  (which only proves fuel → fuel+1) to arbitrary fuel gaps.
 pub proof fn lemma_converged_layout_stable<T: OrderedField>(
     limits: Limits<T>,
     widget: Widget<T>,
@@ -29,21 +29,21 @@ pub proof fn lemma_converged_layout_stable<T: OrderedField>(
     decreases fuel2 - fuel1,
 {
     if fuel1 == fuel2 {
-        // Trivially identical
+        //  Trivially identical
     } else {
-        // fuel1 < fuel2: step through fuel1 → fuel1+1 → ... → fuel2
-        // widget_converged(widget, fuel1) implies converged at fuel1+1 too
-        // (converged is monotone in fuel — more fuel, still converged)
+        //  fuel1 < fuel2: step through fuel1 → fuel1+1 → ... → fuel2
+        //  widget_converged(widget, fuel1) implies converged at fuel1+1 too
+        //  (converged is monotone in fuel — more fuel, still converged)
         lemma_converged_monotone(widget, fuel1);
         lemma_layout_widget_fuel_monotone(limits, widget, fuel1);
-        // layout(fuel1) == layout(fuel1+1)
-        // widget_converged(widget, fuel1+1)
-        // By induction: layout(fuel1+1) === layout(fuel2)
+        //  layout(fuel1) == layout(fuel1+1)
+        //  widget_converged(widget, fuel1+1)
+        //  By induction: layout(fuel1+1) === layout(fuel2)
         lemma_converged_layout_stable(limits, widget, fuel1 + 1, fuel2);
     }
 }
 
-/// Widget convergence is monotone in fuel: converged at fuel implies converged at fuel+1.
+///  Widget convergence is monotone in fuel: converged at fuel implies converged at fuel+1.
 proof fn lemma_converged_monotone<T: OrderedRing>(
     widget: Widget<T>,
     fuel: nat,
@@ -54,13 +54,13 @@ proof fn lemma_converged_monotone<T: OrderedRing>(
         widget_converged(widget, fuel + 1),
     decreases fuel,
 {
-    // widget_converged(widget, fuel) implies fuel >= 1
+    //  widget_converged(widget, fuel) implies fuel >= 1
     assert(fuel >= 1nat);
     let children = get_children(widget);
     if children.len() == 0 {
-        // Leaf or similar — always converged at fuel >= 1
+        //  Leaf or similar — always converged at fuel >= 1
     } else {
-        // All children converged at fuel-1 → converged at fuel
+        //  All children converged at fuel-1 → converged at fuel
         assert forall|i: int| 0 <= i < children.len() implies
             widget_converged(children[i], fuel)
         by {
@@ -69,11 +69,11 @@ proof fn lemma_converged_monotone<T: OrderedRing>(
     }
 }
 
-// ── Theorem 2: Subtree independence ─────────────────────────────
+//  ── Theorem 2: Subtree independence ─────────────────────────────
 
-/// Changing sibling widgets doesn't affect the j-th child's layout.
-/// Since widget_child_nodes(limits, children, fuel)[j] = layout_widget(limits, children[j], fuel),
-/// if children1[j] === children2[j], the j-th result is identical.
+///  Changing sibling widgets doesn't affect the j-th child's layout.
+///  Since widget_child_nodes(limits, children, fuel)[j] = layout_widget(limits, children[j], fuel),
+///  if children1[j] === children2[j], the j-th result is identical.
 pub proof fn lemma_sibling_layout_independent<T: OrderedField>(
     limits: Limits<T>,
     children1: Seq<Widget<T>>,
@@ -89,16 +89,16 @@ pub proof fn lemma_sibling_layout_independent<T: OrderedField>(
         widget_child_nodes(limits, children1, fuel)[j]
             === widget_child_nodes(limits, children2, fuel)[j],
 {
-    // widget_child_nodes = Seq::new(n, |i| layout_widget(limits, children[i], fuel))
-    // By Seq::new indexing: result[j] = layout_widget(limits, children[j], fuel)
-    // Since children1[j] === children2[j], both sides are identical.
+    //  widget_child_nodes = Seq::new(n, |i| layout_widget(limits, children[i], fuel))
+    //  By Seq::new indexing: result[j] = layout_widget(limits, children[j], fuel)
+    //  Since children1[j] === children2[j], both sides are identical.
 }
 
-// ── Theorem 3: Monotone change propagation ──────────────────────
+//  ── Theorem 3: Monotone change propagation ──────────────────────
 
-/// If one child's height grows, the column's content height grows.
-/// If child sizes are pointwise monotone (sizes1[i].height ≤ sizes2[i].height),
-/// then column_content_height(sizes1, spacing) ≤ column_content_height(sizes2, spacing).
+///  If one child's height grows, the column's content height grows.
+///  If child sizes are pointwise monotone (sizes1[i].height ≤ sizes2[i].height),
+///  then column_content_height(sizes1, spacing) ≤ column_content_height(sizes2, spacing).
 pub proof fn lemma_column_single_child_change_monotone<T: OrderedRing>(
     sizes1: Seq<Size<T>>,
     sizes2: Seq<Size<T>>,
@@ -111,10 +111,10 @@ pub proof fn lemma_column_single_child_change_monotone<T: OrderedRing>(
     ensures
         column_content_height(sizes1, spacing).le(column_content_height(sizes2, spacing)),
 {
-    // column_content_height = sum_heights + (n-1)*spacing
-    // sum_heights pointwise monotone (already proved in proofs.rs)
+    //  column_content_height = sum_heights + (n-1)*spacing
+    //  sum_heights pointwise monotone (already proved in proofs.rs)
     super::proofs::lemma_sum_heights_pointwise_monotone::<T>(sizes1, sizes2, sizes1.len() as nat);
-    // Both have same spacing term → content_h1 ≤ content_h2
+    //  Both have same spacing term → content_h1 ≤ content_h2
     if sizes1.len() > 0 {
         T::axiom_le_add_monotone(
             sum_heights(sizes1, sizes1.len() as nat),
@@ -124,10 +124,10 @@ pub proof fn lemma_column_single_child_change_monotone<T: OrderedRing>(
     }
 }
 
-// ── Theorem 4: Diff-layout correspondence ───────────────────────
+//  ── Theorem 4: Diff-layout correspondence ───────────────────────
 
-/// If diff_nodes says Same (with fuel > 0), the nodes are deeply equivalent.
-/// Convenience wrapper around lemma_diff_same_implies_deeply_eqv.
+///  If diff_nodes says Same (with fuel > 0), the nodes are deeply equivalent.
+///  Convenience wrapper around lemma_diff_same_implies_deeply_eqv.
 pub proof fn lemma_same_diff_reusable<T: OrderedRing>(
     old: Node<T>,
     new: Node<T>,
@@ -142,10 +142,10 @@ pub proof fn lemma_same_diff_reusable<T: OrderedRing>(
     lemma_diff_same_implies_deeply_eqv(old, new, fuel);
 }
 
-// ── Theorem 5: Diff converged stability ──────────────────────────
+//  ── Theorem 5: Diff converged stability ──────────────────────────
 
-/// If a widget has converged at fuel1, then the layouts at fuel1 and fuel2
-/// (≥ fuel1) produce identical nodes, hence diff returns Same.
+///  If a widget has converged at fuel1, then the layouts at fuel1 and fuel2
+///  (≥ fuel1) produce identical nodes, hence diff returns Same.
 pub proof fn lemma_diff_converged_stability<T: OrderedField>(
     limits: Limits<T>,
     widget: Widget<T>,
@@ -163,16 +163,16 @@ pub proof fn lemma_diff_converged_stability<T: OrderedField>(
             fuel1,
         ) === DiffResult::<T>::Same,
 {
-    // Converged implies identical layout
+    //  Converged implies identical layout
     lemma_converged_layout_stable(limits, widget, fuel1, fuel2);
-    // layout(fuel1) === layout(fuel2), so diff is reflexive
+    //  layout(fuel1) === layout(fuel2), so diff is reflexive
     lemma_diff_reflexive(layout_widget(limits, widget, fuel1), fuel1);
 }
 
-// ── Theorem 6: Sufficient fuel implies convergence ──────────────
+//  ── Theorem 6: Sufficient fuel implies convergence ──────────────
 
-/// Helper: max_child_widget_depth(children, fuel, count) >= widget_depth(children[i], fuel)
-/// for all i < count.
+///  Helper: max_child_widget_depth(children, fuel, count) >= widget_depth(children[i], fuel)
+///  for all i < count.
 proof fn lemma_max_child_depth_bound<T: OrderedRing>(
     children: Seq<Widget<T>>,
     fuel: nat,
@@ -187,22 +187,22 @@ proof fn lemma_max_child_depth_bound<T: OrderedRing>(
     decreases count,
 {
     if count == 0 {
-        // impossible since i < count
+        //  impossible since i < count
     } else if i == (count - 1) as int {
-        // widget_depth(children[count-1], fuel) is the cur value
-        // max_child_depth = max(prev, cur) >= cur
+        //  widget_depth(children[count-1], fuel) is the cur value
+        //  max_child_depth = max(prev, cur) >= cur
     } else {
-        // i < count - 1, so by IH, prev >= widget_depth(children[i], fuel)
+        //  i < count - 1, so by IH, prev >= widget_depth(children[i], fuel)
         lemma_max_child_depth_bound::<T>(children, fuel, (count - 1) as nat, i);
-        // max_child_depth = max(prev, cur) >= prev >= widget_depth(children[i], fuel)
+        //  max_child_depth = max(prev, cur) >= prev >= widget_depth(children[i], fuel)
     }
 }
 
-/// If fuel > widget_depth(widget, fuel), then widget_converged(widget, fuel).
+///  If fuel > widget_depth(widget, fuel), then widget_converged(widget, fuel).
 ///
-/// The widget_depth function computes the tree depth within the given fuel budget.
-/// When fuel exceeds this depth, all subtrees are fully resolved and the widget
-/// has converged.
+///  The widget_depth function computes the tree depth within the given fuel budget.
+///  When fuel exceeds this depth, all subtrees are fully resolved and the widget
+///  has converged.
 pub proof fn lemma_sufficient_fuel_converges<T: OrderedRing>(
     widget: Widget<T>,
     fuel: nat,
@@ -213,35 +213,35 @@ pub proof fn lemma_sufficient_fuel_converges<T: OrderedRing>(
         widget_converged(widget, fuel),
     decreases fuel,
 {
-    // fuel > widget_depth >= 0, so fuel >= 1
+    //  fuel > widget_depth >= 0, so fuel >= 1
     let children = get_children(widget);
     if children.len() == 0 {
-        // Leaf-like: widget_converged = true for fuel >= 1
+        //  Leaf-like: widget_converged = true for fuel >= 1
     } else {
-        // widget_depth(widget, fuel) = 1 + max_child_widget_depth(children, fuel-1, children.len())
-        // So fuel > 1 + max_child_depth, i.e., fuel - 1 > max_child_depth
+        //  widget_depth(widget, fuel) = 1 + max_child_widget_depth(children, fuel-1, children.len())
+        //  So fuel > 1 + max_child_depth, i.e., fuel - 1 > max_child_depth
         let max_child_depth = max_child_widget_depth(children, (fuel - 1) as nat, children.len());
         assert forall|i: int| 0 <= i < children.len() implies
             widget_converged(children[i], (fuel - 1) as nat)
         by {
-            // max_child_depth >= widget_depth(children[i], fuel-1) by helper
+            //  max_child_depth >= widget_depth(children[i], fuel-1) by helper
             lemma_max_child_depth_bound::<T>(
                 children, (fuel - 1) as nat, children.len() as nat, i,
             );
-            // fuel - 1 > max_child_depth >= widget_depth(children[i], fuel-1)
-            // By IH: widget_converged(children[i], fuel-1)
+            //  fuel - 1 > max_child_depth >= widget_depth(children[i], fuel-1)
+            //  By IH: widget_converged(children[i], fuel-1)
             lemma_sufficient_fuel_converges::<T>(children[i], (fuel - 1) as nat);
         };
     }
 }
 
-// ── Theorem 7: Fuel-independent layout ──────────────────────────
+//  ── Theorem 7: Fuel-independent layout ──────────────────────────
 
-/// If both fuel1 and fuel2 exceed the widget's depth, the layout results are
-/// identical — the layout is independent of fuel choice once sufficient.
+///  If both fuel1 and fuel2 exceed the widget's depth, the layout results are
+///  identical — the layout is independent of fuel choice once sufficient.
 ///
-/// Combines `lemma_sufficient_fuel_converges` and `lemma_converged_layout_stable`
-/// into a single easy-to-use theorem.
+///  Combines `lemma_sufficient_fuel_converges` and `lemma_converged_layout_stable`
+///  into a single easy-to-use theorem.
 pub proof fn lemma_layout_stable_beyond_depth<T: OrderedField>(
     limits: Limits<T>,
     widget: Widget<T>,
@@ -254,23 +254,23 @@ pub proof fn lemma_layout_stable_beyond_depth<T: OrderedField>(
     ensures
         layout_widget(limits, widget, fuel1) === layout_widget(limits, widget, fuel2),
 {
-    // Both fuels are sufficient → both have converged
+    //  Both fuels are sufficient → both have converged
     lemma_sufficient_fuel_converges::<T>(widget, fuel1);
     lemma_sufficient_fuel_converges::<T>(widget, fuel2);
-    // widget_converged(widget, fuel1) and widget_converged(widget, fuel2)
+    //  widget_converged(widget, fuel1) and widget_converged(widget, fuel2)
 
     if fuel1 <= fuel2 {
-        // fuel2 >= fuel1, converged at fuel1 → same layout
+        //  fuel2 >= fuel1, converged at fuel1 → same layout
         lemma_converged_layout_stable(limits, widget, fuel1, fuel2);
     } else {
-        // fuel1 > fuel2, converged at fuel2 → same layout
+        //  fuel1 > fuel2, converged at fuel2 → same layout
         lemma_converged_layout_stable(limits, widget, fuel2, fuel1);
     }
 }
 
-// ── Theorem 8: widget_depth stability ────────────────────────────
+//  ── Theorem 8: widget_depth stability ────────────────────────────
 
-/// max_child_widget_depth is stable when each child's depth is stable.
+///  max_child_widget_depth is stable when each child's depth is stable.
 proof fn lemma_max_child_depth_stable<T: OrderedRing>(
     children: Seq<Widget<T>>,
     fuel: nat,
@@ -291,8 +291,8 @@ proof fn lemma_max_child_depth_stable<T: OrderedRing>(
     }
 }
 
-/// widget_depth is stable once fuel exceeds the measured depth:
-/// widget_depth(w, fuel+1) == widget_depth(w, fuel).
+///  widget_depth is stable once fuel exceeds the measured depth:
+///  widget_depth(w, fuel+1) == widget_depth(w, fuel).
 pub proof fn lemma_widget_depth_stable<T: OrderedRing>(
     widget: Widget<T>,
     fuel: nat,
@@ -303,32 +303,32 @@ pub proof fn lemma_widget_depth_stable<T: OrderedRing>(
         widget_depth(widget, fuel + 1) == widget_depth(widget, fuel),
     decreases fuel,
 {
-    // fuel > widget_depth >= 0 → fuel >= 1
+    //  fuel > widget_depth >= 0 → fuel >= 1
     let children = get_children(widget);
     if children.len() == 0 {
-        // Both fuels give 0
+        //  Both fuels give 0
     } else {
-        // widget_depth(w, fuel) = 1 + max_child_depth(children, fuel-1, n)
-        // fuel > 1 + max_child_depth → fuel-1 > max_child_depth
+        //  widget_depth(w, fuel) = 1 + max_child_depth(children, fuel-1, n)
+        //  fuel > 1 + max_child_depth → fuel-1 > max_child_depth
         let n = children.len();
         let max_cd = max_child_widget_depth(children, (fuel - 1) as nat, n);
-        // For each child: fuel-1 > max_cd >= widget_depth(child, fuel-1)
-        // By IH: widget_depth(child, fuel) == widget_depth(child, fuel-1)
+        //  For each child: fuel-1 > max_cd >= widget_depth(child, fuel-1)
+        //  By IH: widget_depth(child, fuel) == widget_depth(child, fuel-1)
         assert forall|i: int| 0 <= i < n implies
             widget_depth(children[i], fuel as nat) == widget_depth(children[i], (fuel - 1) as nat)
         by {
             lemma_max_child_depth_bound::<T>(children, (fuel - 1) as nat, n as nat, i);
             lemma_widget_depth_stable::<T>(children[i], (fuel - 1) as nat);
         };
-        // max_child_widget_depth(children, fuel, n) == max_child_widget_depth(children, fuel-1, n)
+        //  max_child_widget_depth(children, fuel, n) == max_child_widget_depth(children, fuel-1, n)
         lemma_max_child_depth_stable::<T>(children, (fuel - 1) as nat, n as nat);
-        // widget_depth(w, fuel+1) = 1 + max_child_depth(children, fuel, n)
-        //                         = 1 + max_child_depth(children, fuel-1, n)
-        //                         = widget_depth(w, fuel)
+        //  widget_depth(w, fuel+1) = 1 + max_child_depth(children, fuel, n)
+        //                          = 1 + max_child_depth(children, fuel-1, n)
+        //                          = widget_depth(w, fuel)
     }
 }
 
-/// widget_depth gives the same result for any two sufficient fuels.
+///  widget_depth gives the same result for any two sufficient fuels.
 pub proof fn lemma_widget_depth_fuel_independent<T: OrderedRing>(
     widget: Widget<T>,
     fuel1: nat,
@@ -340,8 +340,8 @@ pub proof fn lemma_widget_depth_fuel_independent<T: OrderedRing>(
     ensures
         widget_depth(widget, fuel1) == widget_depth(widget, fuel2),
 {
-    // Step fuel1 up to max(fuel1, fuel2) and fuel2 up to max(fuel1, fuel2)
-    // by repeated application of stability
+    //  Step fuel1 up to max(fuel1, fuel2) and fuel2 up to max(fuel1, fuel2)
+    //  by repeated application of stability
     if fuel1 <= fuel2 {
         lemma_widget_depth_stable_chain::<T>(widget, fuel1, fuel2);
     } else {
@@ -349,8 +349,8 @@ pub proof fn lemma_widget_depth_fuel_independent<T: OrderedRing>(
     }
 }
 
-/// Chain: if fuel > widget_depth(w, fuel) and fuel2 >= fuel,
-/// then widget_depth(w, fuel2) == widget_depth(w, fuel).
+///  Chain: if fuel > widget_depth(w, fuel) and fuel2 >= fuel,
+///  then widget_depth(w, fuel2) == widget_depth(w, fuel).
 proof fn lemma_widget_depth_stable_chain<T: OrderedRing>(
     widget: Widget<T>,
     fuel: nat,
@@ -365,15 +365,15 @@ proof fn lemma_widget_depth_stable_chain<T: OrderedRing>(
 {
     if fuel == fuel2 {
     } else {
-        // widget_depth(w, fuel+1) == widget_depth(w, fuel)
+        //  widget_depth(w, fuel+1) == widget_depth(w, fuel)
         lemma_widget_depth_stable::<T>(widget, fuel);
-        // fuel+1 > widget_depth(w, fuel+1) = widget_depth(w, fuel) < fuel < fuel+1
+        //  fuel+1 > widget_depth(w, fuel+1) = widget_depth(w, fuel) < fuel < fuel+1
         lemma_widget_depth_stable_chain::<T>(widget, fuel + 1, fuel2);
     }
 }
 
-/// Convergence bound: fuel = widget_depth + 1 is always sufficient,
-/// and the depth measurement itself is fuel-independent once sufficient.
+///  Convergence bound: fuel = widget_depth + 1 is always sufficient,
+///  and the depth measurement itself is fuel-independent once sufficient.
 pub proof fn lemma_convergence_bound<T: OrderedField>(
     limits: Limits<T>,
     widget: Widget<T>,
@@ -384,13 +384,13 @@ pub proof fn lemma_convergence_bound<T: OrderedField>(
         fuel > widget_depth(widget, fuel),
         any_other_fuel > widget_depth(widget, any_other_fuel),
     ensures
-        // Both fuels give identical layout
+        //  Both fuels give identical layout
         layout_widget(limits, widget, fuel) === layout_widget(limits, widget, any_other_fuel),
-        // Both fuels measure the same depth
+        //  Both fuels measure the same depth
         widget_depth(widget, fuel) == widget_depth(widget, any_other_fuel),
 {
     lemma_widget_depth_fuel_independent::<T>(widget, fuel, any_other_fuel);
     lemma_layout_stable_beyond_depth(limits, widget, fuel, any_other_fuel);
 }
 
-} // verus!
+} //  verus!

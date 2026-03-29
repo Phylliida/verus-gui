@@ -6,10 +6,10 @@ use crate::widget::{Widget, get_children};
 
 verus! {
 
-// ── Draw command type ─────────────────────────────────────────────────
+//  ── Draw command type ─────────────────────────────────────────────────
 
-/// A draw command: an axis-aligned rectangle with absolute screen coordinates
-/// and a depth value (z-order from DFS traversal order).
+///  A draw command: an axis-aligned rectangle with absolute screen coordinates
+///  and a depth value (z-order from DFS traversal order).
 #[verifier::reject_recursive_types(T)]
 pub struct DrawCommand<T: OrderedRing> {
     pub x: T,
@@ -19,9 +19,9 @@ pub struct DrawCommand<T: OrderedRing> {
     pub depth: nat,
 }
 
-// ── Flatten node tree to draw commands ────────────────────────────────
+//  ── Flatten node tree to draw commands ────────────────────────────────
 
-/// Count the total number of nodes in a Node tree.
+///  Count the total number of nodes in a Node tree.
 pub open spec fn node_count<T: OrderedRing>(node: Node<T>, fuel: nat) -> nat
     decreases fuel, 0nat,
 {
@@ -32,7 +32,7 @@ pub open spec fn node_count<T: OrderedRing>(node: Node<T>, fuel: nat) -> nat
     }
 }
 
-/// Count nodes across children starting from index `from`.
+///  Count nodes across children starting from index `from`.
 pub open spec fn children_node_count<T: OrderedRing>(
     children: Seq<Node<T>>,
     fuel: nat,
@@ -48,8 +48,8 @@ pub open spec fn children_node_count<T: OrderedRing>(
     }
 }
 
-/// Count widgets in a widget tree (fuel-bounded, like widget_depth).
-/// When fuel exceeds widget_depth, this gives the exact widget count.
+///  Count widgets in a widget tree (fuel-bounded, like widget_depth).
+///  When fuel exceeds widget_depth, this gives the exact widget count.
 pub open spec fn widget_node_count<T: OrderedRing>(widget: Widget<T>, fuel: nat) -> nat
     decreases fuel, 0nat,
 {
@@ -61,7 +61,7 @@ pub open spec fn widget_node_count<T: OrderedRing>(widget: Widget<T>, fuel: nat)
     }
 }
 
-/// Sum of widget_node_count for children[0..count].
+///  Sum of widget_node_count for children[0..count].
 pub open spec fn widget_children_node_count<T: OrderedRing>(
     children: Seq<Widget<T>>, fuel: nat, count: nat,
 ) -> nat
@@ -75,9 +75,9 @@ pub open spec fn widget_children_node_count<T: OrderedRing>(
     }
 }
 
-/// Flatten a Node tree into a sequence of DrawCommands with absolute coordinates.
+///  Flatten a Node tree into a sequence of DrawCommands with absolute coordinates.
 ///
-/// DFS traversal: emit current node first, then recursively emit children.
+///  DFS traversal: emit current node first, then recursively emit children.
 pub open spec fn flatten_node_to_draws<T: OrderedRing>(
     node: Node<T>,
     offset_x: T,
@@ -112,7 +112,7 @@ pub open spec fn flatten_node_to_draws<T: OrderedRing>(
     }
 }
 
-/// Flatten children starting from index `from`.
+///  Flatten children starting from index `from`.
 pub open spec fn flatten_children_to_draws<T: OrderedRing>(
     children: Seq<Node<T>>,
     parent_abs_x: T,
@@ -137,7 +137,7 @@ pub open spec fn flatten_children_to_draws<T: OrderedRing>(
     }
 }
 
-/// Total number of draw commands produced by flattening.
+///  Total number of draw commands produced by flattening.
 pub open spec fn flatten_count<T: OrderedRing>(
     node: Node<T>,
     fuel: nat,
@@ -145,4 +145,4 @@ pub open spec fn flatten_count<T: OrderedRing>(
     flatten_node_to_draws::<T>(node, T::zero(), T::zero(), 0, fuel).len()
 }
 
-} // verus!
+} //  verus!

@@ -4,56 +4,56 @@ use super::operations::*;
 
 verus! {
 
-// ──────────────────────────────────────────────────────────────────────
-// Undo entry
-// ──────────────────────────────────────────────────────────────────────
+//  ──────────────────────────────────────────────────────────────────────
+//  Undo entry
+//  ──────────────────────────────────────────────────────────────────────
 
-/// A single undo entry capturing both directions of a splice operation.
-/// Stores enough information to reverse (undo) and replay (redo) the edit.
+///  A single undo entry capturing both directions of a splice operation.
+///  Stores enough information to reverse (undo) and replay (redo) the edit.
 pub struct UndoEntry {
-    /// Start position of the splice.
+    ///  Start position of the splice.
     pub start: nat,
-    /// Text that was removed by the splice (original content).
+    ///  Text that was removed by the splice (original content).
     pub removed_text: Seq<char>,
-    /// Styles that were removed by the splice.
+    ///  Styles that were removed by the splice.
     pub removed_styles: Seq<StyleSet>,
-    /// Text that was inserted by the splice (new content).
+    ///  Text that was inserted by the splice (new content).
     pub inserted_text: Seq<char>,
-    /// Styles that were inserted by the splice.
+    ///  Styles that were inserted by the splice.
     pub inserted_styles: Seq<StyleSet>,
-    /// Anchor position before the edit.
+    ///  Anchor position before the edit.
     pub anchor_before: nat,
-    /// Focus position before the edit.
+    ///  Focus position before the edit.
     pub focus_before: nat,
-    /// Focus position after the edit.
+    ///  Focus position after the edit.
     pub focus_after: nat,
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// Undo stack
-// ──────────────────────────────────────────────────────────────────────
+//  ──────────────────────────────────────────────────────────────────────
+//  Undo stack
+//  ──────────────────────────────────────────────────────────────────────
 
-/// A stack of undo/redo entries with a current position.
-/// Entries `[0..position)` are undo-able; entries `[position..len)` are redo-able.
+///  A stack of undo/redo entries with a current position.
+///  Entries `[0..position)` are undo-able; entries `[position..len)` are redo-able.
 pub struct UndoStack {
     pub entries: Seq<UndoEntry>,
     pub position: nat,
 }
 
-/// Well-formedness of an undo entry.
+///  Well-formedness of an undo entry.
 pub open spec fn undo_entry_wf(entry: UndoEntry) -> bool {
     &&& entry.removed_text.len() == entry.removed_styles.len()
     &&& entry.inserted_text.len() == entry.inserted_styles.len()
 }
 
-/// Well-formedness of an undo stack.
+///  Well-formedness of an undo stack.
 pub open spec fn undo_stack_wf(stack: UndoStack) -> bool {
     &&& stack.position <= stack.entries.len()
     &&& forall|i: int| 0 <= i < stack.entries.len() ==>
         undo_entry_wf(#[trigger] stack.entries[i])
 }
 
-/// An empty undo stack.
+///  An empty undo stack.
 pub open spec fn empty_undo_stack() -> UndoStack {
     UndoStack {
         entries: Seq::empty(),
@@ -61,22 +61,22 @@ pub open spec fn empty_undo_stack() -> UndoStack {
     }
 }
 
-/// Whether the stack has entries to undo.
+///  Whether the stack has entries to undo.
 pub open spec fn can_undo(stack: UndoStack) -> bool {
     stack.position > 0
 }
 
-/// Whether the stack has entries to redo.
+///  Whether the stack has entries to redo.
 pub open spec fn can_redo(stack: UndoStack) -> bool {
     stack.position < stack.entries.len()
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// Entry construction
-// ──────────────────────────────────────────────────────────────────────
+//  ──────────────────────────────────────────────────────────────────────
+//  Entry construction
+//  ──────────────────────────────────────────────────────────────────────
 
-/// Create an undo entry capturing the inverse of
-/// `splice(model, start, end, new_text, new_styles, new_focus)`.
+///  Create an undo entry capturing the inverse of
+///  `splice(model, start, end, new_text, new_styles, new_focus)`.
 pub open spec fn undo_entry_for_splice(
     model: TextModel,
     start: nat,
@@ -97,11 +97,11 @@ pub open spec fn undo_entry_for_splice(
     }
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// Push / truncate
-// ──────────────────────────────────────────────────────────────────────
+//  ──────────────────────────────────────────────────────────────────────
+//  Push / truncate
+//  ──────────────────────────────────────────────────────────────────────
 
-/// Push an undo entry, truncating any redo entries beyond the current position.
+///  Push an undo entry, truncating any redo entries beyond the current position.
 pub open spec fn push_undo(stack: UndoStack, entry: UndoEntry) -> UndoStack {
     UndoStack {
         entries: stack.entries.subrange(0, stack.position as int).push(entry),
@@ -109,7 +109,7 @@ pub open spec fn push_undo(stack: UndoStack, entry: UndoEntry) -> UndoStack {
     }
 }
 
-/// Convenience: record an edit by creating and pushing an undo entry.
+///  Convenience: record an edit by creating and pushing an undo entry.
 pub open spec fn record_edit(
     stack: UndoStack,
     model: TextModel,
@@ -125,12 +125,12 @@ pub open spec fn record_edit(
     )
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// Apply undo / redo
-// ──────────────────────────────────────────────────────────────────────
+//  ──────────────────────────────────────────────────────────────────────
+//  Apply undo / redo
+//  ──────────────────────────────────────────────────────────────────────
 
-/// Apply undo: splice the inverse of the most recent edit.
-/// Returns (new_stack, new_model).
+///  Apply undo: splice the inverse of the most recent edit.
+///  Returns (new_stack, new_model).
 pub open spec fn apply_undo(
     stack: UndoStack,
     model: TextModel,
@@ -153,8 +153,8 @@ pub open spec fn apply_undo(
     (new_stack, new_model)
 }
 
-/// Apply redo: replay the edit at the current position.
-/// Returns (new_stack, new_model).
+///  Apply redo: replay the edit at the current position.
+///  Returns (new_stack, new_model).
 pub open spec fn apply_redo(
     stack: UndoStack,
     model: TextModel,
@@ -177,20 +177,20 @@ pub open spec fn apply_redo(
     (new_stack, new_model)
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// Undo merge
-// ──────────────────────────────────────────────────────────────────────
+//  ──────────────────────────────────────────────────────────────────────
+//  Undo merge
+//  ──────────────────────────────────────────────────────────────────────
 
-/// Whether two entries can be merged (adjacent pure insertions).
-/// Both must be pure insertions (removed_text empty), and e2 must start
-/// where e1's insertion ends.
+///  Whether two entries can be merged (adjacent pure insertions).
+///  Both must be pure insertions (removed_text empty), and e2 must start
+///  where e1's insertion ends.
 pub open spec fn can_merge_entries(e1: UndoEntry, e2: UndoEntry) -> bool {
     &&& e1.removed_text.len() == 0
     &&& e2.removed_text.len() == 0
     &&& e2.start == e1.start + e1.inserted_text.len()
 }
 
-/// Merge two adjacent insertion entries into one.
+///  Merge two adjacent insertion entries into one.
 pub open spec fn merge_entries(e1: UndoEntry, e2: UndoEntry) -> UndoEntry {
     UndoEntry {
         start: e1.start,
@@ -204,9 +204,9 @@ pub open spec fn merge_entries(e1: UndoEntry, e2: UndoEntry) -> UndoEntry {
     }
 }
 
-/// Push an undo entry, optionally merging with the top entry.
-/// If `merge` is true and the top entry is merge-compatible, replace top with merged.
-/// Otherwise, normal push.
+///  Push an undo entry, optionally merging with the top entry.
+///  If `merge` is true and the top entry is merge-compatible, replace top with merged.
+///  Otherwise, normal push.
 pub open spec fn push_undo_or_merge(
     stack: UndoStack, entry: UndoEntry, merge: bool,
 ) -> UndoStack {
@@ -224,11 +224,11 @@ pub open spec fn push_undo_or_merge(
     }
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// Undo history consistency
-// ──────────────────────────────────────────────────────────────────────
+//  ──────────────────────────────────────────────────────────────────────
+//  Undo history consistency
+//  ──────────────────────────────────────────────────────────────────────
 
-/// An undo entry correctly describes a text transition.
+///  An undo entry correctly describes a text transition.
 pub open spec fn entry_describes_transition(
     entry: UndoEntry, before_text: Seq<char>, after_text: Seq<char>,
 ) -> bool {
@@ -247,9 +247,9 @@ pub open spec fn entry_describes_transition(
     &&& after_text.len() < usize::MAX
 }
 
-/// The history is consistent with the undo stack and current text.
-/// history[i] = text state before entry[i] was applied.
-/// history.last() = text after all entries applied.
+///  The history is consistent with the undo stack and current text.
+///  history[i] = text state before entry[i] was applied.
+///  history.last() = text after all entries applied.
 pub open spec fn undo_history_valid(
     stack: UndoStack, history: Seq<Seq<char>>,
 ) -> bool {
@@ -259,11 +259,11 @@ pub open spec fn undo_history_valid(
             #[trigger] stack.entries[i], history[i], history[i + 1])
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// Style history consistency
-// ──────────────────────────────────────────────────────────────────────
+//  ──────────────────────────────────────────────────────────────────────
+//  Style history consistency
+//  ──────────────────────────────────────────────────────────────────────
 
-/// An undo entry correctly describes a style transition.
+///  An undo entry correctly describes a style transition.
 pub open spec fn entry_describes_style_transition(
     entry: UndoEntry, before_styles: Seq<StyleSet>, after_styles: Seq<StyleSet>,
 ) -> bool {
@@ -274,7 +274,7 @@ pub open spec fn entry_describes_style_transition(
             entry.inserted_styles)
 }
 
-/// The style history is consistent with the undo stack.
+///  The style history is consistent with the undo stack.
 pub open spec fn undo_style_history_valid(
     stack: UndoStack, style_history: Seq<Seq<StyleSet>>,
 ) -> bool {
@@ -284,4 +284,4 @@ pub open spec fn undo_style_history_valid(
             #[trigger] stack.entries[i], style_history[i], style_history[i + 1])
 }
 
-} // verus!
+} //  verus!

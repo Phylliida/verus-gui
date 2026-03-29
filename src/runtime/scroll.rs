@@ -9,7 +9,7 @@ use crate::scroll::child_visible;
 
 verus! {
 
-/// Whether child i is visible, using add_spec/lt_spec directly (avoids trait method resolution).
+///  Whether child i is visible, using add_spec/lt_spec directly (avoids trait method resolution).
 pub open spec fn runtime_child_visible_at(
     padding_top: RationalModel,
     spec_sizes: Seq<Size<RationalModel>>,
@@ -24,11 +24,11 @@ pub open spec fn runtime_child_visible_at(
     scroll_y.lt_spec(bottom) && y_pos.lt_spec(scroll_bottom)
 }
 
-/// Compute the visible range [first, end) for a column's children
-/// given scroll position and viewport height.
+///  Compute the visible range [first, end) for a column's children
+///  given scroll position and viewport height.
 ///
-/// Two-phase scan: first pass finds the first visible child,
-/// second pass extends until non-visible (contiguous range).
+///  Two-phase scan: first pass finds the first visible child,
+///  second pass extends until non-visible (contiguous range).
 pub fn visible_range_exec(
     padding_top: &RuntimeRational,
     child_sizes: &Vec<RuntimeSize>,
@@ -64,7 +64,7 @@ pub fn visible_range_exec(
 
     let scroll_bottom = scroll_y.add(viewport_h);
 
-    // Phase 1: find the first visible child
+    //  Phase 1: find the first visible child
     let mut y_pos = copy_rational(padding_top);
     let mut first: usize = 0;
 
@@ -92,8 +92,8 @@ pub fn visible_range_exec(
         let bottom = y_pos.add(&child_h);
 
         if scroll_y.lt(&bottom) && y_pos.lt(&scroll_bottom) {
-            // Found first visible child.
-            // Phase 2: extend from first, tracking visibility
+            //  Found first visible child.
+            //  Phase 2: extend from first, tracking visibility
             proof {
                 assert(spec_sizes[first as int] == child_sizes@[first as int]@);
                 assert(child_h@ == spec_sizes[first as int].height);
@@ -154,14 +154,14 @@ pub fn visible_range_exec(
             }
 
             proof {
-                // Connect ghost spec_sizes to the ensures-level Seq::new
+                //  Connect ghost spec_sizes to the ensures-level Seq::new
                 let ensures_sizes = Seq::new(child_sizes@.len() as nat, |j: int| child_sizes@[j]@);
                 assert(spec_sizes =~= ensures_sizes);
             }
             return (first, end);
         }
 
-        // Not visible: advance
+        //  Not visible: advance
         let y_next = y_pos.add(&child_h).add(spacing);
         proof {
             assert(spec_sizes[first as int] == child_sizes@[first as int]@);
@@ -170,8 +170,8 @@ pub fn visible_range_exec(
         first = first + 1;
     }
 
-    // No visible children
+    //  No visible children
     (0, 0)
 }
 
-} // verus!
+} //  verus!

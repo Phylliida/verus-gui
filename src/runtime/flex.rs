@@ -17,7 +17,7 @@ use crate::layout::flex_proofs::*;
 
 verus! {
 
-/// Execute flex column layout: distribute height proportionally by weights.
+///  Execute flex column layout: distribute height proportionally by weights.
 pub fn flex_column_layout_exec(
     limits: &RuntimeLimits,
     padding: &RuntimePadding,
@@ -33,7 +33,7 @@ pub fn flex_column_layout_exec(
         weights@.len() == child_cross_sizes@.len(),
         forall|i: int| 0 <= i < weights@.len() ==> weights@[i].wf_spec(),
         forall|i: int| 0 <= i < child_cross_sizes@.len() ==> child_cross_sizes@[i].wf_spec(),
-        // Total weight must be nonzero for proportional division
+        //  Total weight must be nonzero for proportional division
         weights@.len() > 0 ==> !sum_weights::<RationalModel>(
             Seq::new(weights@.len() as nat, |i: int| weights@[i]@),
             weights@.len() as nat,
@@ -52,7 +52,7 @@ pub fn flex_column_layout_exec(
         Seq::new(weights@.len() as nat, |i: int| weights@[i]@);
     let ghost spec_cross: Seq<RationalModel> =
         Seq::new(child_cross_sizes@.len() as nat, |i: int| child_cross_sizes@[i]@);
-    // Carry the nonzero total weight fact as ghost
+    //  Carry the nonzero total weight fact as ghost
     proof {
         if weights@.len() > 0 {
             assert(!sum_weights::<RationalModel>(spec_weights, weights@.len() as nat)
@@ -62,7 +62,7 @@ pub fn flex_column_layout_exec(
 
     let n = weights.len();
 
-    // Compute total_weight = sum of all weights
+    //  Compute total_weight = sum of all weights
     let mut total_weight = RuntimeRational::from_int(0);
     let mut i: usize = 0;
     while i < n
@@ -79,12 +79,12 @@ pub fn flex_column_layout_exec(
         i = i + 1;
     }
 
-    // Compute available dimensions
+    //  Compute available dimensions
     let pad_h = padding.horizontal_exec();
     let pad_v = padding.vertical_exec();
     let available_width = limits.max.width.sub(&pad_h);
 
-    // Compute total_spacing
+    //  Compute total_spacing
     let mut total_spacing = RuntimeRational::from_int(0);
     if n > 0 {
         let mut j: usize = 0;
@@ -107,14 +107,14 @@ pub fn flex_column_layout_exec(
     let avail_minus_pad = limits.max.height.sub(&pad_v);
     let available_height = avail_minus_pad.sub(&total_spacing);
 
-    // Resolve parent size
+    //  Resolve parent size
     let parent_size_w = copy_rational(&limits.max.width);
     let parent_size_h = copy_rational(&limits.max.height);
     let parent_width = limits.min.width.max(&parent_size_w.min(&limits.max.width));
     let parent_height = limits.min.height.max(&parent_size_h.min(&limits.max.height));
     let parent_size = RuntimeSize::new(parent_width, parent_height);
 
-    // Establish children sequence length
+    //  Establish children sequence length
     proof {
         lemma_flex_column_children_len::<RationalModel>(
             padding@, spacing@, *h_align, spec_weights, spec_cross,
@@ -122,17 +122,17 @@ pub fn flex_column_layout_exec(
         );
     }
 
-    // Build children
+    //  Build children
     let mut children: Vec<RuntimeNode> = Vec::new();
     let mut y_pos = copy_rational(&padding.top);
     let mut main_sum = RuntimeRational::from_int(0);
     let mut k: usize = 0;
 
-    // Establish initial invariant: flex_column_child_y(pt, ..., 0) == pt
+    //  Establish initial invariant: flex_column_child_y(pt, ..., 0) == pt
     proof {
         if n > 0 {
-            // flex_main_sum(..., 0) == zero and repeated_add(sp, 0) == zero
-            // flex_column_child_y(pt, ..., 0) = pt.add(zero).add(zero) = pt
+            //  flex_main_sum(..., 0) == zero and repeated_add(sp, 0) == zero
+            //  flex_column_child_y(pt, ..., 0) = pt.add(zero).add(zero) = pt
             use verus_rational::rational::Rational;
             Rational::lemma_add_zero_identity(padding@.top);
             let zero = RationalModel::from_int_spec(0);
@@ -187,7 +187,7 @@ pub fn flex_column_layout_exec(
             );
         }
 
-        // child_h = weight[k] / total_weight * available_height
+        //  child_h = weight[k] / total_weight * available_height
         let w_k = copy_rational(&weights[k]);
         let child_h = w_k.div(&total_weight).mul(&available_height);
         let cross_k = copy_rational(&child_cross_sizes[k]);
@@ -198,12 +198,12 @@ pub fn flex_column_layout_exec(
         let child_node = RuntimeNode::leaf_exec(child_x, child_y, cs);
         children.push(child_node);
 
-        // Update main_sum and y_pos
+        //  Update main_sum and y_pos
         main_sum = main_sum.add(&child_h);
         if k + 1 < n {
             y_pos = padding.top.add(&main_sum);
             y_pos = y_pos.add(&{
-                // repeated_add(spacing, k+1)
+                //  repeated_add(spacing, k+1)
                 let mut sp = RuntimeRational::from_int(0);
                 let mut m: usize = 0;
                 let target = k + 1;
@@ -261,7 +261,7 @@ pub fn flex_column_layout_exec(
     out
 }
 
-/// Execute flex row layout: distribute width proportionally by weights.
+///  Execute flex row layout: distribute width proportionally by weights.
 pub fn flex_row_layout_exec(
     limits: &RuntimeLimits,
     padding: &RuntimePadding,
@@ -304,7 +304,7 @@ pub fn flex_row_layout_exec(
 
     let n = weights.len();
 
-    // Compute total_weight
+    //  Compute total_weight
     let mut total_weight = RuntimeRational::from_int(0);
     let mut i: usize = 0;
     while i < n
@@ -321,12 +321,12 @@ pub fn flex_row_layout_exec(
         i = i + 1;
     }
 
-    // Compute available dimensions
+    //  Compute available dimensions
     let pad_h = padding.horizontal_exec();
     let pad_v = padding.vertical_exec();
     let available_height = limits.max.height.sub(&pad_v);
 
-    // Compute total_spacing
+    //  Compute total_spacing
     let mut total_spacing = RuntimeRational::from_int(0);
     if n > 0 {
         let mut j: usize = 0;
@@ -349,14 +349,14 @@ pub fn flex_row_layout_exec(
     let avail_minus_pad = limits.max.width.sub(&pad_h);
     let available_width = avail_minus_pad.sub(&total_spacing);
 
-    // Resolve parent size
+    //  Resolve parent size
     let parent_size_w = copy_rational(&limits.max.width);
     let parent_size_h = copy_rational(&limits.max.height);
     let parent_width = limits.min.width.max(&parent_size_w.min(&limits.max.width));
     let parent_height = limits.min.height.max(&parent_size_h.min(&limits.max.height));
     let parent_size = RuntimeSize::new(parent_width, parent_height);
 
-    // Establish children sequence length
+    //  Establish children sequence length
     proof {
         lemma_flex_row_children_len::<RationalModel>(
             padding@, spacing@, *v_align, spec_weights, spec_cross,
@@ -364,13 +364,13 @@ pub fn flex_row_layout_exec(
         );
     }
 
-    // Build children
+    //  Build children
     let mut children: Vec<RuntimeNode> = Vec::new();
     let mut x_pos = copy_rational(&padding.left);
     let mut main_sum = RuntimeRational::from_int(0);
     let mut k: usize = 0;
 
-    // Establish initial invariant: flex_row_child_x(pt, ..., 0) == pt
+    //  Establish initial invariant: flex_row_child_x(pt, ..., 0) == pt
     proof {
         if n > 0 {
             use verus_rational::rational::Rational;
@@ -427,7 +427,7 @@ pub fn flex_row_layout_exec(
             );
         }
 
-        // child_w = weight[k] / total_weight * available_width
+        //  child_w = weight[k] / total_weight * available_width
         let w_k = copy_rational(&weights[k]);
         let child_w = w_k.div(&total_weight).mul(&available_width);
         let cross_k = copy_rational(&child_cross_sizes[k]);
@@ -438,7 +438,7 @@ pub fn flex_row_layout_exec(
         let child_node = RuntimeNode::leaf_exec(child_x, child_y, cs);
         children.push(child_node);
 
-        // Update main_sum and x_pos
+        //  Update main_sum and x_pos
         main_sum = main_sum.add(&child_w);
         if k + 1 < n {
             x_pos = padding.left.add(&main_sum);
@@ -500,4 +500,4 @@ pub fn flex_row_layout_exec(
     out
 }
 
-} // verus!
+} //  verus!

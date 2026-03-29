@@ -13,7 +13,7 @@ use crate::layout::wrap::*;
 
 verus! {
 
-// ── Content-size helpers per variant ──────────────────────────────
+//  ── Content-size helpers per variant ──────────────────────────────
 
 pub fn measure_column_size_exec(
     limits: &RuntimeLimits,
@@ -325,4 +325,4 @@ pub fn measure_wrap_size_exec(
     limits.resolve_exec(RuntimeSize::new(total_width, total_height))
 }
 
-} // verus!
+} //  verus!

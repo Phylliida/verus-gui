@@ -18,9 +18,9 @@ use crate::widget::*;
 
 verus! {
 
-// ── max_width / max_height non-negativity ───────────────────────────
+//  ── max_width / max_height non-negativity ───────────────────────────
 
-/// max_width is non-negative when all child widths are non-negative.
+///  max_width is non-negative when all child widths are non-negative.
 pub proof fn lemma_max_width_nonneg<T: OrderedRing>(
     sizes: Seq<Size<T>>,
     n: nat,
@@ -37,7 +37,7 @@ pub proof fn lemma_max_width_nonneg<T: OrderedRing>(
         T::axiom_le_reflexive(T::zero());
     } else {
         lemma_max_width_nonneg(sizes, (n - 1) as nat);
-        // max(prev, sizes[n-1].width) >= prev >= 0
+        //  max(prev, sizes[n-1].width) >= prev >= 0
         lemma_max_ge_left::<T>(
             max_width(sizes, (n - 1) as nat),
             sizes[(n - 1) as int].width,
@@ -50,7 +50,7 @@ pub proof fn lemma_max_width_nonneg<T: OrderedRing>(
     }
 }
 
-/// max_height is non-negative when all child heights are non-negative.
+///  max_height is non-negative when all child heights are non-negative.
 pub proof fn lemma_max_height_nonneg<T: OrderedRing>(
     sizes: Seq<Size<T>>,
     n: nat,
@@ -79,7 +79,7 @@ pub proof fn lemma_max_height_nonneg<T: OrderedRing>(
     }
 }
 
-/// The stack content size is non-negative when all children have non-negative sizes.
+///  The stack content size is non-negative when all children have non-negative sizes.
 pub proof fn lemma_stack_content_size_nonneg<T: OrderedRing>(
     child_sizes: Seq<Size<T>>,
 )
@@ -93,9 +93,9 @@ pub proof fn lemma_stack_content_size_nonneg<T: OrderedRing>(
     lemma_max_height_nonneg(child_sizes, child_sizes.len() as nat);
 }
 
-// ── max_width / max_height bound each child ─────────────────────────
+//  ── max_width / max_height bound each child ─────────────────────────
 
-/// Each child's width is <= max_width.
+///  Each child's width is <= max_width.
 pub proof fn lemma_max_width_bounds_child<T: OrderedRing>(
     sizes: Seq<Size<T>>,
     i: nat,
@@ -108,7 +108,7 @@ pub proof fn lemma_max_width_bounds_child<T: OrderedRing>(
     decreases sizes.len() - i,
 {
     let n = sizes.len() as nat;
-    // sizes[i].width <= max_width(sizes, i+1) <= max_width(sizes, n)
+    //  sizes[i].width <= max_width(sizes, i+1) <= max_width(sizes, n)
     lemma_max_width_contains(sizes, i);
     lemma_max_width_monotone(sizes, (i + 1) as nat, n);
     T::axiom_le_transitive(
@@ -118,7 +118,7 @@ pub proof fn lemma_max_width_bounds_child<T: OrderedRing>(
     );
 }
 
-/// max_width(sizes, i+1) >= sizes[i].width (the latest element is in the max).
+///  max_width(sizes, i+1) >= sizes[i].width (the latest element is in the max).
 proof fn lemma_max_width_contains<T: OrderedRing>(
     sizes: Seq<Size<T>>,
     i: nat,
@@ -129,11 +129,11 @@ proof fn lemma_max_width_contains<T: OrderedRing>(
         sizes[i as int].width.le(max_width(sizes, (i + 1) as nat)),
 {
     reveal(max_width);
-    // max_width(sizes, i+1) = max(max_width(sizes, i), sizes[i].width) >= sizes[i].width
+    //  max_width(sizes, i+1) = max(max_width(sizes, i), sizes[i].width) >= sizes[i].width
     lemma_max_ge_right::<T>(max_width(sizes, i), sizes[i as int].width);
 }
 
-/// max_width is monotone: i <= j implies max_width(sizes, i) <= max_width(sizes, j).
+///  max_width is monotone: i <= j implies max_width(sizes, i) <= max_width(sizes, j).
 proof fn lemma_max_width_monotone<T: OrderedRing>(
     sizes: Seq<Size<T>>,
     i: nat,
@@ -152,7 +152,7 @@ proof fn lemma_max_width_monotone<T: OrderedRing>(
         T::axiom_le_reflexive(max_width(sizes, i));
     } else {
         lemma_max_width_monotone(sizes, i, (j - 1) as nat);
-        // max_width(j) = max(max_width(j-1), sizes[j-1].width) >= max_width(j-1)
+        //  max_width(j) = max(max_width(j-1), sizes[j-1].width) >= max_width(j-1)
         lemma_max_ge_left::<T>(max_width(sizes, (j - 1) as nat), sizes[(j - 1) as int].width);
         T::axiom_le_transitive(
             max_width(sizes, i),
@@ -162,7 +162,7 @@ proof fn lemma_max_width_monotone<T: OrderedRing>(
     }
 }
 
-/// Each child's height is <= max_height.
+///  Each child's height is <= max_height.
 pub proof fn lemma_max_height_bounds_child<T: OrderedRing>(
     sizes: Seq<Size<T>>,
     i: nat,
@@ -184,7 +184,7 @@ pub proof fn lemma_max_height_bounds_child<T: OrderedRing>(
     );
 }
 
-/// max_height(sizes, i+1) >= sizes[i].height.
+///  max_height(sizes, i+1) >= sizes[i].height.
 proof fn lemma_max_height_contains<T: OrderedRing>(
     sizes: Seq<Size<T>>,
     i: nat,
@@ -198,7 +198,7 @@ proof fn lemma_max_height_contains<T: OrderedRing>(
     lemma_max_ge_right::<T>(max_height(sizes, i), sizes[i as int].height);
 }
 
-/// max_height is monotone.
+///  max_height is monotone.
 proof fn lemma_max_height_monotone<T: OrderedRing>(
     sizes: Seq<Size<T>>,
     i: nat,
@@ -226,11 +226,11 @@ proof fn lemma_max_height_monotone<T: OrderedRing>(
     }
 }
 
-// ── Stack child within bounds ───────────────────────────────────────
+//  ── Stack child within bounds ───────────────────────────────────────
 
-/// Each child in a stack fits within the available space.
-/// Child x-position >= padding_left and child right edge <= padding_left + available_width.
-/// Child y-position >= padding_top and child bottom edge <= padding_top + available_height.
+///  Each child in a stack fits within the available space.
+///  Child x-position >= padding_left and child right edge <= padding_left + available_width.
+///  Child y-position >= padding_top and child bottom edge <= padding_top + available_height.
 pub proof fn lemma_stack_child_within_bounds<T: OrderedField>(
     padding_left: T,
     padding_top: T,
@@ -245,24 +245,24 @@ pub proof fn lemma_stack_child_within_bounds<T: OrderedField>(
         child_width.le(available_width),
         child_height.le(available_height),
     ensures
-        // x lower bound
+        //  x lower bound
         padding_left.le(
             padding_left.add(align_offset(h_align, available_width, child_width))
         ),
-        // x upper bound
+        //  x upper bound
         padding_left.add(align_offset(h_align, available_width, child_width))
             .add(child_width)
             .le(padding_left.add(available_width)),
-        // y lower bound
+        //  y lower bound
         padding_top.le(
             padding_top.add(align_offset(v_align, available_height, child_height))
         ),
-        // y upper bound
+        //  y upper bound
         padding_top.add(align_offset(v_align, available_height, child_height))
             .add(child_height)
             .le(padding_top.add(available_height)),
 {
-    // x bounds: direct from alignment lemmas
+    //  x bounds: direct from alignment lemmas
     lemma_align_offset_nonneg(h_align, available_width, child_width);
     lemma_le_add_nonneg(padding_left, align_offset(h_align, available_width, child_width));
 
@@ -270,7 +270,7 @@ pub proof fn lemma_stack_child_within_bounds<T: OrderedField>(
         padding_left, h_align, available_width, child_width,
     );
 
-    // y bounds: direct from alignment lemmas
+    //  y bounds: direct from alignment lemmas
     lemma_align_offset_nonneg(v_align, available_height, child_height);
     lemma_le_add_nonneg(padding_top, align_offset(v_align, available_height, child_height));
 
@@ -279,14 +279,14 @@ pub proof fn lemma_stack_child_within_bounds<T: OrderedField>(
     );
 }
 
-// ── Stack size commutativity ─────────────────────────────────────
+//  ── Stack size commutativity ─────────────────────────────────────
 
-/// Swap two elements in a sequence.
+///  Swap two elements in a sequence.
 pub open spec fn swap_seq<A>(s: Seq<A>, i: nat, j: nat) -> Seq<A> {
     s.update(i as int, s[j as int]).update(j as int, s[i as int])
 }
 
-/// max_width(sizes, n) <= bound when every element width <= bound.
+///  max_width(sizes, n) <= bound when every element width <= bound.
 proof fn lemma_max_width_upper_bound<T: OrderedRing>(
     sizes: Seq<Size<T>>,
     n: nat,
@@ -304,19 +304,19 @@ proof fn lemma_max_width_upper_bound<T: OrderedRing>(
     if n == 0 {
     } else {
         lemma_max_width_upper_bound(sizes, (n - 1) as nat, bound);
-        // max_width(n) = max(max_width(n-1), sizes[n-1].width)
-        // max_width(n-1) <= bound, sizes[n-1].width <= bound
-        // max(a, b) <= c when a <= c and b <= c
+        //  max_width(n) = max(max_width(n-1), sizes[n-1].width)
+        //  max_width(n-1) <= bound, sizes[n-1].width <= bound
+        //  max(a, b) <= c when a <= c and b <= c
         T::axiom_le_total(max_width(sizes, (n - 1) as nat), sizes[(n - 1) as int].width);
         if max_width(sizes, (n - 1) as nat).le(sizes[(n - 1) as int].width) {
-            // max = sizes[n-1].width <= bound
+            //  max = sizes[n-1].width <= bound
         } else {
-            // max = max_width(n-1) <= bound
+            //  max = max_width(n-1) <= bound
         }
     }
 }
 
-/// Every element of swap_seq is bounded by max_width of the original.
+///  Every element of swap_seq is bounded by max_width of the original.
 proof fn lemma_swap_elements_bounded_by_max_width<T: OrderedRing>(
     sizes: Seq<Size<T>>,
     i: nat,
@@ -337,19 +337,19 @@ proof fn lemma_swap_elements_bounded_by_max_width<T: OrderedRing>(
         t[k].width.le(max_width(sizes, n))
     by {
         if k == j as int {
-            // t[j] = sizes[i]
+            //  t[j] = sizes[i]
             lemma_max_width_bounds_child(sizes, i);
         } else if k == i as int {
-            // t[i] = sizes[j]
+            //  t[i] = sizes[j]
             lemma_max_width_bounds_child(sizes, j);
         } else {
-            // t[k] = sizes[k]
+            //  t[k] = sizes[k]
             lemma_max_width_bounds_child(sizes, k as nat);
         }
     }
 }
 
-/// Swapping two children doesn't change max_width.
+///  Swapping two children doesn't change max_width.
 pub proof fn lemma_max_width_swap<T: OrderedRing>(
     sizes: Seq<Size<T>>,
     i: nat,
@@ -366,19 +366,19 @@ pub proof fn lemma_max_width_swap<T: OrderedRing>(
     let n = sizes.len() as nat;
     let t = swap_seq(sizes, i, j);
 
-    // Nonneg bounds for upper_bound preconditions
+    //  Nonneg bounds for upper_bound preconditions
     lemma_max_width_nonneg(sizes, n);
-    // t has same elements, so nonneg widths carry over
+    //  t has same elements, so nonneg widths carry over
     assert forall|k: int| 0 <= k < t.len() implies T::zero().le(t[k].width) by {
         if k == i as int { } else if k == j as int { } else { }
     }
     lemma_max_width_nonneg(t, n);
 
-    // Direction 1: max_width(t, n) <= max_width(s, n)
+    //  Direction 1: max_width(t, n) <= max_width(s, n)
     lemma_swap_elements_bounded_by_max_width(sizes, i, j);
     lemma_max_width_upper_bound(t, n, max_width(sizes, n));
 
-    // Direction 2: max_width(s, n) <= max_width(t, n)
+    //  Direction 2: max_width(s, n) <= max_width(t, n)
     assert forall|k: int| 0 <= k < n as int implies
         sizes[k].width.le(max_width(t, n))
     by {
@@ -398,7 +398,7 @@ pub proof fn lemma_max_width_swap<T: OrderedRing>(
     );
 }
 
-/// Every element of swap_seq is bounded by max_height of the original.
+///  Every element of swap_seq is bounded by max_height of the original.
 proof fn lemma_swap_elements_bounded_by_max_height<T: OrderedRing>(
     sizes: Seq<Size<T>>,
     i: nat,
@@ -428,7 +428,7 @@ proof fn lemma_swap_elements_bounded_by_max_height<T: OrderedRing>(
     }
 }
 
-/// max_height(sizes, n) <= bound when every element height <= bound.
+///  max_height(sizes, n) <= bound when every element height <= bound.
 proof fn lemma_max_height_upper_bound<T: OrderedRing>(
     sizes: Seq<Size<T>>,
     n: nat,
@@ -450,7 +450,7 @@ proof fn lemma_max_height_upper_bound<T: OrderedRing>(
     }
 }
 
-/// Swapping two children doesn't change max_height.
+///  Swapping two children doesn't change max_height.
 pub proof fn lemma_max_height_swap<T: OrderedRing>(
     sizes: Seq<Size<T>>,
     i: nat,
@@ -467,18 +467,18 @@ pub proof fn lemma_max_height_swap<T: OrderedRing>(
     let n = sizes.len() as nat;
     let t = swap_seq(sizes, i, j);
 
-    // Nonneg bounds for upper_bound preconditions
+    //  Nonneg bounds for upper_bound preconditions
     lemma_max_height_nonneg(sizes, n);
     assert forall|k: int| 0 <= k < t.len() implies T::zero().le(t[k].height) by {
         if k == i as int { } else if k == j as int { } else { }
     }
     lemma_max_height_nonneg(t, n);
 
-    // Direction 1: max_height(t, n) <= max_height(s, n)
+    //  Direction 1: max_height(t, n) <= max_height(s, n)
     lemma_swap_elements_bounded_by_max_height(sizes, i, j);
     lemma_max_height_upper_bound(t, n, max_height(sizes, n));
 
-    // Direction 2: max_height(s, n) <= max_height(t, n)
+    //  Direction 2: max_height(s, n) <= max_height(t, n)
     assert forall|k: int| 0 <= k < n as int implies
         sizes[k].height.le(max_height(t, n))
     by {
@@ -498,7 +498,7 @@ pub proof fn lemma_max_height_swap<T: OrderedRing>(
     );
 }
 
-/// Stack parent size is invariant under swapping two children.
+///  Stack parent size is invariant under swapping two children.
 pub proof fn lemma_stack_content_size_swap<T: OrderedRing>(
     sizes: Seq<Size<T>>,
     i: nat,
@@ -519,11 +519,11 @@ pub proof fn lemma_stack_content_size_swap<T: OrderedRing>(
     lemma_max_height_swap(sizes, i, j);
 }
 
-// ── Stack children-within-bounds ──────────────────────────────────
+//  ── Stack children-within-bounds ──────────────────────────────────
 
-/// Stack layout with Start alignment on both axes has children_within_bounds.
-/// Each child is at (padding.left, padding.top) and its size fits within
-/// the resolved parent bounds.
+///  Stack layout with Start alignment on both axes has children_within_bounds.
+///  Each child is at (padding.left, padding.top) and its size fits within
+///  the resolved parent bounds.
 pub proof fn lemma_stack_start_children_within_bounds<T: OrderedField>(
     limits: Limits<T>,
     padding: Padding<T>,
@@ -559,19 +559,19 @@ pub proof fn lemma_stack_start_children_within_bounds<T: OrderedField>(
     let avail_h = limits.max.height.sub(v);
     let parent_size = limits.resolve(Size::new(total_w, total_h));
 
-    // h >= 0, v >= 0
+    //  h >= 0, v >= 0
     lemma_nonneg_sum(padding.left, padding.right);
     lemma_nonneg_sum(padding.top, padding.bottom);
 
-    // inner.wf()
+    //  inner.wf()
     lemma_shrink_wf(limits, h, v);
 
-    // Convert: h+min <= max → min+h <= max for shrink_max_bound
+    //  Convert: h+min <= max → min+h <= max for shrink_max_bound
     lemma_add_comm_le(h, limits.min.width, limits.max.width);
     lemma_add_comm_le(v, limits.min.height, limits.max.height);
     lemma_shrink_max_bound(limits, h, v);
 
-    // Each child size: min <= size <= max, hence nonneg
+    //  Each child size: min <= size <= max, hence nonneg
     assert forall|k: int| 0 <= k < cn.len() implies
         child_sizes[k].width.le(inner.max.width)
         && child_sizes[k].height.le(inner.max.height)
@@ -583,30 +583,30 @@ pub proof fn lemma_stack_start_children_within_bounds<T: OrderedField>(
         T::axiom_le_transitive(T::zero(), inner.min.height, child_sizes[k].height);
     };
 
-    // content <= inner.max
+    //  content <= inner.max
     lemma_max_width_upper_bound(child_sizes, child_sizes.len() as nat, inner.max.width);
     lemma_max_height_upper_bound(child_sizes, child_sizes.len() as nat, inner.max.height);
 
-    // total_w = h + content.w <= h + inner.max.w = inner.max.w + h <= max.w
+    //  total_w = h + content.w <= h + inner.max.w = inner.max.w + h <= max.w
     T::axiom_le_add_monotone(content.width, inner.max.width, h);
     lemma_add_comm_le(content.width, h, inner.max.width.add(h));
     T::axiom_le_transitive(total_w, inner.max.width.add(h), limits.max.width);
 
-    // total_h = v + content.h <= max.h (symmetric)
+    //  total_h = v + content.h <= max.h (symmetric)
     T::axiom_le_add_monotone(content.height, inner.max.height, v);
     lemma_add_comm_le(content.height, v, inner.max.height.add(v));
     T::axiom_le_transitive(total_h, inner.max.height.add(v), limits.max.height);
 
-    // resolve >= total
+    //  resolve >= total
     lemma_resolve_ge_input(limits, Size::new(total_w, total_h));
 
-    // stack_children length
+    //  stack_children length
     lemma_stack_children_len(
         padding, Alignment::Start, Alignment::Start, child_sizes,
         avail_w, avail_h, 0,
     );
 
-    // Per-child cwb
+    //  Per-child cwb
     let sc = stack_children(
         padding, Alignment::Start, Alignment::Start, child_sizes,
         avail_w, avail_h, 0,
@@ -617,23 +617,23 @@ pub proof fn lemma_stack_start_children_within_bounds<T: OrderedField>(
         && sc[i].x.add(child_sizes[i].width).le(parent_size.width)
         && sc[i].y.add(child_sizes[i].height).le(parent_size.height)
     by {
-        // Element access: sc[i] = Node::leaf(left+align_offset, top+align_offset, sizes[i])
+        //  Element access: sc[i] = Node::leaf(left+align_offset, top+align_offset, sizes[i])
         lemma_stack_children_element(
             padding, Alignment::Start, Alignment::Start, child_sizes,
             avail_w, avail_h, i as nat,
         );
-        // For Start: align_offset(Start, _, _) = T::zero()
-        // So sc[i].x = padding.left.add(T::zero()), sc[i].y = padding.top.add(T::zero())
+        //  For Start: align_offset(Start, _, _) = T::zero()
+        //  So sc[i].x = padding.left.add(T::zero()), sc[i].y = padding.top.add(T::zero())
 
-        // 0 <= x: 0 <= left <= left + 0
+        //  0 <= x: 0 <= left <= left + 0
         T::axiom_le_reflexive(T::zero());
         lemma_le_add_nonneg(padding.left, T::zero());
         T::axiom_le_transitive(T::zero(), padding.left, padding.left.add(T::zero()));
-        // 0 <= y: symmetric
+        //  0 <= y: symmetric
         lemma_le_add_nonneg(padding.top, T::zero());
         T::axiom_le_transitive(T::zero(), padding.top, padding.top.add(T::zero()));
 
-        // child.w <= content.w = max_width(sizes, n)
+        //  child.w <= content.w = max_width(sizes, n)
         lemma_max_width_contains(child_sizes, i as nat);
         lemma_max_width_monotone(child_sizes, (i + 1) as nat, child_sizes.len() as nat);
         T::axiom_le_transitive(
@@ -641,7 +641,7 @@ pub proof fn lemma_stack_start_children_within_bounds<T: OrderedField>(
             max_width(child_sizes, (i + 1) as nat),
             content.width,
         );
-        // child.h <= content.h
+        //  child.h <= content.h
         lemma_max_height_contains(child_sizes, i as nat);
         lemma_max_height_monotone(child_sizes, (i + 1) as nat, child_sizes.len() as nat);
         T::axiom_le_transitive(
@@ -650,7 +650,7 @@ pub proof fn lemma_stack_start_children_within_bounds<T: OrderedField>(
             content.height,
         );
 
-        // left + child.w <= h + content.w = total_w <= parent.w
+        //  left + child.w <= h + content.w = total_w <= parent.w
         lemma_le_add_nonneg(padding.left, padding.right);
         verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_add_both::<T>(
             padding.left, h, child_sizes[i as int].width, content.width,
@@ -658,7 +658,7 @@ pub proof fn lemma_stack_start_children_within_bounds<T: OrderedField>(
         T::axiom_le_transitive(
             padding.left.add(child_sizes[i as int].width), total_w, parent_size.width,
         );
-        // top + child.h <= v + content.h = total_h <= parent.h
+        //  top + child.h <= v + content.h = total_h <= parent.h
         lemma_le_add_nonneg(padding.top, padding.bottom);
         verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_add_both::<T>(
             padding.top, v, child_sizes[i as int].height, content.height,
@@ -667,8 +667,8 @@ pub proof fn lemma_stack_start_children_within_bounds<T: OrderedField>(
             padding.top.add(child_sizes[i as int].height), total_h, parent_size.height,
         );
 
-        // Bridge: right() = (left+0)+child.w, need to show this ≡ left+child.w
-        // left+0 ≡ left (add_identity), then (left+0)+w ≡ left+w (add_congruence)
+        //  Bridge: right() = (left+0)+child.w, need to show this ≡ left+child.w
+        //  left+0 ≡ left (add_identity), then (left+0)+w ≡ left+w (add_congruence)
         T::axiom_add_zero_right(padding.left);
         T::axiom_eqv_symmetric(padding.left.add(T::zero()), padding.left);
         T::axiom_eqv_reflexive(child_sizes[i as int].width);
@@ -681,7 +681,7 @@ pub proof fn lemma_stack_start_children_within_bounds<T: OrderedField>(
             padding.left.add(T::zero()).add(child_sizes[i as int].width),
             parent_size.width,
         );
-        // Bridge for bottom(): (top+0)+child.h ≡ top+child.h
+        //  Bridge for bottom(): (top+0)+child.h ≡ top+child.h
         T::axiom_add_zero_right(padding.top);
         T::axiom_eqv_symmetric(padding.top.add(T::zero()), padding.top);
         T::axiom_eqv_reflexive(child_sizes[i as int].height);
@@ -696,28 +696,28 @@ pub proof fn lemma_stack_start_children_within_bounds<T: OrderedField>(
         );
     };
 
-    // Bridge: connect sc[i] facts to merge_layout(stack_layout(...), cn).cwb
+    //  Bridge: connect sc[i] facts to merge_layout(stack_layout(...), cn).cwb
     let layout = stack_layout(limits, padding, Alignment::Start, Alignment::Start, child_sizes);
 
-    // Prove merge_layout precondition: layout.children[i] bounds
+    //  Prove merge_layout precondition: layout.children[i] bounds
     assert forall|i: int| 0 <= i < cn.len() implies
         T::zero().le(layout.children[i].x)
         && T::zero().le(layout.children[i].y)
         && layout.children[i].x.add(cn[i].size.width).le(layout.size.width)
         && layout.children[i].y.add(cn[i].size.height).le(layout.size.height)
     by {
-        // Trigger the first forall: child_sizes[i] == cn[i].size (definitional)
+        //  Trigger the first forall: child_sizes[i] == cn[i].size (definitional)
         assert(child_sizes[i] === cn[i].size);
-        // Now Z3 has child_sizes[i] ground term, triggering the sc[i] facts above.
-        // layout.children[i] == sc[i] (both from stack_children with same args)
-        // layout.size == parent_size (both from limits.resolve with same args)
+        //  Now Z3 has child_sizes[i] ground term, triggering the sc[i] facts above.
+        //  layout.children[i] == sc[i] (both from stack_children with same args)
+        //  layout.size == parent_size (both from limits.resolve with same args)
     };
 
     lemma_merge_layout_cwb(layout, cn);
 }
 
-/// max_width is monotone in inputs: if each width in sizes1 <= sizes2, then
-/// max_width(sizes1, n) <= max_width(sizes2, n).
+///  max_width is monotone in inputs: if each width in sizes1 <= sizes2, then
+///  max_width(sizes1, n) <= max_width(sizes2, n).
 pub proof fn lemma_max_width_le_inputs<T: OrderedRing>(
     sizes1: Seq<Size<T>>,
     sizes2: Seq<Size<T>>,
@@ -737,15 +737,15 @@ pub proof fn lemma_max_width_le_inputs<T: OrderedRing>(
         T::axiom_le_reflexive(T::zero());
     } else {
         let k = (n - 1) as nat;
-        // Induction: max_width(sizes1, k) <= max_width(sizes2, k)
+        //  Induction: max_width(sizes1, k) <= max_width(sizes2, k)
         lemma_max_width_le_inputs(sizes1, sizes2, k);
 
-        // sizes1[k].width <= sizes2[k].width (from precondition)
-        // max_width(sizes1, n) = max(max_width(sizes1, k), sizes1[k].width)
-        // max_width(sizes2, n) = max(max_width(sizes2, k), sizes2[k].width)
-        // Both components of the left max are <= some component of the right max.
+        //  sizes1[k].width <= sizes2[k].width (from precondition)
+        //  max_width(sizes1, n) = max(max_width(sizes1, k), sizes1[k].width)
+        //  max_width(sizes2, n) = max(max_width(sizes2, k), sizes2[k].width)
+        //  Both components of the left max are <= some component of the right max.
 
-        // max_width(sizes1, k) <= max_width(sizes2, k) <= max(sizes2, k, sizes2[k].w)
+        //  max_width(sizes1, k) <= max_width(sizes2, k) <= max(sizes2, k, sizes2[k].w)
         verus_algebra::min_max::lemma_max_ge_left::<T>(
             max_width(sizes2, k), sizes2[k as int].width,
         );
@@ -754,7 +754,7 @@ pub proof fn lemma_max_width_le_inputs<T: OrderedRing>(
             max::<T>(max_width(sizes2, k), sizes2[k as int].width),
         );
 
-        // sizes1[k].w <= sizes2[k].w <= max(sizes2, k, sizes2[k].w)
+        //  sizes1[k].w <= sizes2[k].w <= max(sizes2, k, sizes2[k].w)
         verus_algebra::min_max::lemma_max_ge_right::<T>(
             max_width(sizes2, k), sizes2[k as int].width,
         );
@@ -763,15 +763,15 @@ pub proof fn lemma_max_width_le_inputs<T: OrderedRing>(
             max::<T>(max_width(sizes2, k), sizes2[k as int].width),
         );
 
-        // Both args of max(sizes1) are <= max(sizes2)
-        // max(a, b) <= c when a <= c and b <= c
-        // Use totality on the two args to show max picks one of them
+        //  Both args of max(sizes1) are <= max(sizes2)
+        //  max(a, b) <= c when a <= c and b <= c
+        //  Use totality on the two args to show max picks one of them
         T::axiom_le_total(max_width(sizes1, k), sizes1[k as int].width);
     }
 }
 
-/// max_height is monotone in inputs: if each height in sizes1 <= sizes2, then
-/// max_height(sizes1, n) <= max_height(sizes2, n).
+///  max_height is monotone in inputs: if each height in sizes1 <= sizes2, then
+///  max_height(sizes1, n) <= max_height(sizes2, n).
 pub proof fn lemma_max_height_le_inputs<T: OrderedRing>(
     sizes1: Seq<Size<T>>,
     sizes2: Seq<Size<T>>,
@@ -813,7 +813,7 @@ pub proof fn lemma_max_height_le_inputs<T: OrderedRing>(
     }
 }
 
-/// stack_layout.children has length cs.len().
+///  stack_layout.children has length cs.len().
 pub proof fn lemma_stack_layout_children_len<T: OrderedField>(
     lim: Limits<T>, pad: Padding<T>, ha: Alignment, va: Alignment,
     cs: Seq<Size<T>>,
@@ -827,4 +827,4 @@ pub proof fn lemma_stack_layout_children_len<T: OrderedField>(
         lim.max.height.sub(pad.vertical()), 0);
 }
 
-} // verus!
+} //  verus!

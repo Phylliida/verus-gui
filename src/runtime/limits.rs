@@ -7,7 +7,7 @@ use crate::limits::Limits;
 
 verus! {
 
-/// Runtime-backed Limits with rational coordinates.
+///  Runtime-backed Limits with rational coordinates.
 pub struct RuntimeLimits {
     pub min: RuntimeSize,
     pub max: RuntimeSize,
@@ -23,7 +23,7 @@ impl View for RuntimeLimits {
 }
 
 impl RuntimeLimits {
-    /// Well-formedness.
+    ///  Well-formedness.
     pub open spec fn wf_spec(&self) -> bool {
         &&& self.min.wf_spec()
         &&& self.max.wf_spec()
@@ -31,7 +31,7 @@ impl RuntimeLimits {
         &&& self.max@ == self@.max
     }
 
-    /// Check semantic equality of two limits.
+    ///  Check semantic equality of two limits.
     pub fn eq_exec(&self, rhs: &Self) -> (out: bool)
         requires
             self.wf_spec(),
@@ -47,7 +47,7 @@ impl RuntimeLimits {
         self.min.eq_exec(&rhs.min) && self.max.eq_exec(&rhs.max)
     }
 
-    /// Construct RuntimeLimits from min and max sizes.
+    ///  Construct RuntimeLimits from min and max sizes.
     pub fn new(min: RuntimeSize, max: RuntimeSize) -> (out: Self)
         requires
             min.wf_spec(),
@@ -61,7 +61,7 @@ impl RuntimeLimits {
         RuntimeLimits { min, max, model: Ghost(model) }
     }
 
-    /// Resolve a desired size within these limits (clamp each dimension).
+    ///  Resolve a desired size within these limits (clamp each dimension).
     pub fn resolve_exec(&self, size: RuntimeSize) -> (out: RuntimeSize)
         requires
             self.wf_spec(),
@@ -75,7 +75,7 @@ impl RuntimeLimits {
         RuntimeSize::new(w, h)
     }
 
-    /// Intersect two limits.
+    ///  Intersect two limits.
     pub fn intersect_exec(&self, other: &RuntimeLimits) -> (out: Self)
         requires
             self.wf_spec(),
@@ -93,7 +93,7 @@ impl RuntimeLimits {
         RuntimeLimits::new(new_min, new_max)
     }
 
-    /// Shrink limits by subtracting padding from the max (min unchanged).
+    ///  Shrink limits by subtracting padding from the max (min unchanged).
     pub fn shrink_exec(&self, pad_w: &RuntimeRational, pad_h: &RuntimeRational) -> (out: Self)
         requires
             self.wf_spec(),
@@ -110,7 +110,7 @@ impl RuntimeLimits {
         RuntimeLimits::new(new_min, new_max)
     }
 
-    /// Normalize all rational fields.
+    ///  Normalize all rational fields.
     pub fn normalize_exec(self) -> (out: Self)
         requires self.wf_spec(),
         ensures
@@ -131,4 +131,4 @@ impl RuntimeLimits {
     }
 }
 
-} // verus!
+} //  verus!

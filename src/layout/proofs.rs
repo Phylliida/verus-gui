@@ -19,41 +19,41 @@ use crate::widget::*;
 
 verus! {
 
-// ── Limits resolve lemmas ───────────────────────────────────────────
+//  ── Limits resolve lemmas ───────────────────────────────────────────
 
-/// Resolved width is >= min width.
+///  Resolved width is >= min width.
 pub proof fn lemma_resolve_ge_min_width<T: OrderedRing>(limits: Limits<T>, size: Size<T>)
     requires
         limits.wf(),
     ensures
         limits.min.width.le(limits.resolve(size).width),
 {
-    // resolve(size).width = max(min_w, min(size.width, max_w))
-    // max(min_w, _) >= min_w
+    //  resolve(size).width = max(min_w, min(size.width, max_w))
+    //  max(min_w, _) >= min_w
     lemma_max_ge_left::<T>(limits.min.width, min::<T>(size.width, limits.max.width));
 }
 
-/// Resolved width is <= max width.
+///  Resolved width is <= max width.
 pub proof fn lemma_resolve_le_max_width<T: OrderedRing>(limits: Limits<T>, size: Size<T>)
     requires
         limits.wf(),
     ensures
         limits.resolve(size).width.le(limits.max.width),
 {
-    // min(size.width, max_w) <= max_w
+    //  min(size.width, max_w) <= max_w
     lemma_min_le_right::<T>(size.width, limits.max.width);
-    // max(min_w, min(size.width, max_w)) <= max_w ?
-    // We need: max(min_w, X) <= max_w where X <= max_w and min_w <= max_w
-    // If min_w <= X: max = X <= max_w. If X < min_w: max = min_w <= max_w.
+    //  max(min_w, min(size.width, max_w)) <= max_w ?
+    //  We need: max(min_w, X) <= max_w where X <= max_w and min_w <= max_w
+    //  If min_w <= X: max = X <= max_w. If X < min_w: max = min_w <= max_w.
     T::axiom_le_total(limits.min.width, min::<T>(size.width, limits.max.width));
     if limits.min.width.le(min::<T>(size.width, limits.max.width)) {
-        // max = min(size.width, max_w), which is <= max_w
+        //  max = min(size.width, max_w), which is <= max_w
     } else {
-        // max = min_w, which is <= max_w by wf
+        //  max = min_w, which is <= max_w by wf
     }
 }
 
-/// Resolved height is >= min height.
+///  Resolved height is >= min height.
 pub proof fn lemma_resolve_ge_min_height<T: OrderedRing>(limits: Limits<T>, size: Size<T>)
     requires
         limits.wf(),
@@ -63,7 +63,7 @@ pub proof fn lemma_resolve_ge_min_height<T: OrderedRing>(limits: Limits<T>, size
     lemma_max_ge_left::<T>(limits.min.height, min::<T>(size.height, limits.max.height));
 }
 
-/// Resolved height is <= max height.
+///  Resolved height is <= max height.
 pub proof fn lemma_resolve_le_max_height<T: OrderedRing>(limits: Limits<T>, size: Size<T>)
     requires
         limits.wf(),
@@ -74,7 +74,7 @@ pub proof fn lemma_resolve_le_max_height<T: OrderedRing>(limits: Limits<T>, size
     T::axiom_le_total(limits.min.height, min::<T>(size.height, limits.max.height));
 }
 
-/// Combined: resolve produces a size within [min, max].
+///  Combined: resolve produces a size within [min, max].
 pub proof fn lemma_resolve_bounds<T: OrderedRing>(limits: Limits<T>, size: Size<T>)
     requires
         limits.wf(),
@@ -88,12 +88,12 @@ pub proof fn lemma_resolve_bounds<T: OrderedRing>(limits: Limits<T>, size: Size<
     lemma_resolve_le_max_height(limits, size);
 }
 
-// ── Column: children non-overlapping ────────────────────────────────
+//  ── Column: children non-overlapping ────────────────────────────────
 
-/// In a column layout, consecutive children do not overlap vertically:
-/// child_y(i) + child_sizes[i].height + spacing == child_y(i+1).
+///  In a column layout, consecutive children do not overlap vertically:
+///  child_y(i) + child_sizes[i].height + spacing == child_y(i+1).
 ///
-/// This holds by construction of child_y_position.
+///  This holds by construction of child_y_position.
 pub proof fn lemma_column_children_nonoverlapping<T: OrderedRing>(
     padding_top: T,
     child_sizes: Seq<Size<T>>,
@@ -110,33 +110,33 @@ pub proof fn lemma_column_children_nonoverlapping<T: OrderedRing>(
                 child_y_position(padding_top, child_sizes, spacing, i + 1)
             ),
 {
-    // By definition: child_y(i+1) = child_y(i) + child_sizes[i].height + spacing
-    // We need: x <= x + spacing where x = child_y(i) + child_sizes[i].height
-    // This follows from 0 <= spacing via add_monotone.
+    //  By definition: child_y(i+1) = child_y(i) + child_sizes[i].height + spacing
+    //  We need: x <= x + spacing where x = child_y(i) + child_sizes[i].height
+    //  This follows from 0 <= spacing via add_monotone.
     let x = child_y_position(padding_top, child_sizes, spacing, i)
         .add(child_sizes[i as int].height);
 
-    // Step 1: 0 <= spacing => 0 + x <= spacing + x
+    //  Step 1: 0 <= spacing => 0 + x <= spacing + x
     T::axiom_le_add_monotone(T::zero(), spacing, x);
 
-    // Step 2: 0 + x ≡ x (via commutativity and zero identity)
+    //  Step 2: 0 + x ≡ x (via commutativity and zero identity)
     T::axiom_add_commutative(T::zero(), x);
     T::axiom_add_zero_right(x);
     T::axiom_eqv_transitive(T::zero().add(x), x.add(T::zero()), x);
 
-    // Step 3: spacing + x ≡ x + spacing
+    //  Step 3: spacing + x ≡ x + spacing
     T::axiom_add_commutative(spacing, x);
 
-    // Step 4: congruence gives x <= x + spacing
+    //  Step 4: congruence gives x <= x + spacing
     T::axiom_le_congruence(
         T::zero().add(x), x,
         spacing.add(x), x.add(spacing),
     );
 }
 
-// ── Column: total allocation ────────────────────────────────────────
+//  ── Column: total allocation ────────────────────────────────────────
 
-/// repeated_add(val, 0) == zero.
+///  repeated_add(val, 0) == zero.
 pub proof fn lemma_repeated_add_zero<T: OrderedRing>(val: T)
     ensures
         repeated_add(val, 0).eqv(T::zero()),
@@ -144,7 +144,7 @@ pub proof fn lemma_repeated_add_zero<T: OrderedRing>(val: T)
     T::axiom_eqv_reflexive(T::zero());
 }
 
-/// sum_heights(sizes, 0) == zero.
+///  sum_heights(sizes, 0) == zero.
 pub proof fn lemma_sum_heights_zero<T: OrderedRing>(sizes: Seq<Size<T>>)
     ensures
         sum_heights(sizes, 0).eqv(T::zero()),
@@ -152,7 +152,7 @@ pub proof fn lemma_sum_heights_zero<T: OrderedRing>(sizes: Seq<Size<T>>)
     T::axiom_eqv_reflexive(T::zero());
 }
 
-/// 0 <= spacing implies 0 <= repeated_add(spacing, n).
+///  0 <= spacing implies 0 <= repeated_add(spacing, n).
 pub proof fn lemma_repeated_add_nonneg<T: OrderedRing>(val: T, n: nat)
     requires
         T::zero().le(val),
@@ -164,14 +164,14 @@ pub proof fn lemma_repeated_add_nonneg<T: OrderedRing>(val: T, n: nat)
         T::axiom_le_reflexive(T::zero());
     } else {
         lemma_repeated_add_nonneg(val, (n - 1) as nat);
-        // 0 <= repeated_add(val, n-1) and 0 <= val
-        // repeated_add(val, n) = repeated_add(val, n-1) + val
-        // 0 + 0 <= repeated_add(val, n-1) + val
+        //  0 <= repeated_add(val, n-1) and 0 <= val
+        //  repeated_add(val, n) = repeated_add(val, n-1) + val
+        //  0 + 0 <= repeated_add(val, n-1) + val
         verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_add_both::<T>(
             T::zero(), repeated_add(val, (n - 1) as nat),
             T::zero(), val,
         );
-        // 0 + 0 ≡ 0
+        //  0 + 0 ≡ 0
         T::axiom_add_zero_right(T::zero());
         T::axiom_eqv_symmetric(T::zero().add(T::zero()), T::zero());
         T::axiom_eqv_reflexive(repeated_add(val, (n - 1) as nat).add(val));
@@ -183,7 +183,7 @@ pub proof fn lemma_repeated_add_nonneg<T: OrderedRing>(val: T, n: nat)
     }
 }
 
-/// If all child heights are non-negative, then sum_heights(sizes, n) is non-negative.
+///  If all child heights are non-negative, then sum_heights(sizes, n) is non-negative.
 pub proof fn lemma_sum_heights_nonneg<T: OrderedRing>(
     sizes: Seq<Size<T>>,
     n: nat,
@@ -199,7 +199,7 @@ pub proof fn lemma_sum_heights_nonneg<T: OrderedRing>(
         T::axiom_le_reflexive(T::zero());
     } else {
         lemma_sum_heights_nonneg(sizes, (n - 1) as nat);
-        // 0 <= sum_heights(sizes, n-1) and 0 <= sizes[n-1].height
+        //  0 <= sum_heights(sizes, n-1) and 0 <= sizes[n-1].height
         verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_add_both::<T>(
             T::zero(), sum_heights(sizes, (n - 1) as nat),
             T::zero(), sizes[(n - 1) as int].height,
@@ -217,8 +217,8 @@ pub proof fn lemma_sum_heights_nonneg<T: OrderedRing>(
     }
 }
 
-/// The column content height is non-negative when spacing and all child heights
-/// are non-negative.
+///  The column content height is non-negative when spacing and all child heights
+///  are non-negative.
 pub proof fn lemma_column_content_height_nonneg<T: OrderedRing>(
     child_sizes: Seq<Size<T>>,
     spacing: T,
@@ -250,10 +250,10 @@ pub proof fn lemma_column_content_height_nonneg<T: OrderedRing>(
     }
 }
 
-// ── Row: children non-overlapping ───────────────────────────────────
+//  ── Row: children non-overlapping ───────────────────────────────────
 
-/// In a row layout, consecutive children do not overlap horizontally:
-/// child_x(i) + child_sizes[i].width <= child_x(i+1).
+///  In a row layout, consecutive children do not overlap horizontally:
+///  child_x(i) + child_sizes[i].width <= child_x(i+1).
 pub proof fn lemma_row_children_nonoverlapping<T: OrderedRing>(
     padding_left: T,
     child_sizes: Seq<Size<T>>,
@@ -270,32 +270,32 @@ pub proof fn lemma_row_children_nonoverlapping<T: OrderedRing>(
                 child_x_position(padding_left, child_sizes, spacing, i + 1)
             ),
 {
-    // By definition: child_x(i+1) = child_x(i) + child_sizes[i].width + spacing
-    // We need: x <= x + spacing where x = child_x(i) + child_sizes[i].width
+    //  By definition: child_x(i+1) = child_x(i) + child_sizes[i].width + spacing
+    //  We need: x <= x + spacing where x = child_x(i) + child_sizes[i].width
     let x = child_x_position(padding_left, child_sizes, spacing, i)
         .add(child_sizes[i as int].width);
 
-    // Step 1: 0 <= spacing => 0 + x <= spacing + x
+    //  Step 1: 0 <= spacing => 0 + x <= spacing + x
     T::axiom_le_add_monotone(T::zero(), spacing, x);
 
-    // Step 2: 0 + x ≡ x
+    //  Step 2: 0 + x ≡ x
     T::axiom_add_commutative(T::zero(), x);
     T::axiom_add_zero_right(x);
     T::axiom_eqv_transitive(T::zero().add(x), x.add(T::zero()), x);
 
-    // Step 3: spacing + x ≡ x + spacing
+    //  Step 3: spacing + x ≡ x + spacing
     T::axiom_add_commutative(spacing, x);
 
-    // Step 4: congruence gives x <= x + spacing
+    //  Step 4: congruence gives x <= x + spacing
     T::axiom_le_congruence(
         T::zero().add(x), x,
         spacing.add(x), x.add(spacing),
     );
 }
 
-// ── Helper: adding a non-negative value ───────────────────────────
+//  ── Helper: adding a non-negative value ───────────────────────────
 
-/// If 0 <= val, then x <= x + val.
+///  If 0 <= val, then x <= x + val.
 pub proof fn lemma_le_add_nonneg<T: OrderedRing>(x: T, val: T)
     requires
         T::zero().le(val),
@@ -306,28 +306,28 @@ pub proof fn lemma_le_add_nonneg<T: OrderedRing>(x: T, val: T)
     verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_add_both::<T>(
         x, x, T::zero(), val,
     );
-    // x + 0 <= x + val
+    //  x + 0 <= x + val
     T::axiom_add_zero_right(x);
-    // x + 0 ≡ x
+    //  x + 0 ≡ x
     verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
         x.add(T::zero()), x, x.add(val),
     );
 }
 
-// ── Alignment offset lemmas ───────────────────────────────────────
+//  ── Alignment offset lemmas ───────────────────────────────────────
 
-/// 0 < two() in any ordered field.
+///  0 < two() in any ordered field.
 proof fn lemma_two_positive<T: OrderedField>()
     ensures
         T::zero().lt(two::<T>()),
 {
     verus_algebra::lemmas::ordered_ring_lemmas::lemma_zero_lt_one::<T>();
     T::axiom_lt_iff_le_and_not_eqv(T::zero(), T::one());
-    // 0 < 1 and 0 <= 1 => 0 < 1 + 1
+    //  0 < 1 and 0 <= 1 => 0 < 1 + 1
     verus_algebra::lemmas::ordered_ring_lemmas::lemma_add_pos_nonneg::<T>(T::one(), T::one());
 }
 
-/// zero / two() ≡ zero.
+///  zero / two() ≡ zero.
 proof fn lemma_zero_div_two<T: OrderedField>()
     ensures
         T::zero().div(two::<T>()).eqv(T::zero()),
@@ -341,7 +341,7 @@ proof fn lemma_zero_div_two<T: OrderedField>()
     );
 }
 
-/// a ≡ b implies a/c ≡ b/c.
+///  a ≡ b implies a/c ≡ b/c.
 proof fn lemma_div_congruence_numerator<T: OrderedField>(a: T, b: T, c: T)
     requires
         a.eqv(b),
@@ -356,7 +356,7 @@ proof fn lemma_div_congruence_numerator<T: OrderedField>(a: T, b: T, c: T)
     T::axiom_eqv_transitive(a.div(c), b.mul(c.recip()), b.div(c));
 }
 
-/// align_offset produces a non-negative offset when the child fits.
+///  align_offset produces a non-negative offset when the child fits.
 pub proof fn lemma_align_offset_nonneg<T: OrderedField>(
     alignment: Alignment,
     available: T,
@@ -374,19 +374,19 @@ pub proof fn lemma_align_offset_nonneg<T: OrderedField>(
         },
         Alignment::Center => {
             let x = available.sub(used);
-            // 0 <= x
+            //  0 <= x
             verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_iff_sub_nonneg::<T>(
                 used, available,
             );
-            // 0 < two()
+            //  0 < two()
             lemma_two_positive::<T>();
-            // 0 <= x and 0 < two() => 0/two() <= x/two()
+            //  0 <= x and 0 < two() => 0/two() <= x/two()
             verus_algebra::lemmas::ordered_field_lemmas::lemma_le_div_monotone::<T>(
                 T::zero(), x, two::<T>(),
             );
-            // 0/two() ≡ 0
+            //  0/two() ≡ 0
             lemma_zero_div_two::<T>();
-            // 0 <= x/two()
+            //  0 <= x/two()
             verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
                 T::zero().div(two::<T>()), T::zero(), x.div(two::<T>()),
             );
@@ -399,8 +399,8 @@ pub proof fn lemma_align_offset_nonneg<T: OrderedField>(
     }
 }
 
-/// align_offset(alignment, available, used) + used <= available
-/// when the child fits in the available space.
+///  align_offset(alignment, available, used) + used <= available
+///  when the child fits in the available space.
 pub proof fn lemma_align_offset_bounded<T: OrderedField>(
     alignment: Alignment,
     available: T,
@@ -414,7 +414,7 @@ pub proof fn lemma_align_offset_bounded<T: OrderedField>(
     reveal(align_offset);
     match alignment {
         Alignment::Start => {
-            // align_offset = 0, so need 0 + used <= available
+            //  align_offset = 0, so need 0 + used <= available
             verus_algebra::lemmas::additive_group_lemmas::lemma_add_zero_left::<T>(used);
             T::axiom_eqv_symmetric(T::zero().add(used), used);
             verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
@@ -423,40 +423,40 @@ pub proof fn lemma_align_offset_bounded<T: OrderedField>(
         },
         Alignment::Center => {
             let x = available.sub(used);
-            // 0 <= x
+            //  0 <= x
             verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_iff_sub_nonneg::<T>(
                 used, available,
             );
 
-            // midpoint(0, x) <= x via lemma_midpoint_between
+            //  midpoint(0, x) <= x via lemma_midpoint_between
             verus_algebra::convex::lemma_midpoint_between::<T>(T::zero(), x);
-            // midpoint(0, x) = (0 + x) / two() by definition
-            // Need: (0+x)/two() ≡ x/two() via add_zero_left congruence
+            //  midpoint(0, x) = (0 + x) / two() by definition
+            //  Need: (0+x)/two() ≡ x/two() via add_zero_left congruence
             verus_algebra::lemmas::additive_group_lemmas::lemma_add_zero_left::<T>(x);
             lemma_div_congruence_numerator::<T>(T::zero().add(x), x, two::<T>());
-            // midpoint(0, x) ≡ x/two(), and midpoint(0, x) <= x
-            // So x/two() <= x
+            //  midpoint(0, x) ≡ x/two(), and midpoint(0, x) <= x
+            //  So x/two() <= x
             verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
                 verus_algebra::convex::midpoint::<T>(T::zero(), x),
                 x.div(two::<T>()),
                 x,
             );
 
-            // x/two() <= x => x/two() + used <= x + used
+            //  x/two() <= x => x/two() + used <= x + used
             T::axiom_le_add_monotone(x.div(two::<T>()), x, used);
 
-            // x + used ≡ available
+            //  x + used ≡ available
             verus_algebra::lemmas::additive_group_lemmas::lemma_sub_then_add_cancel::<T>(
                 available, used,
             );
-            // x/two() + used <= available
+            //  x/two() + used <= available
             verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_right::<T>(
                 x.div(two::<T>()).add(used), x.add(used), available,
             );
         },
         Alignment::End => {
-            // align_offset = available - used
-            // (available - used) + used ≡ available
+            //  align_offset = available - used
+            //  (available - used) + used ≡ available
             verus_algebra::lemmas::additive_group_lemmas::lemma_sub_then_add_cancel::<T>(
                 available, used,
             );
@@ -469,11 +469,11 @@ pub proof fn lemma_align_offset_bounded<T: OrderedField>(
     }
 }
 
-// ── Column: cross-axis containment ────────────────────────────────
+//  ── Column: cross-axis containment ────────────────────────────────
 
-/// In a column layout, each child's x-position is >= padding_left.
+///  In a column layout, each child's x-position is >= padding_left.
 ///
-/// Precondition: the child's width fits within the available width.
+///  Precondition: the child's width fits within the available width.
 pub proof fn lemma_column_child_x_lower_bound<T: OrderedField>(
     padding_left: T,
     alignment: Alignment,
@@ -491,9 +491,9 @@ pub proof fn lemma_column_child_x_lower_bound<T: OrderedField>(
     lemma_le_add_nonneg(padding_left, align_offset(alignment, available_width, child_width));
 }
 
-/// In a column layout, each child's right edge <= padding_left + available_width.
+///  In a column layout, each child's right edge <= padding_left + available_width.
 ///
-/// Precondition: the child's width fits within the available width.
+///  Precondition: the child's width fits within the available width.
 pub proof fn lemma_column_child_x_upper_bound<T: OrderedField>(
     padding_left: T,
     alignment: Alignment,
@@ -509,13 +509,13 @@ pub proof fn lemma_column_child_x_upper_bound<T: OrderedField>(
 {
     let offset = align_offset(alignment, available_width, child_width);
 
-    // offset + child_width <= available_width
+    //  offset + child_width <= available_width
     lemma_align_offset_bounded(alignment, available_width, child_width);
 
-    // (offset + w) + p_l <= aw + p_l
+    //  (offset + w) + p_l <= aw + p_l
     T::axiom_le_add_monotone(offset.add(child_width), available_width, padding_left);
 
-    // Commute both sides to get p_l + (offset + w) <= p_l + aw
+    //  Commute both sides to get p_l + (offset + w) <= p_l + aw
     T::axiom_add_commutative(offset.add(child_width), padding_left);
     T::axiom_add_commutative(available_width, padding_left);
     T::axiom_le_congruence(
@@ -525,15 +525,15 @@ pub proof fn lemma_column_child_x_upper_bound<T: OrderedField>(
         padding_left.add(available_width),
     );
 
-    // (p_l + offset) + w ≡ p_l + (offset + w) by associativity
+    //  (p_l + offset) + w ≡ p_l + (offset + w) by associativity
     T::axiom_add_associative(padding_left, offset, child_width);
-    // symmetric: p_l + (offset + w) ≡ (p_l + offset) + w
+    //  symmetric: p_l + (offset + w) ≡ (p_l + offset) + w
     T::axiom_eqv_symmetric(
         padding_left.add(offset).add(child_width),
         padding_left.add(offset.add(child_width)),
     );
 
-    // (p_l + offset) + w <= p_l + aw
+    //  (p_l + offset) + w <= p_l + aw
     verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
         padding_left.add(offset.add(child_width)),
         padding_left.add(offset).add(child_width),
@@ -541,9 +541,9 @@ pub proof fn lemma_column_child_x_upper_bound<T: OrderedField>(
     );
 }
 
-// ── Column: layout-axis lower bound ──────────────────────────────
+//  ── Column: layout-axis lower bound ──────────────────────────────
 
-/// In a column layout, each child's y-position is >= padding_top.
+///  In a column layout, each child's y-position is >= padding_top.
 pub proof fn lemma_column_child_y_lower_bound<T: OrderedRing>(
     padding_top: T,
     child_sizes: Seq<Size<T>>,
@@ -559,29 +559,29 @@ pub proof fn lemma_column_child_y_lower_bound<T: OrderedRing>(
     decreases i,
 {
     if i == 0 {
-        // child_y(0) = padding_top
+        //  child_y(0) = padding_top
         T::axiom_le_reflexive(padding_top);
     } else {
-        // IH: padding_top <= child_y(i-1)
+        //  IH: padding_top <= child_y(i-1)
         lemma_column_child_y_lower_bound(padding_top, child_sizes, spacing, (i - 1) as nat);
         let y_prev = child_y_position(padding_top, child_sizes, spacing, (i - 1) as nat);
         let h = child_sizes[(i - 1) as int].height;
 
-        // y_prev <= y_prev + h (since 0 <= h)
+        //  y_prev <= y_prev + h (since 0 <= h)
         lemma_le_add_nonneg(y_prev, h);
-        // y_prev + h <= (y_prev + h) + spacing (since 0 <= spacing)
+        //  y_prev + h <= (y_prev + h) + spacing (since 0 <= spacing)
         lemma_le_add_nonneg(y_prev.add(h), spacing);
 
-        // chain: y_prev <= y_prev + h <= child_y(i)
+        //  chain: y_prev <= y_prev + h <= child_y(i)
         T::axiom_le_transitive(y_prev, y_prev.add(h), y_prev.add(h).add(spacing));
-        // chain: padding_top <= y_prev <= child_y(i)
+        //  chain: padding_top <= y_prev <= child_y(i)
         T::axiom_le_transitive(padding_top, y_prev, y_prev.add(h).add(spacing));
     }
 }
 
-// ── Row: cross-axis containment ──────────────────────────────────
+//  ── Row: cross-axis containment ──────────────────────────────────
 
-/// In a row layout, each child's y-position is >= padding_top.
+///  In a row layout, each child's y-position is >= padding_top.
 pub proof fn lemma_row_child_y_lower_bound<T: OrderedField>(
     padding_top: T,
     alignment: Alignment,
@@ -599,7 +599,7 @@ pub proof fn lemma_row_child_y_lower_bound<T: OrderedField>(
     lemma_le_add_nonneg(padding_top, align_offset(alignment, available_height, child_height));
 }
 
-/// In a row layout, each child's bottom edge <= padding_top + available_height.
+///  In a row layout, each child's bottom edge <= padding_top + available_height.
 pub proof fn lemma_row_child_y_upper_bound<T: OrderedField>(
     padding_top: T,
     alignment: Alignment,
@@ -641,9 +641,9 @@ pub proof fn lemma_row_child_y_upper_bound<T: OrderedField>(
     );
 }
 
-// ── Row: layout-axis lower bound ─────────────────────────────────
+//  ── Row: layout-axis lower bound ─────────────────────────────────
 
-/// In a row layout, each child's x-position is >= padding_left.
+///  In a row layout, each child's x-position is >= padding_left.
 pub proof fn lemma_row_child_x_lower_bound<T: OrderedRing>(
     padding_left: T,
     child_sizes: Seq<Size<T>>,
@@ -673,9 +673,9 @@ pub proof fn lemma_row_child_x_lower_bound<T: OrderedRing>(
     }
 }
 
-// ── Helpers for rearrangement ─────────────────────────────────────
+//  ── Helpers for rearrangement ─────────────────────────────────────
 
-/// (a + b) + c ≡ (a + c) + b — swap the last two addends.
+///  (a + b) + c ≡ (a + c) + b — swap the last two addends.
 pub proof fn lemma_add_swap_last<T: OrderedRing>(a: T, b: T, c: T)
     ensures
         a.add(b).add(c).eqv(a.add(c).add(b)),
@@ -691,9 +691,9 @@ pub proof fn lemma_add_swap_last<T: OrderedRing>(a: T, b: T, c: T)
     T::axiom_eqv_transitive(a.add(b).add(c), a.add(c.add(b)), a.add(c).add(b));
 }
 
-// ── Monotonicity lemmas ──────────────────────────────────────────
+//  ── Monotonicity lemmas ──────────────────────────────────────────
 
-/// sum_heights is monotone: i <= j implies sum_heights(sizes, i) <= sum_heights(sizes, j).
+///  sum_heights is monotone: i <= j implies sum_heights(sizes, i) <= sum_heights(sizes, j).
 pub proof fn lemma_sum_heights_monotone<T: OrderedRing>(
     sizes: Seq<Size<T>>,
     i: nat,
@@ -723,8 +723,8 @@ pub proof fn lemma_sum_heights_monotone<T: OrderedRing>(
     }
 }
 
-/// repeated_add is monotone: i <= j and 0 <= val implies
-/// repeated_add(val, i) <= repeated_add(val, j).
+///  repeated_add is monotone: i <= j and 0 <= val implies
+///  repeated_add(val, i) <= repeated_add(val, j).
 pub proof fn lemma_repeated_add_monotone<T: OrderedRing>(
     val: T,
     i: nat,
@@ -750,7 +750,7 @@ pub proof fn lemma_repeated_add_monotone<T: OrderedRing>(
     }
 }
 
-/// sum_widths is monotone: i <= j implies sum_widths(sizes, i) <= sum_widths(sizes, j).
+///  sum_widths is monotone: i <= j implies sum_widths(sizes, i) <= sum_widths(sizes, j).
 pub proof fn lemma_sum_widths_monotone<T: OrderedRing>(
     sizes: Seq<Size<T>>,
     i: nat,
@@ -780,9 +780,9 @@ pub proof fn lemma_sum_widths_monotone<T: OrderedRing>(
     }
 }
 
-// ── Position identity lemmas ─────────────────────────────────────
+//  ── Position identity lemmas ─────────────────────────────────────
 
-/// child_y_position(pt, sizes, sp, i) ≡ pt + sum_heights(sizes, i) + repeated_add(sp, i).
+///  child_y_position(pt, sizes, sp, i) ≡ pt + sum_heights(sizes, i) + repeated_add(sp, i).
 pub proof fn lemma_child_y_position_identity<T: OrderedRing>(
     pt: T,
     sizes: Seq<Size<T>>,
@@ -798,24 +798,24 @@ pub proof fn lemma_child_y_position_identity<T: OrderedRing>(
     decreases i,
 {
     if i == 0 {
-        // child_y(0) = pt, RHS = pt + 0 + 0
-        // pt ≡ pt + 0
+        //  child_y(0) = pt, RHS = pt + 0 + 0
+        //  pt ≡ pt + 0
         T::axiom_add_zero_right(pt);
         T::axiom_eqv_symmetric(pt.add(T::zero()), pt);
-        // pt + 0 ≡ (pt + 0) + 0
+        //  pt + 0 ≡ (pt + 0) + 0
         T::axiom_add_zero_right(pt.add(T::zero()));
         T::axiom_eqv_symmetric(
             pt.add(T::zero()).add(T::zero()),
             pt.add(T::zero()),
         );
-        // pt ≡ (pt + 0) + 0
+        //  pt ≡ (pt + 0) + 0
         T::axiom_eqv_transitive(
             pt,
             pt.add(T::zero()),
             pt.add(T::zero()).add(T::zero()),
         );
     } else {
-        // IH: child_y(i-1) ≡ pt + SH(i-1) + RA(i-1)
+        //  IH: child_y(i-1) ≡ pt + SH(i-1) + RA(i-1)
         lemma_child_y_position_identity(pt, sizes, sp, (i - 1) as nat);
 
         let prev = child_y_position(pt, sizes, sp, (i - 1) as nat);
@@ -823,28 +823,28 @@ pub proof fn lemma_child_y_position_identity<T: OrderedRing>(
         let ra = repeated_add(sp, (i - 1) as nat);
         let h = sizes[(i - 1) as int].height;
 
-        // child_y(i) = prev + h + sp [by definition]
-        // prev ≡ pt + sh + ra [IH]
+        //  child_y(i) = prev + h + sp [by definition]
+        //  prev ≡ pt + sh + ra [IH]
 
-        // A: prev + h ≡ (pt + sh + ra) + h [congruence from IH]
+        //  A: prev + h ≡ (pt + sh + ra) + h [congruence from IH]
         T::axiom_add_congruence_left(prev, pt.add(sh).add(ra), h);
-        // B: (prev + h) + sp ≡ ((pt + sh + ra) + h) + sp [congruence]
+        //  B: (prev + h) + sp ≡ ((pt + sh + ra) + h) + sp [congruence]
         T::axiom_add_congruence_left(prev.add(h), pt.add(sh).add(ra).add(h), sp);
 
-        // C: ((pt+sh+ra)+h)+sp ≡ (pt+sh+ra)+(h+sp) [assoc]
+        //  C: ((pt+sh+ra)+h)+sp ≡ (pt+sh+ra)+(h+sp) [assoc]
         T::axiom_add_associative(pt.add(sh).add(ra), h, sp);
-        // D: (pt+sh+ra)+(h+sp) ≡ ((pt+sh)+h)+(ra+sp) [rearrange]
+        //  D: (pt+sh+ra)+(h+sp) ≡ ((pt+sh)+h)+(ra+sp) [rearrange]
         verus_algebra::lemmas::additive_group_lemmas::lemma_add_rearrange_2x2::<T>(
             pt.add(sh), ra, h, sp,
         );
-        // E: (pt+sh)+h ≡ pt+(sh+h) [assoc]
+        //  E: (pt+sh)+h ≡ pt+(sh+h) [assoc]
         T::axiom_add_associative(pt, sh, h);
-        // F: ((pt+sh)+h)+(ra+sp) ≡ (pt+(sh+h))+(ra+sp) [congruence]
+        //  F: ((pt+sh)+h)+(ra+sp) ≡ (pt+(sh+h))+(ra+sp) [congruence]
         T::axiom_add_congruence_left(
             pt.add(sh).add(h), pt.add(sh.add(h)), ra.add(sp),
         );
 
-        // Chain C→D→F:
+        //  Chain C→D→F:
         T::axiom_eqv_transitive(
             pt.add(sh).add(ra).add(h).add(sp),
             pt.add(sh).add(ra).add(h.add(sp)),
@@ -856,17 +856,17 @@ pub proof fn lemma_child_y_position_identity<T: OrderedRing>(
             pt.add(sh.add(h)).add(ra.add(sp)),
         );
 
-        // Full: child_y(i) = prev+h+sp ≡ ((pt+sh+ra)+h)+sp ≡ pt+(sh+h)+(ra+sp)
+        //  Full: child_y(i) = prev+h+sp ≡ ((pt+sh+ra)+h)+sp ≡ pt+(sh+h)+(ra+sp)
         T::axiom_eqv_transitive(
             prev.add(h).add(sp),
             pt.add(sh).add(ra).add(h).add(sp),
             pt.add(sh.add(h)).add(ra.add(sp)),
         );
-        // sh+h = sum_heights(i), ra+sp = repeated_add(sp, i) by definition
+        //  sh+h = sum_heights(i), ra+sp = repeated_add(sp, i) by definition
     }
 }
 
-/// child_x_position(pl, sizes, sp, i) ≡ pl + sum_widths(sizes, i) + repeated_add(sp, i).
+///  child_x_position(pl, sizes, sp, i) ≡ pl + sum_widths(sizes, i) + repeated_add(sp, i).
 pub proof fn lemma_child_x_position_identity<T: OrderedRing>(
     pl: T,
     sizes: Seq<Size<T>>,
@@ -933,10 +933,10 @@ pub proof fn lemma_child_x_position_identity<T: OrderedRing>(
     }
 }
 
-// ── Column: layout-axis upper bound ──────────────────────────────
+//  ── Column: layout-axis upper bound ──────────────────────────────
 
-/// In a column layout, each child's bottom edge is within the content area:
-/// child_y(i) + sizes[i].height <= pt + column_content_height(sizes, sp).
+///  In a column layout, each child's bottom edge is within the content area:
+///  child_y(i) + sizes[i].height <= pt + column_content_height(sizes, sp).
 pub proof fn lemma_column_child_y_upper_bound<T: OrderedRing>(
     pt: T,
     sizes: Seq<Size<T>>,
@@ -956,18 +956,18 @@ pub proof fn lemma_column_child_y_upper_bound<T: OrderedRing>(
     let n = sizes.len() as nat;
     let h = sizes[i as int].height;
 
-    // A: child_y(i) ≡ pt + sum_heights(i) + repeated_add(sp, i)
+    //  A: child_y(i) ≡ pt + sum_heights(i) + repeated_add(sp, i)
     lemma_child_y_position_identity(pt, sizes, sp, i);
 
-    // B: child_y(i) + h ≡ (pt + SH(i) + RA(i)) + h
+    //  B: child_y(i) + h ≡ (pt + SH(i) + RA(i)) + h
     T::axiom_add_congruence_left(
         child_y_position(pt, sizes, sp, i),
         pt.add(sum_heights(sizes, i)).add(repeated_add(sp, i)),
         h,
     );
 
-    // C: Rearrange (pt + SH + RA) + h to (pt + SH(i+1)) + RA(i)
-    //    using swap_last then associativity
+    //  C: Rearrange (pt + SH + RA) + h to (pt + SH(i+1)) + RA(i)
+    //     using swap_last then associativity
     lemma_add_swap_last(pt.add(sum_heights(sizes, i)), repeated_add(sp, i), h);
     T::axiom_add_associative(pt, sum_heights(sizes, i), h);
     T::axiom_add_congruence_left(
@@ -981,27 +981,27 @@ pub proof fn lemma_column_child_y_upper_bound<T: OrderedRing>(
         pt.add(sum_heights(sizes, i).add(h)).add(repeated_add(sp, i)),
     );
 
-    // D: child_y(i) + h ≡ pt + SH(i+1) + RA(i)
-    //    (since sum_heights(i).add(h) = sum_heights(i+1) by definition)
+    //  D: child_y(i) + h ≡ pt + SH(i+1) + RA(i)
+    //     (since sum_heights(i).add(h) = sum_heights(i+1) by definition)
     T::axiom_eqv_transitive(
         child_y_position(pt, sizes, sp, i).add(h),
         pt.add(sum_heights(sizes, i)).add(repeated_add(sp, i)).add(h),
         pt.add(sum_heights(sizes, i).add(h)).add(repeated_add(sp, i)),
     );
 
-    // E: SH(i+1) <= SH(n)
+    //  E: SH(i+1) <= SH(n)
     lemma_sum_heights_monotone(sizes, (i + 1) as nat, n);
 
-    // F: RA(i) <= RA(n-1)
+    //  F: RA(i) <= RA(n-1)
     lemma_repeated_add_monotone(sp, i, (n - 1) as nat);
 
-    // G: SH(i+1) + RA(i) <= SH(n) + RA(n-1) = column_content_height
+    //  G: SH(i+1) + RA(i) <= SH(n) + RA(n-1) = column_content_height
     verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_add_both::<T>(
         sum_heights(sizes, (i + 1) as nat), sum_heights(sizes, n),
         repeated_add(sp, i), repeated_add(sp, (n - 1) as nat),
     );
 
-    // H: pt + (SH(i+1) + RA(i)) <= pt + (SH(n) + RA(n-1))
+    //  H: pt + (SH(i+1) + RA(i)) <= pt + (SH(n) + RA(n-1))
     T::axiom_le_add_monotone(
         sum_heights(sizes, (i + 1) as nat).add(repeated_add(sp, i)),
         sum_heights(sizes, n).add(repeated_add(sp, (n - 1) as nat)),
@@ -1020,7 +1020,7 @@ pub proof fn lemma_column_child_y_upper_bound<T: OrderedRing>(
         pt.add(sum_heights(sizes, n).add(repeated_add(sp, (n - 1) as nat))),
     );
 
-    // I: Relate pt + SH(i+1) + RA(i) to pt + (SH(i+1) + RA(i)) via assoc
+    //  I: Relate pt + SH(i+1) + RA(i) to pt + (SH(i+1) + RA(i)) via assoc
     T::axiom_add_associative(
         pt,
         sum_heights(sizes, (i + 1) as nat),
@@ -1035,10 +1035,10 @@ pub proof fn lemma_column_child_y_upper_bound<T: OrderedRing>(
         pt.add(sum_heights(sizes, (i + 1) as nat)).add(repeated_add(sp, i)),
         pt.add(sum_heights(sizes, n).add(repeated_add(sp, (n - 1) as nat))),
     );
-    // Now: pt + SH(i+1) + RA(i) <= pt + (SH(n) + RA(n-1))
+    //  Now: pt + SH(i+1) + RA(i) <= pt + (SH(n) + RA(n-1))
 
-    // J: child_y(i)+h ≡ pt+SH(i+1)+RA(i), apply congruence to get final le
-    //    (sum_heights(i).add(h) = sum_heights(i+1) by definition)
+    //  J: child_y(i)+h ≡ pt+SH(i+1)+RA(i), apply congruence to get final le
+    //     (sum_heights(i).add(h) = sum_heights(i+1) by definition)
     T::axiom_eqv_symmetric(
         child_y_position(pt, sizes, sp, i).add(h),
         pt.add(sum_heights(sizes, i).add(h)).add(repeated_add(sp, i)),
@@ -1048,13 +1048,13 @@ pub proof fn lemma_column_child_y_upper_bound<T: OrderedRing>(
         child_y_position(pt, sizes, sp, i).add(h),
         pt.add(sum_heights(sizes, n).add(repeated_add(sp, (n - 1) as nat))),
     );
-    // pt.add(SH(n).add(RA(n-1))) = pt.add(column_content_height) by definition
+    //  pt.add(SH(n).add(RA(n-1))) = pt.add(column_content_height) by definition
 }
 
-// ── Row: layout-axis upper bound ─────────────────────────────────
+//  ── Row: layout-axis upper bound ─────────────────────────────────
 
-/// In a row layout, each child's right edge is within the content area:
-/// child_x(i) + sizes[i].width <= pl + row_content_width(sizes, sp).
+///  In a row layout, each child's right edge is within the content area:
+///  child_x(i) + sizes[i].width <= pl + row_content_width(sizes, sp).
 pub proof fn lemma_row_child_x_upper_bound<T: OrderedRing>(
     pl: T,
     sizes: Seq<Size<T>>,
@@ -1151,9 +1151,9 @@ pub proof fn lemma_row_child_x_upper_bound<T: OrderedRing>(
     );
 }
 
-// ── Children sequence lemmas ──────────────────────────────────────
+//  ── Children sequence lemmas ──────────────────────────────────────
 
-/// Length of column_children sequence.
+///  Length of column_children sequence.
 pub proof fn lemma_column_children_len<T: OrderedField>(
     padding: crate::padding::Padding<T>,
     spacing: T,
@@ -1175,7 +1175,7 @@ pub proof fn lemma_column_children_len<T: OrderedField>(
     }
 }
 
-/// Element access into column_children: the k-th child (from start) has the expected fields.
+///  Element access into column_children: the k-th child (from start) has the expected fields.
 pub proof fn lemma_column_children_element<T: OrderedField>(
     padding: crate::padding::Padding<T>,
     spacing: T,
@@ -1197,7 +1197,7 @@ pub proof fn lemma_column_children_element<T: OrderedField>(
     lemma_column_children_element_shifted(padding, spacing, alignment, child_sizes, available_width, 0, k);
 }
 
-/// Helper: column_children(pad, sp, al, sizes, aw, start)[k - start] for start <= k < sizes.len()
+///  Helper: column_children(pad, sp, al, sizes, aw, start)[k - start] for start <= k < sizes.len()
 proof fn lemma_column_children_element_shifted<T: OrderedField>(
     padding: crate::padding::Padding<T>,
     spacing: T,
@@ -1220,25 +1220,25 @@ proof fn lemma_column_children_element_shifted<T: OrderedField>(
     decreases k - start,
 {
     if start == k {
-        // Base case: one-step unfolding gives column_children(.., k)[0] = node_k
+        //  Base case: one-step unfolding gives column_children(.., k)[0] = node_k
     } else {
-        // Establish tail length so axiom_seq_add_index2 precondition is satisfied
+        //  Establish tail length so axiom_seq_add_index2 precondition is satisfied
         lemma_column_children_len(padding, spacing, alignment, child_sizes, available_width, start + 1);
         lemma_column_children_len(padding, spacing, alignment, child_sizes, available_width, start);
 
-        // Apply induction first
+        //  Apply induction first
         lemma_column_children_element_shifted(padding, spacing, alignment, child_sizes, available_width, start + 1, k);
 
-        // column_children(.., start) = head.add(tail) where head has length 1
-        // For index (k-start) >= 1: element is tail[(k-start) - 1] = tail[(k-(start+1))]
+        //  column_children(.., start) = head.add(tail) where head has length 1
+        //  For index (k-start) >= 1: element is tail[(k-start) - 1] = tail[(k-(start+1))]
         let tail = column_children(padding, spacing, alignment, child_sizes, available_width, start + 1);
         let cc = column_children(padding, spacing, alignment, child_sizes, available_width, start);
-        // cc[k-start] == tail[(k-start) - 1] by axiom_seq_add_index2 (since head.len() == 1)
+        //  cc[k-start] == tail[(k-start) - 1] by axiom_seq_add_index2 (since head.len() == 1)
         assert(cc[(k - start) as int] == tail[((k - start) as int) - 1]);
     }
 }
 
-/// Length of row_children sequence.
+///  Length of row_children sequence.
 pub proof fn lemma_row_children_len<T: OrderedField>(
     padding: crate::padding::Padding<T>,
     spacing: T,
@@ -1260,7 +1260,7 @@ pub proof fn lemma_row_children_len<T: OrderedField>(
     }
 }
 
-/// Element access into row_children: the k-th child (from start) has the expected fields.
+///  Element access into row_children: the k-th child (from start) has the expected fields.
 pub proof fn lemma_row_children_element<T: OrderedField>(
     padding: crate::padding::Padding<T>,
     spacing: T,
@@ -1282,7 +1282,7 @@ pub proof fn lemma_row_children_element<T: OrderedField>(
     lemma_row_children_element_shifted(padding, spacing, alignment, child_sizes, available_height, 0, k);
 }
 
-/// Helper: row_children(pad, sp, al, sizes, ah, start)[k - start] for start <= k < sizes.len()
+///  Helper: row_children(pad, sp, al, sizes, ah, start)[k - start] for start <= k < sizes.len()
 proof fn lemma_row_children_element_shifted<T: OrderedField>(
     padding: crate::padding::Padding<T>,
     spacing: T,
@@ -1305,71 +1305,71 @@ proof fn lemma_row_children_element_shifted<T: OrderedField>(
     decreases k - start,
 {
     if start == k {
-        // Base case: one-step unfolding gives row_children(.., k)[0] = node_k
+        //  Base case: one-step unfolding gives row_children(.., k)[0] = node_k
     } else {
-        // Establish tail length so axiom_seq_add_index2 precondition is satisfied
+        //  Establish tail length so axiom_seq_add_index2 precondition is satisfied
         lemma_row_children_len(padding, spacing, alignment, child_sizes, available_height, start + 1);
         lemma_row_children_len(padding, spacing, alignment, child_sizes, available_height, start);
 
-        // Apply induction first
+        //  Apply induction first
         lemma_row_children_element_shifted(padding, spacing, alignment, child_sizes, available_height, start + 1, k);
 
-        // row_children(.., start) = head.add(tail) where head has length 1
+        //  row_children(.., start) = head.add(tail) where head has length 1
         let tail = row_children(padding, spacing, alignment, child_sizes, available_height, start + 1);
         let rc = row_children(padding, spacing, alignment, child_sizes, available_height, start);
         assert(rc[(k - start) as int] == tail[((k - start) as int) - 1]);
     }
 }
 
-// ── Phase 4: Additional Properties ────────────────────────────────
+//  ── Phase 4: Additional Properties ────────────────────────────────
 
-/// Helper: x/two() + x/two() ≡ x.
-/// Proof: (x/2)*2 ≡ x by div_mul_cancel, and (x/2)*2 = (x/2)*(1+1)
-/// = (x/2)*1 + (x/2)*1 = x/2 + x/2 by distributivity and mul_one.
+///  Helper: x/two() + x/two() ≡ x.
+///  Proof: (x/2)*2 ≡ x by div_mul_cancel, and (x/2)*2 = (x/2)*(1+1)
+///  = (x/2)*1 + (x/2)*1 = x/2 + x/2 by distributivity and mul_one.
 proof fn lemma_half_plus_half<T: OrderedField>(x: T)
     ensures
         x.div(two::<T>()).add(x.div(two::<T>())).eqv(x),
 {
     let h = x.div(two::<T>());
 
-    // (x/two()) * two() ≡ x
+    //  (x/two()) * two() ≡ x
     lemma_two_nonzero::<T>();
     verus_algebra::lemmas::field_lemmas::lemma_div_mul_cancel::<T>(x, two::<T>());
-    // h.mul(two()) ≡ x
+    //  h.mul(two()) ≡ x
 
-    // two() = one() + one()
-    // h * (one() + one()) ≡ h*one() + h*one() by distributivity
+    //  two() = one() + one()
+    //  h * (one() + one()) ≡ h*one() + h*one() by distributivity
     T::axiom_mul_distributes_left(h, T::one(), T::one());
-    // h.mul(T::one().add(T::one())) ≡ h.mul(T::one()).add(h.mul(T::one()))
+    //  h.mul(T::one().add(T::one())) ≡ h.mul(T::one()).add(h.mul(T::one()))
 
-    // h * one() ≡ h
+    //  h * one() ≡ h
     T::axiom_mul_one_right(h);
-    // So h*one() + h*one() ≡ h + h via congruence
+    //  So h*one() + h*one() ≡ h + h via congruence
     verus_algebra::lemmas::additive_group_lemmas::lemma_add_congruence::<T>(
         h.mul(T::one()), h, h.mul(T::one()), h,
     );
 
-    // h * two() ≡ h * (one() + one()) by definition (they're equal)
-    // and h * (one() + one()) ≡ h*one() + h*one() ≡ h + h
+    //  h * two() ≡ h * (one() + one()) by definition (they're equal)
+    //  and h * (one() + one()) ≡ h*one() + h*one() ≡ h + h
     T::axiom_eqv_transitive(
         h.mul(T::one().add(T::one())),
         h.mul(T::one()).add(h.mul(T::one())),
         h.add(h),
     );
-    // h.mul(two()) ≡ h + h (since two() == one() + one())
+    //  h.mul(two()) ≡ h + h (since two() == one() + one())
 
-    // h.mul(two()) ≡ h + h, so h + h ≡ h.mul(two()) by symmetry
+    //  h.mul(two()) ≡ h + h, so h + h ≡ h.mul(two()) by symmetry
     T::axiom_eqv_symmetric(h.mul(two::<T>()), h.add(h));
-    // h.mul(two()) ≡ x by div_mul_cancel, flip to get x side
-    // h + h ≡ h.mul(two()) ≡ x
+    //  h.mul(two()) ≡ x by div_mul_cancel, flip to get x side
+    //  h + h ≡ h.mul(two()) ≡ x
     T::axiom_eqv_transitive(h.add(h), h.mul(two::<T>()), x);
 }
 
-/// Center alignment is symmetric: the gap on the left equals the gap on the right.
+///  Center alignment is symmetric: the gap on the left equals the gap on the right.
 ///
-/// For Center alignment: align_offset = (available - used) / 2.
-/// This lemma proves: align_offset ≡ (available - used) - align_offset,
-/// i.e. the child is equidistant from both edges.
+///  For Center alignment: align_offset = (available - used) / 2.
+///  This lemma proves: align_offset ≡ (available - used) - align_offset,
+///  i.e. the child is equidistant from both edges.
 pub proof fn lemma_center_alignment_symmetric<T: OrderedField>(
     available: T,
     used: T,
@@ -1384,33 +1384,33 @@ pub proof fn lemma_center_alignment_symmetric<T: OrderedField>(
     reveal(align_offset);
     let x = available.sub(used);
     let h = x.div(two::<T>());
-    // align_offset(Center, available, used) == h == x / two()
+    //  align_offset(Center, available, used) == h == x / two()
 
-    // h + h ≡ x
+    //  h + h ≡ x
     lemma_half_plus_half::<T>(x);
 
-    // (h + h) - h ≡ h  by add_then_sub_cancel
+    //  (h + h) - h ≡ h  by add_then_sub_cancel
     verus_algebra::lemmas::additive_group_lemmas::lemma_add_then_sub_cancel::<T>(h, h);
 
-    // h + h ≡ x, so (h + h) - h ≡ x - h by sub_congruence
+    //  h + h ≡ x, so (h + h) - h ≡ x - h by sub_congruence
     T::axiom_eqv_reflexive(h);
     verus_algebra::lemmas::additive_group_lemmas::lemma_sub_congruence::<T>(
         h.add(h), x, h, h,
     );
 
-    // (h + h) - h ≡ h, and (h + h) - h ≡ x - h
-    // => h ≡ x - h
+    //  (h + h) - h ≡ h, and (h + h) - h ≡ x - h
+    //  => h ≡ x - h
     T::axiom_eqv_symmetric(h.add(h).sub(h), h);
     T::axiom_eqv_transitive(h, h.add(h).sub(h), x.sub(h));
 }
 
-/// Column children are contained within the padded region: both
-/// cross-axis and layout-axis bounds hold simultaneously.
+///  Column children are contained within the padded region: both
+///  cross-axis and layout-axis bounds hold simultaneously.
 ///
-/// Each child i satisfies:
-///   - padding_left <= child_x  (cross-axis lower)
-///   - child_x + child_width <= padding_left + available_width  (cross-axis upper)
-///   - padding_top <= child_y  (layout-axis lower)
+///  Each child i satisfies:
+///    - padding_left <= child_x  (cross-axis lower)
+///    - child_x + child_width <= padding_left + available_width  (cross-axis upper)
+///    - padding_top <= child_y  (layout-axis lower)
 pub proof fn lemma_column_child_contained<T: OrderedField>(
     padding: Padding<T>,
     spacing: T,
@@ -1425,15 +1425,15 @@ pub proof fn lemma_column_child_contained<T: OrderedField>(
         forall|j: int| 0 <= j < child_sizes.len() ==> T::zero().le(child_sizes[j].height),
         forall|j: int| 0 <= j < child_sizes.len() ==> child_sizes[j].width.le(available_width),
     ensures
-        // Cross-axis lower bound
+        //  Cross-axis lower bound
         padding.left.le(
             padding.left.add(align_offset(alignment, available_width, child_sizes[i as int].width))
         ),
-        // Cross-axis upper bound
+        //  Cross-axis upper bound
         padding.left.add(align_offset(alignment, available_width, child_sizes[i as int].width))
             .add(child_sizes[i as int].width)
             .le(padding.left.add(available_width)),
-        // Layout-axis lower bound
+        //  Layout-axis lower bound
         padding.top.le(
             child_y_position(padding.top, child_sizes, spacing, i)
         ),
@@ -1447,10 +1447,10 @@ pub proof fn lemma_column_child_contained<T: OrderedField>(
     lemma_column_child_y_lower_bound(padding.top, child_sizes, spacing, i);
 }
 
-/// Adding a child increases column content height.
+///  Adding a child increases column content height.
 ///
-/// content_height(sizes.push(new_size)) >= content_height(sizes)
-/// for non-negative child heights and spacing.
+///  content_height(sizes.push(new_size)) >= content_height(sizes)
+///  for non-negative child heights and spacing.
 pub proof fn lemma_column_content_height_monotone<T: OrderedRing>(
     child_sizes: Seq<Size<T>>,
     new_size: Size<T>,
@@ -1470,32 +1470,32 @@ pub proof fn lemma_column_content_height_monotone<T: OrderedRing>(
     assert(ext.len() == n + 1);
 
     if n == 0 {
-        // content_height(empty) = 0, content_height([new]) = new.height + 0
-        // Need: 0 <= content_height([new])
+        //  content_height(empty) = 0, content_height([new]) = new.height + 0
+        //  Need: 0 <= content_height([new])
         lemma_column_content_height_nonneg(ext, spacing);
     } else {
-        // LHS = sum_heights(sizes, n) + repeated_add(spacing, n-1)
-        // RHS = sum_heights(ext, n+1) + repeated_add(spacing, n)
-        //     = (sum_heights(ext, n) + new.height) + (repeated_add(spacing, n-1) + spacing)
-        // Since ext[j] == sizes[j] for j < n:
-        //     = (sum_heights(sizes, n) + new.height) + (repeated_add(spacing, n-1) + spacing)
+        //  LHS = sum_heights(sizes, n) + repeated_add(spacing, n-1)
+        //  RHS = sum_heights(ext, n+1) + repeated_add(spacing, n)
+        //      = (sum_heights(ext, n) + new.height) + (repeated_add(spacing, n-1) + spacing)
+        //  Since ext[j] == sizes[j] for j < n:
+        //      = (sum_heights(sizes, n) + new.height) + (repeated_add(spacing, n-1) + spacing)
         lemma_sum_heights_ext_equal::<T>(child_sizes, ext, n as nat);
 
         let sh_n = sum_heights(child_sizes, n as nat);
         let ra_nm1 = repeated_add(spacing, (n - 1) as nat);
 
-        // sh_n <= sh_n + new.height  (new.height >= 0)
+        //  sh_n <= sh_n + new.height  (new.height >= 0)
         lemma_le_add_nonneg::<T>(sh_n, new_size.height);
-        // ra_nm1 <= ra_nm1 + spacing  (spacing >= 0)
+        //  ra_nm1 <= ra_nm1 + spacing  (spacing >= 0)
         lemma_le_add_nonneg::<T>(ra_nm1, spacing);
 
-        // sh_n + ra_nm1 <= (sh_n + new.height) + (ra_nm1 + spacing)
+        //  sh_n + ra_nm1 <= (sh_n + new.height) + (ra_nm1 + spacing)
         verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_add_both::<T>(
             sh_n, sh_n.add(new_size.height),
             ra_nm1, ra_nm1.add(spacing),
         );
 
-        // Assert definitional equalities to help Z3 connect to column_content_height
+        //  Assert definitional equalities to help Z3 connect to column_content_height
         assert(column_content_height(child_sizes, spacing) == sh_n.add(ra_nm1));
         assert(sum_heights(ext, (n + 1) as nat) ==
             sum_heights(ext, n as nat).add(ext[n as int].height));
@@ -1505,7 +1505,7 @@ pub proof fn lemma_column_content_height_monotone<T: OrderedRing>(
     }
 }
 
-/// Helper: sum_heights gives the same result when the first `count` elements are identical.
+///  Helper: sum_heights gives the same result when the first `count` elements are identical.
 proof fn lemma_sum_heights_ext_equal<T: OrderedRing>(
     a: Seq<Size<T>>,
     b: Seq<Size<T>>,
@@ -1525,9 +1525,9 @@ proof fn lemma_sum_heights_ext_equal<T: OrderedRing>(
     }
 }
 
-/// Grid 2D non-overlap: consecutive cells don't overlap in both directions.
+///  Grid 2D non-overlap: consecutive cells don't overlap in both directions.
 ///
-/// Combines column and row non-overlap into a single lemma.
+///  Combines column and row non-overlap into a single lemma.
 pub proof fn lemma_grid_2d_nonoverlapping<T: OrderedRing>(
     padding_left: T,
     padding_top: T,
@@ -1544,11 +1544,11 @@ pub proof fn lemma_grid_2d_nonoverlapping<T: OrderedRing>(
         T::zero().le(h_spacing),
         T::zero().le(v_spacing),
     ensures
-        // Columns: right edge of col <= left edge of col+1
+        //  Columns: right edge of col <= left edge of col+1
         crate::layout::grid::grid_cell_x(padding_left, col_widths, h_spacing, col)
             .add(col_widths[col as int].width)
             .le(crate::layout::grid::grid_cell_x(padding_left, col_widths, h_spacing, col + 1)),
-        // Rows: bottom edge of row <= top edge of row+1
+        //  Rows: bottom edge of row <= top edge of row+1
         crate::layout::grid::grid_cell_y(padding_top, row_heights, v_spacing, row)
             .add(row_heights[row as int].height)
             .le(crate::layout::grid::grid_cell_y(padding_top, row_heights, v_spacing, row + 1)),
@@ -1561,9 +1561,9 @@ pub proof fn lemma_grid_2d_nonoverlapping<T: OrderedRing>(
     );
 }
 
-// ── Stack children helper lemmas ──────────────────────────────────
+//  ── Stack children helper lemmas ──────────────────────────────────
 
-/// Length of stack_children sequence.
+///  Length of stack_children sequence.
 pub proof fn lemma_stack_children_len<T: OrderedField>(
     padding: Padding<T>,
     h_align: Alignment,
@@ -1592,7 +1592,7 @@ pub proof fn lemma_stack_children_len<T: OrderedField>(
     }
 }
 
-/// Element access into stack_children.
+///  Element access into stack_children.
 pub proof fn lemma_stack_children_element<T: OrderedField>(
     padding: Padding<T>,
     h_align: Alignment,
@@ -1673,9 +1673,9 @@ proof fn lemma_stack_children_element_shifted<T: OrderedField>(
     }
 }
 
-// ── Row content width monotone lemma (symmetric to column) ────────
+//  ── Row content width monotone lemma (symmetric to column) ────────
 
-/// Helper: sum_widths gives the same result when the first `count` elements are identical.
+///  Helper: sum_widths gives the same result when the first `count` elements are identical.
 proof fn lemma_sum_widths_ext_equal<T: OrderedRing>(
     a: Seq<Size<T>>,
     b: Seq<Size<T>>,
@@ -1695,7 +1695,7 @@ proof fn lemma_sum_widths_ext_equal<T: OrderedRing>(
     }
 }
 
-/// The row content width is non-negative when spacing and all child widths are non-negative.
+///  The row content width is non-negative when spacing and all child widths are non-negative.
 pub proof fn lemma_row_content_width_nonneg<T: OrderedRing>(
     child_sizes: Seq<Size<T>>,
     spacing: T,
@@ -1729,10 +1729,10 @@ pub proof fn lemma_row_content_width_nonneg<T: OrderedRing>(
     }
 }
 
-/// Adding a child increases row content width.
+///  Adding a child increases row content width.
 ///
-/// content_width(sizes.push(new_size)) >= content_width(sizes)
-/// for non-negative child widths and spacing.
+///  content_width(sizes.push(new_size)) >= content_width(sizes)
+///  for non-negative child widths and spacing.
 pub proof fn lemma_row_content_width_monotone<T: OrderedRing>(
     child_sizes: Seq<Size<T>>,
     new_size: Size<T>,
@@ -1759,18 +1759,18 @@ pub proof fn lemma_row_content_width_monotone<T: OrderedRing>(
         let sw_n = sum_widths(child_sizes, n as nat);
         let ra_nm1 = repeated_add(spacing, (n - 1) as nat);
 
-        // sw_n <= sw_n + new.width  (new.width >= 0)
+        //  sw_n <= sw_n + new.width  (new.width >= 0)
         lemma_le_add_nonneg::<T>(sw_n, new_size.width);
-        // ra_nm1 <= ra_nm1 + spacing  (spacing >= 0)
+        //  ra_nm1 <= ra_nm1 + spacing  (spacing >= 0)
         lemma_le_add_nonneg::<T>(ra_nm1, spacing);
 
-        // sw_n + ra_nm1 <= (sw_n + new.width) + (ra_nm1 + spacing)
+        //  sw_n + ra_nm1 <= (sw_n + new.width) + (ra_nm1 + spacing)
         verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_add_both::<T>(
             sw_n, sw_n.add(new_size.width),
             ra_nm1, ra_nm1.add(spacing),
         );
 
-        // Assert definitional equalities to help Z3
+        //  Assert definitional equalities to help Z3
         assert(row_content_width(child_sizes, spacing) == sw_n.add(ra_nm1));
         assert(sum_widths(ext, (n + 1) as nat) ==
             sum_widths(ext, n as nat).add(ext[n as int].width));
@@ -1780,13 +1780,13 @@ pub proof fn lemma_row_content_width_monotone<T: OrderedRing>(
     }
 }
 
-// ── Layout respects limits ──────────────────────────────────────────
+//  ── Layout respects limits ──────────────────────────────────────────
 
-/// Master theorem: layout_widget always produces a size within [limits.min, limits.max].
+///  Master theorem: layout_widget always produces a size within [limits.min, limits.max].
 ///
-/// Every variant ends with limits.resolve(something), and resolve clamps to bounds.
-/// Conditional(visible) is the only variant that doesn't resolve — it passes through
-/// the child result, but uses the same limits, so induction applies.
+///  Every variant ends with limits.resolve(something), and resolve clamps to bounds.
+///  Conditional(visible) is the only variant that doesn't resolve — it passes through
+///  the child result, but uses the same limits, so induction applies.
 pub proof fn lemma_layout_respects_limits<T: OrderedField>(
     limits: Limits<T>,
     widget: Widget<T>,
@@ -1933,10 +1933,10 @@ pub proof fn lemma_layout_respects_limits<T: OrderedField>(
     }
 }
 
-// ── Clamp / Resolve foundation lemmas ────────────────────────────
+//  ── Clamp / Resolve foundation lemmas ────────────────────────────
 
-/// val <= clamp(val, lo, hi) when val <= hi and lo <= hi.
-/// Since val <= hi, min(val, hi) = val, so clamp = max(lo, val) >= val.
+///  val <= clamp(val, lo, hi) when val <= hi and lo <= hi.
+///  Since val <= hi, min(val, hi) = val, so clamp = max(lo, val) >= val.
 pub proof fn lemma_val_le_clamp<T: OrderedRing>(val: T, lo: T, hi: T)
     requires
         lo.le(hi),
@@ -1944,11 +1944,11 @@ pub proof fn lemma_val_le_clamp<T: OrderedRing>(val: T, lo: T, hi: T)
     ensures
         val.le(Limits::clamp(val, lo, hi)),
 {
-    // min(val, hi) = val since val.le(hi), so clamp = max(lo, val)
+    //  min(val, hi) = val since val.le(hi), so clamp = max(lo, val)
     lemma_max_ge_right::<T>(lo, min::<T>(val, hi));
 }
 
-/// max(c, a) <= max(c, b) when a <= b.
+///  max(c, a) <= max(c, b) when a <= b.
 proof fn lemma_max_monotone_right<T: OrderedRing>(a: T, b: T, c: T)
     requires
         a.le(b),
@@ -1957,17 +1957,17 @@ proof fn lemma_max_monotone_right<T: OrderedRing>(a: T, b: T, c: T)
 {
     T::axiom_le_total(c, a);
     if c.le(a) {
-        // max(c,a) = a. c <= a <= b so c <= b, hence max(c,b) = b.
+        //  max(c,a) = a. c <= a <= b so c <= b, hence max(c,b) = b.
         T::axiom_le_transitive(c, a, b);
-        // Now max(c,a) = a, max(c,b) = b, need a.le(b) ✓
+        //  Now max(c,a) = a, max(c,b) = b, need a.le(b) ✓
     } else {
-        // a < c, so max(c,a) = c. Need c <= max(c,b).
+        //  a < c, so max(c,a) = c. Need c <= max(c,b).
         lemma_max_ge_left::<T>(c, b);
     }
 }
 
-/// Clamp is monotone in the upper bound:
-/// clamp(v, lo, hi1) <= clamp(v, lo, hi2) when lo <= hi1 <= hi2.
+///  Clamp is monotone in the upper bound:
+///  clamp(v, lo, hi1) <= clamp(v, lo, hi2) when lo <= hi1 <= hi2.
 pub proof fn lemma_clamp_monotone_hi<T: OrderedRing>(v: T, lo: T, hi1: T, hi2: T)
     requires
         lo.le(hi1),
@@ -1975,30 +1975,30 @@ pub proof fn lemma_clamp_monotone_hi<T: OrderedRing>(v: T, lo: T, hi1: T, hi2: T
     ensures
         Limits::clamp(v, lo, hi1).le(Limits::clamp(v, lo, hi2)),
 {
-    // clamp(v, lo, hi_k) = max(lo, min(v, hi_k))
-    // Show min(v, hi1) <= min(v, hi2), then use max_monotone_right.
+    //  clamp(v, lo, hi_k) = max(lo, min(v, hi_k))
+    //  Show min(v, hi1) <= min(v, hi2), then use max_monotone_right.
     T::axiom_le_total(v, hi1);
     if v.le(hi1) {
-        // min(v, hi1) = v. Also v <= hi1 <= hi2 so v <= hi2, min(v, hi2) = v.
+        //  min(v, hi1) = v. Also v <= hi1 <= hi2 so v <= hi2, min(v, hi2) = v.
         T::axiom_le_transitive(v, hi1, hi2);
-        // Both clamps = max(lo, v).
+        //  Both clamps = max(lo, v).
         T::axiom_le_reflexive(max::<T>(lo, v));
     } else {
-        // hi1 < v, so min(v, hi1) = hi1.
+        //  hi1 < v, so min(v, hi1) = hi1.
         T::axiom_le_total(v, hi2);
         if v.le(hi2) {
-            // min(v, hi2) = v. Need max(lo, hi1) <= max(lo, v).
-            // hi1 <= v (from hi1 < v via total order: NOT v.le(hi1) means hi1.le(v) by totality...
-            // actually axiom_le_total gives v.le(hi1) || hi1.le(v), and we're in the !v.le(hi1) branch)
+            //  min(v, hi2) = v. Need max(lo, hi1) <= max(lo, v).
+            //  hi1 <= v (from hi1 < v via total order: NOT v.le(hi1) means hi1.le(v) by totality...
+            //  actually axiom_le_total gives v.le(hi1) || hi1.le(v), and we're in the !v.le(hi1) branch)
             lemma_max_monotone_right::<T>(hi1, v, lo);
         } else {
-            // hi2 < v, so min(v, hi2) = hi2. Need max(lo, hi1) <= max(lo, hi2).
+            //  hi2 < v, so min(v, hi2) = hi2. Need max(lo, hi1) <= max(lo, hi2).
             lemma_max_monotone_right::<T>(hi1, hi2, lo);
         }
     }
 }
 
-/// resolve(size) >= size component-wise when size <= limits.max.
+///  resolve(size) >= size component-wise when size <= limits.max.
 pub proof fn lemma_resolve_ge_input<T: OrderedRing>(limits: Limits<T>, size: Size<T>)
     requires
         limits.wf(),
@@ -2010,45 +2010,45 @@ pub proof fn lemma_resolve_ge_input<T: OrderedRing>(limits: Limits<T>, size: Siz
     lemma_val_le_clamp::<T>(size.height, limits.min.height, limits.max.height);
 }
 
-// ── Resolve monotonicity ─────────────────────────────────────────
+//  ── Resolve monotonicity ─────────────────────────────────────────
 
-/// max(a1, b).eqv(max(a2, b)) when a1.eqv(a2).
+///  max(a1, b).eqv(max(a2, b)) when a1.eqv(a2).
 pub proof fn lemma_max_congruence_left<T: OrderedRing>(a1: T, a2: T, b: T)
     requires
         a1.eqv(a2),
     ensures
         max::<T>(a1, b).eqv(max::<T>(a2, b)),
 {
-    // Case split on a1.le(b)
+    //  Case split on a1.le(b)
     T::axiom_le_total(a1, b);
     if a1.le(b) {
-        // max(a1, b) = b.
-        // a1.eqv(a2) and a1.le(b) => a2.le(b) by le_congruence
+        //  max(a1, b) = b.
+        //  a1.eqv(a2) and a1.le(b) => a2.le(b) by le_congruence
         T::axiom_eqv_reflexive(b);
         T::axiom_le_congruence(a1, a2, b, b);
-        // max(a2, b) = b. So both are b.
+        //  max(a2, b) = b. So both are b.
         T::axiom_eqv_reflexive(b);
     } else {
-        // max(a1, b) = a1. And b < a1, so NOT b.le(a1)... wait, le_total says a1.le(b) || b.le(a1).
-        // We're in NOT a1.le(b), so b.le(a1) by totality... but wait, that's already from le_total above.
-        // Actually le_total gives a1.le(b) || b.le(a1), and we're in the else, so b.le(a1).
-        // But NOT a1.le(b) doesn't mean NOT a2.le(b) directly. Let me use le_congruence differently.
-        // We have: NOT a1.le(b). max(a1, b) = a1.
-        // Need to show NOT a2.le(b), i.e., max(a2, b) = a2.
-        // From NOT a1.le(b) and a1.eqv(a2): if a2.le(b), then by le_congruence(a2, a1, b, b),
-        // a1.le(b) — contradiction. So NOT a2.le(b).
+        //  max(a1, b) = a1. And b < a1, so NOT b.le(a1)... wait, le_total says a1.le(b) || b.le(a1).
+        //  We're in NOT a1.le(b), so b.le(a1) by totality... but wait, that's already from le_total above.
+        //  Actually le_total gives a1.le(b) || b.le(a1), and we're in the else, so b.le(a1).
+        //  But NOT a1.le(b) doesn't mean NOT a2.le(b) directly. Let me use le_congruence differently.
+        //  We have: NOT a1.le(b). max(a1, b) = a1.
+        //  Need to show NOT a2.le(b), i.e., max(a2, b) = a2.
+        //  From NOT a1.le(b) and a1.eqv(a2): if a2.le(b), then by le_congruence(a2, a1, b, b),
+        //  a1.le(b) — contradiction. So NOT a2.le(b).
         T::axiom_eqv_symmetric(a1, a2);
         T::axiom_eqv_reflexive(b);
         T::axiom_le_total(a2, b);
         if a2.le(b) {
             T::axiom_le_congruence(a2, a1, b, b);
-            // contradiction: a1.le(b) in else branch
+            //  contradiction: a1.le(b) in else branch
         }
-        // max(a2, b) = a2. Need a1.eqv(a2).
+        //  max(a2, b) = a2. Need a1.eqv(a2).
     }
 }
 
-/// Resolve is monotone in limits.max: widening max widens the result.
+///  Resolve is monotone in limits.max: widening max widens the result.
 pub proof fn lemma_resolve_monotone_max<T: OrderedRing>(
     limits1: Limits<T>,
     limits2: Limits<T>,
@@ -2063,26 +2063,26 @@ pub proof fn lemma_resolve_monotone_max<T: OrderedRing>(
     ensures
         limits1.resolve(size).le(limits2.resolve(size)),
 {
-    // Width: clamp(v, min1.w, max1.w) <= clamp(v, min2.w, max2.w)
-    // Since min1.w.eqv(min2.w) and max1.w.le(max2.w):
-    // Step 1: clamp(v, min1.w, max1.w) <= clamp(v, min1.w, max2.w)  [clamp_monotone_hi]
+    //  Width: clamp(v, min1.w, max1.w) <= clamp(v, min2.w, max2.w)
+    //  Since min1.w.eqv(min2.w) and max1.w.le(max2.w):
+    //  Step 1: clamp(v, min1.w, max1.w) <= clamp(v, min1.w, max2.w)  [clamp_monotone_hi]
     lemma_clamp_monotone_hi::<T>(
         size.width, limits1.min.width, limits1.max.width, limits2.max.width,
     );
-    // Step 2: clamp(v, min1.w, max2.w) eqv clamp(v, min2.w, max2.w)  [min eqv => max eqv]
-    // clamp(v, lo, hi) = max(lo, min(v, hi))
+    //  Step 2: clamp(v, min1.w, max2.w) eqv clamp(v, min2.w, max2.w)  [min eqv => max eqv]
+    //  clamp(v, lo, hi) = max(lo, min(v, hi))
     lemma_max_congruence_left::<T>(
         limits1.min.width, limits2.min.width,
         min::<T>(size.width, limits2.max.width),
     );
-    // Step 3: le + eqv => le
+    //  Step 3: le + eqv => le
     verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_right::<T>(
         limits1.resolve(size).width,
         Limits::clamp(size.width, limits1.min.width, limits2.max.width),
         limits2.resolve(size).width,
     );
 
-    // Height: symmetric
+    //  Height: symmetric
     lemma_clamp_monotone_hi::<T>(
         size.height, limits1.min.height, limits1.max.height, limits2.max.height,
     );
@@ -2097,7 +2097,7 @@ pub proof fn lemma_resolve_monotone_max<T: OrderedRing>(
     );
 }
 
-/// Leaf layout is monotone in limits.max: widening max widens the leaf size.
+///  Leaf layout is monotone in limits.max: widening max widens the leaf size.
 pub proof fn lemma_layout_leaf_monotone<T: OrderedField>(
     limits1: Limits<T>,
     limits2: Limits<T>,
@@ -2115,13 +2115,13 @@ pub proof fn lemma_layout_leaf_monotone<T: OrderedField>(
         layout_widget(limits1, Widget::Leaf(LeafWidget::Leaf { size }), fuel).size.le(
             layout_widget(limits2, Widget::Leaf(LeafWidget::Leaf { size }), fuel).size),
 {
-    // layout_widget for Leaf = limits.resolve(size)
+    //  layout_widget for Leaf = limits.resolve(size)
     lemma_resolve_monotone_max(limits1, limits2, size);
 }
 
-// ── Children-within-parent bounds ─────────────────────────────────
+//  ── Children-within-parent bounds ─────────────────────────────────
 
-/// Layout of a Leaf widget has no children, so children_within_bounds is trivially true.
+///  Layout of a Leaf widget has no children, so children_within_bounds is trivially true.
 pub proof fn lemma_leaf_children_within_bounds<T: OrderedField>(
     limits: Limits<T>,
     size: Size<T>,
@@ -2132,7 +2132,7 @@ pub proof fn lemma_leaf_children_within_bounds<T: OrderedField>(
 {
 }
 
-/// Layout of a Conditional(!visible) widget has no children.
+///  Layout of a Conditional(!visible) widget has no children.
 pub proof fn lemma_conditional_hidden_children_within_bounds<T: OrderedField>(
     limits: Limits<T>,
     child: Widget<T>,
@@ -2147,7 +2147,7 @@ pub proof fn lemma_conditional_hidden_children_within_bounds<T: OrderedField>(
 {
 }
 
-/// At fuel=0, layout produces a zero-size leaf, so children_within_bounds holds.
+///  At fuel=0, layout produces a zero-size leaf, so children_within_bounds holds.
 pub proof fn lemma_zero_fuel_children_within_bounds<T: OrderedField>(
     limits: Limits<T>,
     widget: Widget<T>,
@@ -2157,8 +2157,8 @@ pub proof fn lemma_zero_fuel_children_within_bounds<T: OrderedField>(
 {
 }
 
-/// limits.intersect(other).wf() whenever limits.wf().
-/// The intersect construction guarantees min <= max and non-negativity.
+///  limits.intersect(other).wf() whenever limits.wf().
+///  The intersect construction guarantees min <= max and non-negativity.
 proof fn lemma_intersect_wf<T: OrderedRing>(limits: Limits<T>, other: Limits<T>)
     requires
         limits.wf(),
@@ -2166,20 +2166,20 @@ proof fn lemma_intersect_wf<T: OrderedRing>(limits: Limits<T>, other: Limits<T>)
         limits.intersect(other).wf(),
 {
     let eff = limits.intersect(other);
-    // min is non-negative: new_min = max(limits.min, other.min) >= limits.min >= 0
+    //  min is non-negative: new_min = max(limits.min, other.min) >= limits.min >= 0
     lemma_max_ge_left::<T>(limits.min.width, other.min.width);
     T::axiom_le_transitive(T::zero(), limits.min.width, eff.min.width);
     lemma_max_ge_left::<T>(limits.min.height, other.min.height);
     T::axiom_le_transitive(T::zero(), limits.min.height, eff.min.height);
-    // max >= min by construction: max = max(new_min, min(...)) >= new_min
+    //  max >= min by construction: max = max(new_min, min(...)) >= new_min
     lemma_max_ge_left::<T>(eff.min.width, min::<T>(limits.max.width, other.max.width));
     lemma_max_ge_left::<T>(eff.min.height, min::<T>(limits.max.height, other.max.height));
-    // max is non-negative: max >= min >= 0
+    //  max is non-negative: max >= min >= 0
     T::axiom_le_transitive(T::zero(), eff.min.width, eff.max.width);
     T::axiom_le_transitive(T::zero(), eff.min.height, eff.max.height);
 }
 
-/// limits.intersect(other).max <= limits.max when inner_limits.min <= limits.max.
+///  limits.intersect(other).max <= limits.max when inner_limits.min <= limits.max.
 proof fn lemma_intersect_max_le<T: OrderedRing>(limits: Limits<T>, other: Limits<T>)
     requires
         limits.wf(),
@@ -2189,24 +2189,24 @@ proof fn lemma_intersect_max_le<T: OrderedRing>(limits: Limits<T>, other: Limits
         limits.intersect(other).max.le(limits.max),
 {
     let eff = limits.intersect(other);
-    // Width: eff.max.width = max(new_min_w, min(limits.max.width, other.max.width))
-    // min(...) <= limits.max.width by lemma_min_le_left
+    //  Width: eff.max.width = max(new_min_w, min(limits.max.width, other.max.width))
+    //  min(...) <= limits.max.width by lemma_min_le_left
     lemma_min_le_left::<T>(limits.max.width, other.max.width);
-    // new_min_w = max(limits.min.width, other.min.width)
-    // Both <= limits.max.width, so max <= limits.max.width (case split)
+    //  new_min_w = max(limits.min.width, other.min.width)
+    //  Both <= limits.max.width, so max <= limits.max.width (case split)
     let new_min_w = max::<T>(limits.min.width, other.min.width);
     T::axiom_le_total(limits.min.width, other.min.width);
     if limits.min.width.le(other.min.width) {
-        // new_min_w = other.min.width <= limits.max.width
+        //  new_min_w = other.min.width <= limits.max.width
     } else {
-        // new_min_w = limits.min.width <= limits.max.width (by wf)
+        //  new_min_w = limits.min.width <= limits.max.width (by wf)
     }
-    // Now both sides of outer max <= limits.max.width
+    //  Now both sides of outer max <= limits.max.width
     let inner_w = min::<T>(limits.max.width, other.max.width);
     T::axiom_le_total(new_min_w, inner_w);
-    // max(new_min_w, inner_w) is whichever is larger, both <= limits.max.width
+    //  max(new_min_w, inner_w) is whichever is larger, both <= limits.max.width
 
-    // Height: symmetric
+    //  Height: symmetric
     lemma_min_le_left::<T>(limits.max.height, other.max.height);
     let new_min_h = max::<T>(limits.min.height, other.min.height);
     T::axiom_le_total(limits.min.height, other.min.height);
@@ -2214,7 +2214,7 @@ proof fn lemma_intersect_max_le<T: OrderedRing>(limits: Limits<T>, other: Limits
     T::axiom_le_total(new_min_h, inner_h);
 }
 
-/// SizedBox layout places its single child within the parent bounds.
+///  SizedBox layout places its single child within the parent bounds.
 pub proof fn lemma_sized_box_children_within_bounds<T: OrderedField>(
     limits: Limits<T>,
     inner_limits: Limits<T>,
@@ -2237,31 +2237,31 @@ pub proof fn lemma_sized_box_children_within_bounds<T: OrderedField>(
         inner_limits, child: Box::new(child),
     }), fuel);
 
-    // Step 1: effective.wf()
+    //  Step 1: effective.wf()
     lemma_intersect_wf(limits, inner_limits);
 
-    // Step 2: child_node.size <= effective.max
+    //  Step 2: child_node.size <= effective.max
     lemma_layout_respects_limits(effective, child, (fuel - 1) as nat);
 
-    // Step 3: effective.max <= limits.max
+    //  Step 3: effective.max <= limits.max
     lemma_intersect_max_le(limits, inner_limits);
 
-    // Step 4: child_node.size <= limits.max (by transitivity)
+    //  Step 4: child_node.size <= limits.max (by transitivity)
     T::axiom_le_transitive(child_node.size.width, effective.max.width, limits.max.width);
     T::axiom_le_transitive(child_node.size.height, effective.max.height, limits.max.height);
 
-    // Step 5: child_node.size <= limits.resolve(child_node.size)
+    //  Step 5: child_node.size <= limits.resolve(child_node.size)
     lemma_resolve_ge_input(limits, child_node.size);
 
-    // cwb for the single child at (0, 0):
+    //  cwb for the single child at (0, 0):
     lemma_single_child_at_origin_cwb(child_node.size, limits.resolve(child_node.size));
 }
 
-/// AspectRatio layout places its single child within the parent bounds.
+///  AspectRatio layout places its single child within the parent bounds.
 ///
-/// Requires the effective limits (whichever branch is chosen) to be wf.
-/// - Width-first branch (w1/ratio <= max.h): needs min.h <= w1/ratio
-/// - Height-first branch: needs min.w <= h2*ratio
+///  Requires the effective limits (whichever branch is chosen) to be wf.
+///  - Width-first branch (w1/ratio <= max.h): needs min.h <= w1/ratio
+///  - Height-first branch: needs min.w <= h2*ratio
 pub proof fn lemma_aspect_ratio_children_within_bounds<T: OrderedField>(
     limits: Limits<T>,
     ratio: T,
@@ -2276,10 +2276,10 @@ pub proof fn lemma_aspect_ratio_children_within_bounds<T: OrderedField>(
             let w1 = limits.max.width;
             let h1 = w1.div(ratio);
             if h1.le(limits.max.height) {
-                // Width-first: eff.max = (w1, h1), need min <= max for wf
+                //  Width-first: eff.max = (w1, h1), need min <= max for wf
                 limits.min.height.le(h1) && T::zero().le(h1)
             } else {
-                // Height-first: eff.max = (w2, h2), need min <= max for wf
+                //  Height-first: eff.max = (w2, h2), need min <= max for wf
                 let w2 = limits.max.height.mul(ratio);
                 limits.min.width.le(w2) && T::zero().le(w2)
             }
@@ -2292,69 +2292,69 @@ pub proof fn lemma_aspect_ratio_children_within_bounds<T: OrderedField>(
     let w1 = limits.max.width;
     let h1 = w1.div(ratio);
     if h1.le(limits.max.height) {
-        // Width-first branch
+        //  Width-first branch
         let eff = Limits {
             min: limits.min,
             max: Size::new(w1, h1),
         };
-        // eff.wf(): min.w <= max.w = w1 from limits.wf, min.h <= h1 from precondition
-        // 0 <= w1 from limits.wf, 0 <= h1 from precondition
+        //  eff.wf(): min.w <= max.w = w1 from limits.wf, min.h <= h1 from precondition
+        //  0 <= w1 from limits.wf, 0 <= h1 from precondition
         let child_node = layout_widget(eff, child, (fuel - 1) as nat);
 
-        // child_node.size <= eff.max
+        //  child_node.size <= eff.max
         lemma_layout_respects_limits(eff, child, (fuel - 1) as nat);
 
-        // eff.max <= limits.max: w1 <= w1 (refl), h1 <= max.h (branch cond)
+        //  eff.max <= limits.max: w1 <= w1 (refl), h1 <= max.h (branch cond)
         T::axiom_le_reflexive(w1);
 
-        // child_node.size <= limits.max
+        //  child_node.size <= limits.max
         T::axiom_le_transitive(child_node.size.width, eff.max.width, limits.max.width);
         T::axiom_le_transitive(child_node.size.height, eff.max.height, limits.max.height);
     } else {
-        // Height-first branch
+        //  Height-first branch
         let h2 = limits.max.height;
         let w2 = h2.mul(ratio);
         let eff = Limits {
             min: limits.min,
             max: Size::new(w2, h2),
         };
-        // eff.wf(): min.w <= w2 from precondition, min.h <= max.h from limits.wf
-        // 0 <= w2 from precondition, 0 <= h2 from limits.wf
+        //  eff.wf(): min.w <= w2 from precondition, min.h <= max.h from limits.wf
+        //  0 <= w2 from precondition, 0 <= h2 from limits.wf
         let child_node = layout_widget(eff, child, (fuel - 1) as nat);
 
-        // child_node.size <= eff.max
+        //  child_node.size <= eff.max
         lemma_layout_respects_limits(eff, child, (fuel - 1) as nat);
 
-        // eff.max <= limits.max: w2 <= max.w (we need this but don't have it directly)
-        // Actually h2 = max.h, so eff.max.h = max.h <= max.h (refl)
+        //  eff.max <= limits.max: w2 <= max.w (we need this but don't have it directly)
+        //  Actually h2 = max.h, so eff.max.h = max.h <= max.h (refl)
         T::axiom_le_reflexive(h2);
 
-        // w2 = max.h * ratio. Need w2 <= max.w.
-        // !h1.le(max.h) → max.h.le(h1) by totality
+        //  w2 = max.h * ratio. Need w2 <= max.w.
+        //  !h1.le(max.h) → max.h.le(h1) by totality
         T::axiom_le_total(h1, limits.max.height);
-        // max.h.le(h1), so max.h * ratio <= h1 * ratio (since 0 <= ratio)
+        //  max.h.le(h1), so max.h * ratio <= h1 * ratio (since 0 <= ratio)
         T::axiom_lt_iff_le_and_not_eqv(T::zero(), ratio);
         T::axiom_le_mul_nonneg_monotone(limits.max.height, h1, ratio);
-        // h1 * ratio = (w1/ratio) * ratio ≡ w1
-        // Need !ratio.eqv(zero) from !zero.eqv(ratio) via contrapositive of symmetric
+        //  h1 * ratio = (w1/ratio) * ratio ≡ w1
+        //  Need !ratio.eqv(zero) from !zero.eqv(ratio) via contrapositive of symmetric
         assert(!ratio.eqv(T::zero())) by {
             if ratio.eqv(T::zero()) {
                 T::axiom_eqv_symmetric(ratio, T::zero());
             }
         };
         verus_algebra::lemmas::field_lemmas::lemma_div_mul_cancel::<T>(w1, ratio);
-        // w2 <= h1*ratio, h1*ratio ≡ w1 = max.w → w2 <= max.w
+        //  w2 <= h1*ratio, h1*ratio ≡ w1 = max.w → w2 <= max.w
         verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_right::<T>(
             w2, h1.mul(ratio), w1,
         );
 
-        // child_node.size <= limits.max
+        //  child_node.size <= limits.max
         T::axiom_le_transitive(child_node.size.width, eff.max.width, limits.max.width);
         T::axiom_le_transitive(child_node.size.height, eff.max.height, limits.max.height);
     }
 
-    // Common: child_node.size <= limits.max
-    // → resolve(child_node.size) >= child_node.size
+    //  Common: child_node.size <= limits.max
+    //  → resolve(child_node.size) >= child_node.size
     let child_node = if h1.le(limits.max.height) {
         let eff = Limits { min: limits.min, max: Size::new(w1, h1) };
         layout_widget(eff, child, (fuel - 1) as nat)
@@ -2368,9 +2368,9 @@ pub proof fn lemma_aspect_ratio_children_within_bounds<T: OrderedField>(
     lemma_single_child_at_origin_cwb(child_node.size, limits.resolve(child_node.size));
 }
 
-// ── Reusable arithmetic helpers ───────────────────────────────────
+//  ── Reusable arithmetic helpers ───────────────────────────────────
 
-/// a + b >= 0 when a >= 0 and b >= 0.
+///  a + b >= 0 when a >= 0 and b >= 0.
 pub proof fn lemma_nonneg_sum<T: OrderedRing>(a: T, b: T)
     requires T::zero().le(a), T::zero().le(b),
     ensures T::zero().le(a.add(b)),
@@ -2385,7 +2385,7 @@ pub proof fn lemma_nonneg_sum<T: OrderedRing>(a: T, b: T)
     );
 }
 
-/// If a + b <= c, then b + a <= c (commutativity preserves le).
+///  If a + b <= c, then b + a <= c (commutativity preserves le).
 pub proof fn lemma_add_comm_le<T: OrderedRing>(a: T, b: T, c: T)
     requires a.add(b).le(c),
     ensures b.add(a).le(c),
@@ -2396,10 +2396,10 @@ pub proof fn lemma_add_comm_le<T: OrderedRing>(a: T, b: T, c: T)
     );
 }
 
-// ── Single-child-at-origin cwb helper ─────────────────────────────
+//  ── Single-child-at-origin cwb helper ─────────────────────────────
 
-/// Helper: 0 + v <= bound when v <= bound.
-/// Bridges right()/bottom() = zero.add(size) to the le bound.
+///  Helper: 0 + v <= bound when v <= bound.
+///  Bridges right()/bottom() = zero.add(size) to the le bound.
 proof fn lemma_zero_add_le<T: OrderedRing>(v: T, bound: T)
     requires v.le(bound),
     ensures T::zero().add(v).le(bound),
@@ -2411,7 +2411,7 @@ proof fn lemma_zero_add_le<T: OrderedRing>(v: T, bound: T)
     );
 }
 
-/// Additive cancellation for le: a + c <= b + c implies a <= b.
+///  Additive cancellation for le: a + c <= b + c implies a <= b.
 pub proof fn lemma_le_add_cancel_right<T: OrderedRing>(a: T, b: T, c: T)
     requires
         a.add(c).le(b.add(c)),
@@ -2431,10 +2431,10 @@ pub proof fn lemma_le_add_cancel_right<T: OrderedRing>(a: T, b: T, c: T)
     );
 }
 
-/// Establish cwb proof facts for a single child positioned at origin (0,0).
-/// After calling, Z3 has: 0 <= 0, 0 + child_w <= parent_w, 0 + child_h <= parent_h.
-/// These are exactly the facts needed for children_within_bounds of a node
-/// with one child at (0,0) whose size fits within the parent.
+///  Establish cwb proof facts for a single child positioned at origin (0,0).
+///  After calling, Z3 has: 0 <= 0, 0 + child_w <= parent_w, 0 + child_h <= parent_h.
+///  These are exactly the facts needed for children_within_bounds of a node
+///  with one child at (0,0) whose size fits within the parent.
 pub proof fn lemma_single_child_at_origin_cwb<T: OrderedRing>(
     child_size: Size<T>,
     parent_size: Size<T>,
@@ -2452,9 +2452,9 @@ pub proof fn lemma_single_child_at_origin_cwb<T: OrderedRing>(
     lemma_zero_add_le(child_size.height, parent_size.height);
 }
 
-/// Conditional(visible=true) layout has cwb when the child layout has cwb.
-/// The Conditional passes through child_node.children with a (possibly larger)
-/// resolved parent size, so inner cwb implies outer cwb by transitivity.
+///  Conditional(visible=true) layout has cwb when the child layout has cwb.
+///  The Conditional passes through child_node.children with a (possibly larger)
+///  resolved parent size, so inner cwb implies outer cwb by transitivity.
 pub proof fn lemma_conditional_visible_children_within_bounds<T: OrderedField>(
     limits: Limits<T>,
     child: Widget<T>,
@@ -2470,11 +2470,11 @@ pub proof fn lemma_conditional_visible_children_within_bounds<T: OrderedField>(
         }), fuel).children_within_bounds(),
 {
     let child_node = layout_widget(limits, child, (fuel - 1) as nat);
-    // child_node.size <= limits.max
+    //  child_node.size <= limits.max
     lemma_layout_respects_limits(limits, child, (fuel - 1) as nat);
-    // child_node.size <= limits.resolve(child_node.size) (resolve only grows)
+    //  child_node.size <= limits.resolve(child_node.size) (resolve only grows)
     lemma_resolve_ge_input(limits, child_node.size);
-    // Each child c: c.right() <= child_node.size.width <= resolve.width (transitivity)
+    //  Each child c: c.right() <= child_node.size.width <= resolve.width (transitivity)
     assert forall|i: int| 0 <= i < child_node.children.len() implies {
         &&& T::zero().le(child_node.children[i].x)
         &&& T::zero().le(child_node.children[i].y)
@@ -2494,10 +2494,10 @@ pub proof fn lemma_conditional_visible_children_within_bounds<T: OrderedField>(
     };
 }
 
-// ── Shrink helpers ────────────────────────────────────────────────
+//  ── Shrink helpers ────────────────────────────────────────────────
 
-/// shrink(h, v) preserves wf: the shrunken limits still satisfy min <= max
-/// and both are non-negative.
+///  shrink(h, v) preserves wf: the shrunken limits still satisfy min <= max
+///  and both are non-negative.
 pub proof fn lemma_shrink_wf<T: OrderedRing>(limits: Limits<T>, h: T, v: T)
     requires
         limits.wf(),
@@ -2507,16 +2507,16 @@ pub proof fn lemma_shrink_wf<T: OrderedRing>(limits: Limits<T>, h: T, v: T)
         limits.shrink(h, v).wf(),
 {
     let s = limits.shrink(h, v);
-    // min.w <= max(min.w, ...) by max_ge_left
+    //  min.w <= max(min.w, ...) by max_ge_left
     lemma_max_ge_left::<T>(limits.min.width, limits.max.width.sub(h));
     lemma_max_ge_left::<T>(limits.min.height, limits.max.height.sub(v));
-    // max nonneg: max >= min >= 0
+    //  max nonneg: max >= min >= 0
     T::axiom_le_transitive(T::zero(), limits.min.width, s.max.width);
     T::axiom_le_transitive(T::zero(), limits.min.height, s.max.height);
 }
 
-/// After shrinking, shrink.max + margin fits within limits.max:
-/// shrink(h, v).max.width + h <= limits.max.width (and symmetrically for height).
+///  After shrinking, shrink.max + margin fits within limits.max:
+///  shrink(h, v).max.width + h <= limits.max.width (and symmetrically for height).
 pub proof fn lemma_shrink_max_bound<T: OrderedRing>(limits: Limits<T>, h: T, v: T)
     requires
         limits.wf(),
@@ -2528,11 +2528,11 @@ pub proof fn lemma_shrink_max_bound<T: OrderedRing>(limits: Limits<T>, h: T, v: 
         limits.shrink(h, v).max.width.add(h).le(limits.max.width),
         limits.shrink(h, v).max.height.add(v).le(limits.max.height),
 {
-    // Width: shrink.max.w = max(min.w, max.w - h)
+    //  Width: shrink.max.w = max(min.w, max.w - h)
     T::axiom_le_total(limits.min.width, limits.max.width.sub(h));
     if limits.min.width.le(limits.max.width.sub(h)) {
-        // max(min.w, max.w-h) = max.w-h
-        // (max.w-h)+h ≡ max.w → le from eqv
+        //  max(min.w, max.w-h) = max.w-h
+        //  (max.w-h)+h ≡ max.w → le from eqv
         verus_algebra::lemmas::additive_group_lemmas::lemma_sub_then_add_cancel::<T>(
             limits.max.width, h,
         );
@@ -2544,9 +2544,9 @@ pub proof fn lemma_shrink_max_bound<T: OrderedRing>(limits: Limits<T>, h: T, v: 
             limits.max.width,
         );
     }
-    // else: max(min.w, max.w-h) = min.w, min.w+h <= max.w from precondition
+    //  else: max(min.w, max.w-h) = min.w, min.w+h <= max.w from precondition
 
-    // Height: symmetric
+    //  Height: symmetric
     T::axiom_le_total(limits.min.height, limits.max.height.sub(v));
     if limits.min.height.le(limits.max.height.sub(v)) {
         verus_algebra::lemmas::additive_group_lemmas::lemma_sub_then_add_cancel::<T>(
@@ -2562,10 +2562,10 @@ pub proof fn lemma_shrink_max_bound<T: OrderedRing>(limits: Limits<T>, h: T, v: 
     }
 }
 
-// ── Margin cwb ───────────────────────────────────────────────────
+//  ── Margin cwb ───────────────────────────────────────────────────
 
-/// Margin layout places its single child at (margin.left, margin.top)
-/// within the parent bounds, when the margin fits within limits.
+///  Margin layout places its single child at (margin.left, margin.top)
+///  within the parent bounds, when the margin fits within limits.
 pub proof fn lemma_margin_children_within_bounds<T: OrderedField>(
     limits: Limits<T>,
     margin: Padding<T>,
@@ -2590,24 +2590,24 @@ pub proof fn lemma_margin_children_within_bounds<T: OrderedField>(
     let total_w = h.add(child_node.size.width);
     let total_h = v.add(child_node.size.height);
 
-    // 0. h >= 0, v >= 0 from component non-negativity
+    //  0. h >= 0, v >= 0 from component non-negativity
     lemma_nonneg_sum(margin.left, margin.right);
     lemma_nonneg_sum(margin.top, margin.bottom);
 
-    // 1. inner.wf()
+    //  1. inner.wf()
     lemma_shrink_wf(limits, h, v);
 
-    // 2. child.size <= inner.max
+    //  2. child.size <= inner.max
     lemma_layout_respects_limits(inner, child, (fuel - 1) as nat);
 
-    // 3. Convert precondition: h+min.w <= max.w → min.w+h <= max.w
+    //  3. Convert precondition: h+min.w <= max.w → min.w+h <= max.w
     lemma_add_comm_le(h, limits.min.width, limits.max.width);
     lemma_add_comm_le(v, limits.min.height, limits.max.height);
 
-    // 4. shrink.max + h <= limits.max
+    //  4. shrink.max + h <= limits.max
     lemma_shrink_max_bound(limits, h, v);
 
-    // 5. total_w = h + child.w <= h + inner.max.w = inner.max.w + h <= max.w
+    //  5. total_w = h + child.w <= h + inner.max.w = inner.max.w + h <= max.w
     T::axiom_le_add_monotone(child_node.size.width, inner.max.width, h);
     T::axiom_add_commutative(child_node.size.width, h);
     verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
@@ -2615,7 +2615,7 @@ pub proof fn lemma_margin_children_within_bounds<T: OrderedField>(
     );
     T::axiom_le_transitive(total_w, inner.max.width.add(h), limits.max.width);
 
-    // Similarly for height
+    //  Similarly for height
     T::axiom_le_add_monotone(child_node.size.height, inner.max.height, v);
     T::axiom_add_commutative(child_node.size.height, v);
     verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
@@ -2623,23 +2623,23 @@ pub proof fn lemma_margin_children_within_bounds<T: OrderedField>(
     );
     T::axiom_le_transitive(total_h, inner.max.height.add(v), limits.max.height);
 
-    // 6. resolve(total) >= total → parent_size >= total
+    //  6. resolve(total) >= total → parent_size >= total
     lemma_resolve_ge_input(limits, Size::new(total_w, total_h));
     let parent_size = limits.resolve(Size::new(total_w, total_h));
 
-    // 7. margin.left + child.w <= total_w <= parent.w
+    //  7. margin.left + child.w <= total_w <= parent.w
     lemma_le_add_nonneg(margin.left, margin.right);
     T::axiom_le_add_monotone(margin.left, h, child_node.size.width);
     T::axiom_le_transitive(margin.left.add(child_node.size.width), total_w, parent_size.width);
 
-    // 8. margin.top + child.h <= total_h <= parent.h
+    //  8. margin.top + child.h <= total_h <= parent.h
     lemma_le_add_nonneg(margin.top, margin.bottom);
     T::axiom_le_add_monotone(margin.top, v, child_node.size.height);
     T::axiom_le_transitive(margin.top.add(child_node.size.height), total_h, parent_size.height);
 }
 
-/// If layout positions and child sizes satisfy bounds, merge_layout preserves cwb.
-/// Reusable for any widget that goes through merge_layout (stack, column, row, etc.).
+///  If layout positions and child sizes satisfy bounds, merge_layout preserves cwb.
+///  Reusable for any widget that goes through merge_layout (stack, column, row, etc.).
 pub proof fn lemma_merge_layout_cwb<T: OrderedRing>(
     layout: Node<T>,
     child_nodes: Seq<Node<T>>,
@@ -2664,7 +2664,7 @@ pub proof fn lemma_merge_layout_cwb<T: OrderedRing>(
     by {};
 }
 
-/// Clamp is monotone in the lower bound: raising lo raises the result.
+///  Clamp is monotone in the lower bound: raising lo raises the result.
 pub proof fn lemma_clamp_monotone_lo<T: OrderedRing>(
     v: T,
     lo1: T,
@@ -2677,22 +2677,22 @@ pub proof fn lemma_clamp_monotone_lo<T: OrderedRing>(
     ensures
         Limits::clamp(v, lo1, hi).le(Limits::clamp(v, lo2, hi)),
 {
-    // clamp(v, lo, hi) = max(lo, min(v, hi))
+    //  clamp(v, lo, hi) = max(lo, min(v, hi))
     let m = min::<T>(v, hi);
     T::axiom_le_total(lo2, m);
     if lo2.le(m) {
-        // max(lo2, m) = m, lo1 <= lo2 <= m ⇒ lo1.le(m) ⇒ max(lo1, m) = m
+        //  max(lo2, m) = m, lo1 <= lo2 <= m ⇒ lo1.le(m) ⇒ max(lo1, m) = m
         T::axiom_le_transitive(lo1, lo2, m);
-        // result: m.le(m)
+        //  result: m.le(m)
         T::axiom_le_reflexive(m);
     } else {
-        // !lo2.le(m), totality ⇒ m.le(lo2)
-        // max(lo2, m) = lo2
-        // max(lo1, m) ∈ {lo1, m}, both <= lo2
+        //  !lo2.le(m), totality ⇒ m.le(lo2)
+        //  max(lo2, m) = lo2
+        //  max(lo1, m) ∈ {lo1, m}, both <= lo2
     }
 }
 
-/// Resolve is monotone in both min and max: widening both widens the result.
+///  Resolve is monotone in both min and max: widening both widens the result.
 pub proof fn lemma_resolve_monotone_both<T: OrderedRing>(
     limits1: Limits<T>,
     limits2: Limits<T>,
@@ -2706,32 +2706,32 @@ pub proof fn lemma_resolve_monotone_both<T: OrderedRing>(
     ensures
         limits1.resolve(size).le(limits2.resolve(size)),
 {
-    // resolve(size).width = clamp(size.width, min.width, max.width)
-    // Need: clamp(size.w, min1.w, max1.w) <= clamp(size.w, min2.w, max2.w)
-    // Step 1: clamp(v, lo1, hi1) <= clamp(v, lo1, hi2) when hi1 <= hi2
-    //   (from lemma_clamp_monotone_hi, which is the core of resolve_monotone_max)
-    // Step 2: clamp(v, lo1, hi2) <= clamp(v, lo2, hi2) when lo1 <= lo2
-    //   (from lemma_clamp_monotone_lo)
+    //  resolve(size).width = clamp(size.width, min.width, max.width)
+    //  Need: clamp(size.w, min1.w, max1.w) <= clamp(size.w, min2.w, max2.w)
+    //  Step 1: clamp(v, lo1, hi1) <= clamp(v, lo1, hi2) when hi1 <= hi2
+    //    (from lemma_clamp_monotone_hi, which is the core of resolve_monotone_max)
+    //  Step 2: clamp(v, lo1, hi2) <= clamp(v, lo2, hi2) when lo1 <= lo2
+    //    (from lemma_clamp_monotone_lo)
 
-    // Width: use intermediate clamp(size.w, min1.w, max2.w)
-    // First raise max: clamp(v, min1.w, max1.w) <= clamp(v, min1.w, max2.w)
+    //  Width: use intermediate clamp(size.w, min1.w, max2.w)
+    //  First raise max: clamp(v, min1.w, max1.w) <= clamp(v, min1.w, max2.w)
     let lim_mid = Limits {
         min: limits1.min,
         max: limits2.max,
     };
-    // lim_mid.wf(): min1 <= max1 <= max2, so min1 <= max2
+    //  lim_mid.wf(): min1 <= max1 <= max2, so min1 <= max2
     T::axiom_le_transitive(limits1.min.width, limits1.max.width, limits2.max.width);
     T::axiom_le_transitive(limits1.min.height, limits1.max.height, limits2.max.height);
-    // max nonneg for wf
+    //  max nonneg for wf
     T::axiom_le_transitive(T::zero(), limits2.min.width, limits2.max.width);
     T::axiom_le_transitive(T::zero(), limits2.min.height, limits2.max.height);
 
-    // resolve_monotone_max needs min1.eqv(lim_mid.min) = min1.eqv(min1) (reflexive)
+    //  resolve_monotone_max needs min1.eqv(lim_mid.min) = min1.eqv(min1) (reflexive)
     T::axiom_eqv_reflexive(limits1.min.width);
     T::axiom_eqv_reflexive(limits1.min.height);
     lemma_resolve_monotone_max(limits1, lim_mid, size);
 
-    // Then raise min: clamp(v, min1.w, max2.w) <= clamp(v, min2.w, max2.w)
+    //  Then raise min: clamp(v, min1.w, max2.w) <= clamp(v, min2.w, max2.w)
     lemma_clamp_monotone_lo(
         size.width, limits1.min.width, limits2.min.width, limits2.max.width,
     );
@@ -2739,13 +2739,13 @@ pub proof fn lemma_resolve_monotone_both<T: OrderedRing>(
         size.height, limits1.min.height, limits2.min.height, limits2.max.height,
     );
 
-    // Combine: width
+    //  Combine: width
     T::axiom_le_transitive(
         limits1.resolve(size).width,
         lim_mid.resolve(size).width,
         limits2.resolve(size).width,
     );
-    // Combine: height
+    //  Combine: height
     T::axiom_le_transitive(
         limits1.resolve(size).height,
         lim_mid.resolve(size).height,
@@ -2753,9 +2753,9 @@ pub proof fn lemma_resolve_monotone_both<T: OrderedRing>(
     );
 }
 
-// ── Layout monotonicity ────────────────────────────────────────────
+//  ── Layout monotonicity ────────────────────────────────────────────
 
-/// shrink preserves max ordering: wider limits.max → wider shrunk max.
+///  shrink preserves max ordering: wider limits.max → wider shrunk max.
 pub proof fn lemma_shrink_monotone_max<T: OrderedRing>(
     limits1: Limits<T>,
     limits2: Limits<T>,
@@ -2771,14 +2771,14 @@ pub proof fn lemma_shrink_monotone_max<T: OrderedRing>(
     ensures
         limits1.shrink(h, v).max.le(limits2.shrink(h, v).max),
 {
-    // Width: max(min_w, max1_w - h) <= max(min_w, max2_w - h)
+    //  Width: max(min_w, max1_w - h) <= max(min_w, max2_w - h)
     verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_sub_monotone(
         limits1.max.width, limits2.max.width, h,
     );
     lemma_max_monotone_right::<T>(
         limits1.max.width.sub(h), limits2.max.width.sub(h), limits1.min.width,
     );
-    // Congruence: max(min1, max2_w - h) ≡ max(min2, max2_w - h)
+    //  Congruence: max(min1, max2_w - h) ≡ max(min2, max2_w - h)
     lemma_max_congruence_left::<T>(
         limits1.min.width, limits2.min.width, limits2.max.width.sub(h),
     );
@@ -2788,7 +2788,7 @@ pub proof fn lemma_shrink_monotone_max<T: OrderedRing>(
         max::<T>(limits2.min.width, limits2.max.width.sub(h)),
     );
 
-    // Height: symmetric
+    //  Height: symmetric
     verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_sub_monotone(
         limits1.max.height, limits2.max.height, v,
     );
@@ -2805,21 +2805,21 @@ pub proof fn lemma_shrink_monotone_max<T: OrderedRing>(
     );
 }
 
-/// shrink always preserves wf (regardless of h, v sign).
+///  shrink always preserves wf (regardless of h, v sign).
 proof fn lemma_shrink_wf_general<T: OrderedRing>(limits: Limits<T>, h: T, v: T)
     requires limits.wf(),
     ensures limits.shrink(h, v).wf(),
 {
-    // min unchanged, max = max(min, max - h/v)
-    // min ≤ max: max(min, ...) ≥ min by max_ge_left
+    //  min unchanged, max = max(min, max - h/v)
+    //  min ≤ max: max(min, ...) ≥ min by max_ge_left
     verus_algebra::min_max::lemma_max_ge_left::<T>(
         limits.min.width, limits.max.width.sub(h),
     );
     verus_algebra::min_max::lemma_max_ge_left::<T>(
         limits.min.height, limits.max.height.sub(v),
     );
-    // min ≥ 0: unchanged from limits.wf()
-    // max ≥ 0: max(min, ...) ≥ min ≥ 0
+    //  min ≥ 0: unchanged from limits.wf()
+    //  max ≥ 0: max(min, ...) ≥ min ≥ 0
     T::axiom_le_transitive(
         T::zero(), limits.min.width,
         max::<T>(limits.min.width, limits.max.width.sub(h)),
@@ -2830,7 +2830,7 @@ proof fn lemma_shrink_wf_general<T: OrderedRing>(limits: Limits<T>, h: T, v: T)
     );
 }
 
-/// Clamp is monotone in the value: a <= b implies clamp(a, lo, hi) <= clamp(b, lo, hi).
+///  Clamp is monotone in the value: a <= b implies clamp(a, lo, hi) <= clamp(b, lo, hi).
 pub proof fn lemma_clamp_monotone_value<T: OrderedRing>(a: T, b: T, lo: T, hi: T)
     requires
         a.le(b),
@@ -2838,37 +2838,37 @@ pub proof fn lemma_clamp_monotone_value<T: OrderedRing>(a: T, b: T, lo: T, hi: T
     ensures
         Limits::clamp(a, lo, hi).le(Limits::clamp(b, lo, hi)),
 {
-    // clamp(x, lo, hi) = max(lo, min(x, hi))
-    // Need: max(lo, min(a, hi)) <= max(lo, min(b, hi))
-    // Suffices: min(a, hi) <= min(b, hi) → max monotone right
-    // min(a, hi) <= min(b, hi): if a <= hi, min(a,hi)=a. if b <= hi, min(b,hi)=b >= a. if b > hi, min(b,hi)=hi >= a.
-    //   if a > hi, min(a,hi)=hi. min(b,hi) >= hi since b >= a > hi → min(b,hi)=hi. hi ≤ hi by reflexive.
+    //  clamp(x, lo, hi) = max(lo, min(x, hi))
+    //  Need: max(lo, min(a, hi)) <= max(lo, min(b, hi))
+    //  Suffices: min(a, hi) <= min(b, hi) → max monotone right
+    //  min(a, hi) <= min(b, hi): if a <= hi, min(a,hi)=a. if b <= hi, min(b,hi)=b >= a. if b > hi, min(b,hi)=hi >= a.
+    //    if a > hi, min(a,hi)=hi. min(b,hi) >= hi since b >= a > hi → min(b,hi)=hi. hi ≤ hi by reflexive.
     T::axiom_le_total(a, hi);
     T::axiom_le_total(b, hi);
     if a.le(hi) {
         if b.le(hi) {
-            // min(a,hi) = a, min(b,hi) = b, a <= b
+            //  min(a,hi) = a, min(b,hi) = b, a <= b
             lemma_max_monotone_right::<T>(a, b, lo);
         } else {
-            // min(a,hi) = a, min(b,hi) = hi, a <= hi
+            //  min(a,hi) = a, min(b,hi) = hi, a <= hi
             lemma_max_monotone_right::<T>(a, hi, lo);
         }
     } else {
-        // !a.le(hi) → hi.le(a) by totality
-        // min(a, hi) = hi. Need max(lo, hi) <= max(lo, min(b, hi)).
+        //  !a.le(hi) → hi.le(a) by totality
+        //  min(a, hi) = hi. Need max(lo, hi) <= max(lo, min(b, hi)).
         T::axiom_le_transitive(hi, a, b);
-        // hi.le(b). Two cases:
+        //  hi.le(b). Two cases:
         if b.le(hi) {
-            // min(b,hi) = b, and hi.le(b) → max(lo, hi) ≤ max(lo, b) by monotone
+            //  min(b,hi) = b, and hi.le(b) → max(lo, hi) ≤ max(lo, b) by monotone
             lemma_max_monotone_right::<T>(hi, b, lo);
         } else {
-            // min(b,hi) = hi → max(lo, hi) = max(lo, hi) ≤ itself
+            //  min(b,hi) = hi → max(lo, hi) = max(lo, hi) ≤ itself
             T::axiom_le_reflexive(max::<T>(lo, hi));
         }
     }
 }
 
-/// Resolve is monotone in input: larger input → larger resolve (same limits).
+///  Resolve is monotone in input: larger input → larger resolve (same limits).
 pub proof fn lemma_resolve_monotone_input<T: OrderedRing>(
     limits: Limits<T>,
     size1: Size<T>,
@@ -2888,7 +2888,7 @@ pub proof fn lemma_resolve_monotone_input<T: OrderedRing>(
     );
 }
 
-/// Combined: resolve is monotone in both input size and limits.max.
+///  Combined: resolve is monotone in both input size and limits.max.
 pub proof fn lemma_resolve_monotone_input_and_max<T: OrderedRing>(
     limits1: Limits<T>,
     limits2: Limits<T>,
@@ -2905,7 +2905,7 @@ pub proof fn lemma_resolve_monotone_input_and_max<T: OrderedRing>(
     ensures
         limits1.resolve(size1).le(limits2.resolve(size2)),
 {
-    // Chain: resolve1(size1) ≤ resolve1(size2) ≤ resolve2(size2)
+    //  Chain: resolve1(size1) ≤ resolve1(size2) ≤ resolve2(size2)
     lemma_resolve_monotone_input(limits1, size1, size2);
     lemma_resolve_monotone_max(limits1, limits2, size2);
     T::axiom_le_transitive(
@@ -2920,9 +2920,9 @@ pub proof fn lemma_resolve_monotone_input_and_max<T: OrderedRing>(
     );
 }
 
-// ── Content-size monotonicity helpers ───────────────────────────────
+//  ── Content-size monotonicity helpers ───────────────────────────────
 
-/// sum_heights is monotone in pointwise-larger sizes.
+///  sum_heights is monotone in pointwise-larger sizes.
 pub proof fn lemma_sum_heights_pointwise_monotone<T: OrderedRing>(
     sizes1: Seq<Size<T>>,
     sizes2: Seq<Size<T>>,
@@ -2950,7 +2950,7 @@ pub proof fn lemma_sum_heights_pointwise_monotone<T: OrderedRing>(
     }
 }
 
-/// sum_widths is monotone in pointwise-larger sizes.
+///  sum_widths is monotone in pointwise-larger sizes.
 proof fn lemma_sum_widths_pointwise_monotone<T: OrderedRing>(
     sizes1: Seq<Size<T>>,
     sizes2: Seq<Size<T>>,
@@ -2978,7 +2978,7 @@ proof fn lemma_sum_widths_pointwise_monotone<T: OrderedRing>(
     }
 }
 
-/// max is monotone in both arguments: a1 ≤ a2 and b1 ≤ b2 → max(a1,b1) ≤ max(a2,b2).
+///  max is monotone in both arguments: a1 ≤ a2 and b1 ≤ b2 → max(a1,b1) ≤ max(a2,b2).
 proof fn lemma_max_monotone_both<T: OrderedRing>(a1: T, a2: T, b1: T, b2: T)
     requires
         a1.le(a2),
@@ -2986,21 +2986,21 @@ proof fn lemma_max_monotone_both<T: OrderedRing>(a1: T, a2: T, b1: T, b2: T)
     ensures
         max::<T>(a1, b1).le(max::<T>(a2, b2)),
 {
-    // max(a2,b2) ≥ a2 ≥ a1 and max(a2,b2) ≥ b2 ≥ b1
-    // max(a1,b1) is either a1 or b1, both ≤ max(a2,b2)
+    //  max(a2,b2) ≥ a2 ≥ a1 and max(a2,b2) ≥ b2 ≥ b1
+    //  max(a1,b1) is either a1 or b1, both ≤ max(a2,b2)
     T::axiom_le_total(a1, b1);
     verus_algebra::min_max::lemma_max_ge_left::<T>(a2, b2);
     verus_algebra::min_max::lemma_max_ge_right::<T>(a2, b2);
     if a1.le(b1) {
-        // max(a1,b1) = b1 ≤ b2 ≤ max(a2,b2)
+        //  max(a1,b1) = b1 ≤ b2 ≤ max(a2,b2)
         T::axiom_le_transitive(b1, b2, max::<T>(a2, b2));
     } else {
-        // max(a1,b1) = a1 ≤ a2 ≤ max(a2,b2)
+        //  max(a1,b1) = a1 ≤ a2 ≤ max(a2,b2)
         T::axiom_le_transitive(a1, a2, max::<T>(a2, b2));
     }
 }
 
-/// max_width is monotone in pointwise-larger sizes.
+///  max_width is monotone in pointwise-larger sizes.
 proof fn lemma_max_width_pointwise_monotone<T: OrderedRing>(
     sizes1: Seq<Size<T>>,
     sizes2: Seq<Size<T>>,
@@ -3030,7 +3030,7 @@ proof fn lemma_max_width_pointwise_monotone<T: OrderedRing>(
     }
 }
 
-/// max_height is monotone in pointwise-larger sizes.
+///  max_height is monotone in pointwise-larger sizes.
 proof fn lemma_max_height_pointwise_monotone<T: OrderedRing>(
     sizes1: Seq<Size<T>>,
     sizes2: Seq<Size<T>>,
@@ -3060,7 +3060,7 @@ proof fn lemma_max_height_pointwise_monotone<T: OrderedRing>(
     }
 }
 
-/// min is monotone in first argument: a1 ≤ a2 → min(a1, b) ≤ min(a2, b).
+///  min is monotone in first argument: a1 ≤ a2 → min(a1, b) ≤ min(a2, b).
 proof fn lemma_min_monotone_left<T: OrderedRing>(a1: T, a2: T, b: T)
     requires
         a1.le(a2),
@@ -3071,23 +3071,23 @@ proof fn lemma_min_monotone_left<T: OrderedRing>(a1: T, a2: T, b: T)
     T::axiom_le_total(a2, b);
     if a1.le(b) {
         if a2.le(b) {
-            // min(a1,b)=a1, min(a2,b)=a2, a1≤a2
+            //  min(a1,b)=a1, min(a2,b)=a2, a1≤a2
         } else {
-            // min(a1,b)=a1, min(a2,b)=b, a1≤b
+            //  min(a1,b)=a1, min(a2,b)=b, a1≤b
         }
     } else {
-        // !a1.le(b) → b.le(a1). b.le(a1).le(a2) → b.le(a2)
+        //  !a1.le(b) → b.le(a1). b.le(a1).le(a2) → b.le(a2)
         T::axiom_le_transitive(b, a1, a2);
         if a2.le(b) {
-            // min(a1,b)=b, min(a2,b)=a2, b.le(a2)
+            //  min(a1,b)=b, min(a2,b)=a2, b.le(a2)
         } else {
-            // min(a1,b)=b, min(a2,b)=b
+            //  min(a1,b)=b, min(a2,b)=b
             T::axiom_le_reflexive(b);
         }
     }
 }
 
-/// intersect is monotone in self.max: wider self.max → wider intersect.max.
+///  intersect is monotone in self.max: wider self.max → wider intersect.max.
 proof fn lemma_intersect_monotone_max<T: OrderedRing>(
     limits1: Limits<T>,
     limits2: Limits<T>,
@@ -3102,26 +3102,26 @@ proof fn lemma_intersect_monotone_max<T: OrderedRing>(
     ensures
         limits1.intersect(other).max.le(limits2.intersect(other).max),
 {
-    // intersect.max.width = max(new_min, min(self.max.width, other.max.width))
-    // new_min = max(self.min.width, other.min.width)
-    // Since self.min is eqv across limits1/limits2, new_min is eqv
+    //  intersect.max.width = max(new_min, min(self.max.width, other.max.width))
+    //  new_min = max(self.min.width, other.min.width)
+    //  Since self.min is eqv across limits1/limits2, new_min is eqv
     lemma_max_congruence_left::<T>(
         limits1.min.width, limits2.min.width, other.min.width,
     );
     let new_min1 = max::<T>(limits1.min.width, other.min.width);
     let new_min2 = max::<T>(limits2.min.width, other.min.width);
 
-    // min(limits1.max.width, other.max.width) ≤ min(limits2.max.width, other.max.width)
+    //  min(limits1.max.width, other.max.width) ≤ min(limits2.max.width, other.max.width)
     lemma_min_monotone_left::<T>(
         limits1.max.width, limits2.max.width, other.max.width,
     );
-    // max(new_min1, min1) ≤ max(new_min1, min2) by monotone_right
+    //  max(new_min1, min1) ≤ max(new_min1, min2) by monotone_right
     lemma_max_monotone_right::<T>(
         min::<T>(limits1.max.width, other.max.width),
         min::<T>(limits2.max.width, other.max.width),
         new_min1,
     );
-    // max(new_min1, min2) eqv max(new_min2, min2) by congruence
+    //  max(new_min1, min2) eqv max(new_min2, min2) by congruence
     lemma_max_congruence_left::<T>(
         new_min1, new_min2,
         min::<T>(limits2.max.width, other.max.width),
@@ -3132,7 +3132,7 @@ proof fn lemma_intersect_monotone_max<T: OrderedRing>(
         max::<T>(new_min2, min::<T>(limits2.max.width, other.max.width)),
     );
 
-    // Height: symmetric
+    //  Height: symmetric
     lemma_max_congruence_left::<T>(
         limits1.min.height, limits2.min.height, other.min.height,
     );
@@ -3157,9 +3157,9 @@ proof fn lemma_intersect_monotone_max<T: OrderedRing>(
     );
 }
 
-// ── widget_wf helper specs (factored out for Z3 extractability) ─────
+//  ── widget_wf helper specs (factored out for Z3 extractability) ─────
 
-/// Grid child-fits-in-cell condition, factored from widget_wf so Z3 can extract it.
+///  Grid child-fits-in-cell condition, factored from widget_wf so Z3 can extract it.
 pub open spec fn widget_wf_grid_cells_fit<T: OrderedField>(
     limits: Limits<T>,
     padding: Padding<T>,
@@ -3182,7 +3182,7 @@ pub open spec fn widget_wf_grid_cells_fit<T: OrderedField>(
             .le(row_heights[r].height)
 }
 
-/// Absolute content-fits condition, factored from widget_wf so Z3 can extract it.
+///  Absolute content-fits condition, factored from widget_wf so Z3 can extract it.
 pub open spec fn widget_wf_absolute_content_fits<T: OrderedField>(
     limits: Limits<T>,
     padding: Padding<T>,
@@ -3198,11 +3198,11 @@ pub open spec fn widget_wf_absolute_content_fits<T: OrderedField>(
     && padding.vertical().add(content.height).le(limits.max.height)
 }
 
-// ── widget_wf: recursive well-formedness predicate for CWB ─────────
+//  ── widget_wf: recursive well-formedness predicate for CWB ─────────
 
-/// Recursive predicate capturing all preconditions needed for children_within_bounds.
-/// At fuel <= 1, only Leaf and Conditional(false) are well-formed (trivially cwb).
-/// For Conditional(visible=true), recurses into the child.
+///  Recursive predicate capturing all preconditions needed for children_within_bounds.
+///  At fuel <= 1, only Leaf and Conditional(false) are well-formed (trivially cwb).
+///  For Conditional(visible=true), recurses into the child.
 pub open spec fn widget_wf<T: OrderedField>(
     limits: Limits<T>,
     widget: Widget<T>,
@@ -3348,13 +3348,13 @@ pub open spec fn widget_wf<T: OrderedField>(
                         limits.min.width.le(w2) && T::zero().le(w2)
                     }
                 }),
-            // ScrollView intentionally breaks CWB (child at negative offsets),
-            // so widget_wf is never required for ScrollView — guarded by widget_cwb_ok.
+            //  ScrollView intentionally breaks CWB (child at negative offsets),
+            //  so widget_wf is never required for ScrollView — guarded by widget_cwb_ok.
             Widget::Wrapper(WrapperWidget::ScrollView { viewport, scroll_x, scroll_y, child }) =>
                 viewport.is_nonneg()
                 && T::zero().le(scroll_x)
                 && T::zero().le(scroll_y),
-            // ListView uses scroll offsets too, so children can be at negative y
+            //  ListView uses scroll offsets too, so children can be at negative y
             Widget::Container(ContainerWidget::ListView { spacing, scroll_y, viewport, children }) =>
                 viewport.is_nonneg()
                 && T::zero().le(scroll_y),
@@ -3363,8 +3363,8 @@ pub open spec fn widget_wf<T: OrderedField>(
     }
 }
 
-/// Predicate: widget tree supports children-within-bounds.
-/// Returns false for ScrollView (child can be at negative offsets).
+///  Predicate: widget tree supports children-within-bounds.
+///  Returns false for ScrollView (child can be at negative offsets).
 pub open spec fn widget_cwb_ok<T: OrderedRing>(widget: Widget<T>, fuel: nat) -> bool
     decreases fuel,
 {
@@ -3402,18 +3402,18 @@ pub open spec fn widget_cwb_ok<T: OrderedRing>(widget: Widget<T>, fuel: nat) -> 
                 widget_cwb_ok(*child, (fuel - 1) as nat),
             Widget::Wrapper(WrapperWidget::AspectRatio { child, .. }) =>
                 widget_cwb_ok(*child, (fuel - 1) as nat),
-            // ListView positions children with scroll offset → can be negative
+            //  ListView positions children with scroll offset → can be negative
             Widget::Container(ContainerWidget::ListView { .. }) => false,
             Widget::Leaf(LeafWidget::TextInput { .. }) => true,
         }
     }
 }
 
-// Grid and Absolute use separate helpers because their widget_wf conditions
-// include complex block expressions that Z3 can't extract from the large widget_wf match.
+//  Grid and Absolute use separate helpers because their widget_wf conditions
+//  include complex block expressions that Z3 can't extract from the large widget_wf match.
 
-/// Master CWB theorem: if limits.wf() and widget_wf(limits, widget, fuel),
-/// then layout_widget(limits, widget, fuel).children_within_bounds().
+///  Master CWB theorem: if limits.wf() and widget_wf(limits, widget, fuel),
+///  then layout_widget(limits, widget, fuel).children_within_bounds().
 pub proof fn lemma_layout_widget_cwb<T: OrderedField>(
     limits: Limits<T>,
     widget: Widget<T>,
@@ -3429,30 +3429,30 @@ pub proof fn lemma_layout_widget_cwb<T: OrderedField>(
     decreases fuel,
 {
     if fuel <= 1 {
-        // widget_wf at fuel<=1 only accepts Leaf and Conditional(false)
-        // Both produce empty children at any fuel > 0 → cwb trivially
+        //  widget_wf at fuel<=1 only accepts Leaf and Conditional(false)
+        //  Both produce empty children at any fuel > 0 → cwb trivially
         return;
     }
-    // fuel > 1 from here
+    //  fuel > 1 from here
     match widget {
         Widget::Leaf(LeafWidget::Leaf { size }) => {
-            // Empty children → cwb trivially
+            //  Empty children → cwb trivially
         },
         Widget::Container(ContainerWidget::Column { padding, spacing, alignment, children }) => {
             let inner = limits.shrink(padding.horizontal(), padding.vertical());
             let cn = widget_child_nodes(inner, children, (fuel - 1) as nat);
             let child_sizes = Seq::new(cn.len(), |i: int| cn[i].size);
 
-            // Bridge: sum_main(Vertical) == sum_heights, so Z3 derives
-            // linear_content_main(Vertical) == column_content_height
+            //  Bridge: sum_main(Vertical) == sum_heights, so Z3 derives
+            //  linear_content_main(Vertical) == column_content_height
             lemma_sum_main_eq_sum_heights::<T>(child_sizes, child_sizes.len() as nat);
 
-            // Prove CWB on the linear_layout
+            //  Prove CWB on the linear_layout
             lemma_linear_children_within_bounds(
                 limits, padding, spacing, alignment, children, Axis::Vertical, fuel,
             );
 
-            // Bridge to merge_layout CWB
+            //  Bridge to merge_layout CWB
             reveal(linear_layout);
             let layout = linear_layout(limits, padding, spacing, alignment, child_sizes, Axis::Vertical);
             let avail_cross = limits.max.width.sub(padding.horizontal());
@@ -3466,8 +3466,8 @@ pub proof fn lemma_layout_widget_cwb<T: OrderedField>(
                 && layout.children[i].y.add(cn[i].size.height).le(layout.size.height)
             by {
                 lemma_linear_children_element(padding, spacing, alignment, child_sizes, Axis::Vertical, avail_cross, i as nat);
-                // layout.children[i].size == child_sizes[i] == cn[i].size
-                // So CWB bounds transfer from pre-merge to merge_layout_cwb
+                //  layout.children[i].size == child_sizes[i] == cn[i].size
+                //  So CWB bounds transfer from pre-merge to merge_layout_cwb
             };
 
             lemma_merge_layout_cwb(layout, cn);
@@ -3541,7 +3541,7 @@ pub proof fn lemma_layout_widget_cwb<T: OrderedField>(
         },
         Widget::Wrapper(WrapperWidget::Conditional { visible, child }) => {
             if visible {
-                // Recursive: prove child's cwb first, then use conditional lemma
+                //  Recursive: prove child's cwb first, then use conditional lemma
                 lemma_layout_widget_cwb(limits, *child, (fuel - 1) as nat);
                 lemma_conditional_visible_children_within_bounds(limits, *child, fuel);
             } else {
@@ -3555,27 +3555,27 @@ pub proof fn lemma_layout_widget_cwb<T: OrderedField>(
             lemma_aspect_ratio_children_within_bounds(limits, ratio, *child, fuel);
         },
         Widget::Wrapper(WrapperWidget::ScrollView { .. }) => {
-            // Excluded by widget_cwb_ok (returns false for ScrollView)
+            //  Excluded by widget_cwb_ok (returns false for ScrollView)
             assert(false);
         },
         Widget::Container(ContainerWidget::ListView { .. }) => {
-            // Excluded by widget_cwb_ok (returns false for ListView)
+            //  Excluded by widget_cwb_ok (returns false for ListView)
             assert(false);
         },
         Widget::Leaf(LeafWidget::TextInput { .. }) => {
-            // Leaf-like: empty children → cwb trivially
+            //  Leaf-like: empty children → cwb trivially
         },
     }
 }
 
-// ── Layout widget size monotonicity ─────────────────────────────────
+//  ── Layout widget size monotonicity ─────────────────────────────────
 
-/// AspectRatio effective-limits monotonicity helper.
+///  AspectRatio effective-limits monotonicity helper.
 ///
-/// Given limits1.max ≤ limits2.max (same min) and 0 < ratio, the effective
-/// limits chosen by AspectRatio's branch logic satisfy eff1.max ≤ eff2.max.
+///  Given limits1.max ≤ limits2.max (same min) and 0 < ratio, the effective
+///  limits chosen by AspectRatio's branch logic satisfy eff1.max ≤ eff2.max.
 ///
-/// 4 branch cases: (width-first, width-first), (hf, hf), (wf, hf), (hf, wf).
+///  4 branch cases: (width-first, width-first), (hf, hf), (wf, hf), (hf, wf).
 proof fn lemma_aspect_ratio_eff_monotone<T: OrderedField>(
     limits1: Limits<T>,
     limits2: Limits<T>,
@@ -3613,31 +3613,31 @@ proof fn lemma_aspect_ratio_eff_monotone<T: OrderedField>(
     let h1 = w1.div(ratio);
     let h2 = w2.div(ratio);
 
-    // 0 < ratio → 0 ≤ ratio
+    //  0 < ratio → 0 ≤ ratio
     T::axiom_lt_iff_le_and_not_eqv(T::zero(), ratio);
-    // !zero.eqv(ratio)
+    //  !zero.eqv(ratio)
     T::axiom_eqv_symmetric(T::zero(), ratio);
-    // So !ratio.eqv(zero) — needed for div_mul_cancel
+    //  So !ratio.eqv(zero) — needed for div_mul_cancel
 
     if h1.le(h_max1) {
         if h2.le(h_max2) {
-            // Case WF→WF: eff1=(w1, w1/r), eff2=(w2, w2/r)
-            // w1 ≤ w2 from limits
-            // w1/r ≤ w2/r by div monotone
+            //  Case WF→WF: eff1=(w1, w1/r), eff2=(w2, w2/r)
+            //  w1 ≤ w2 from limits
+            //  w1/r ≤ w2/r by div monotone
             verus_algebra::lemmas::ordered_field_lemmas::lemma_le_div_monotone::<T>(
                 w1, w2, ratio,
             );
         } else {
-            // Case WF→HF: eff1=(w1, w1/r), eff2=(h_max2*r, h_max2)
-            // w1/r ≤ h_max1 (branch cond) and h_max1 ≤ h_max2 (limits)
+            //  Case WF→HF: eff1=(w1, w1/r), eff2=(h_max2*r, h_max2)
+            //  w1/r ≤ h_max1 (branch cond) and h_max1 ≤ h_max2 (limits)
             T::axiom_le_transitive(h1, h_max1, h_max2);
-            // So w1/r ≤ h_max2 ✓
-            // For w1 ≤ h_max2*r: multiply (w1/r ≤ h_max2) by r ≥ 0
+            //  So w1/r ≤ h_max2 ✓
+            //  For w1 ≤ h_max2*r: multiply (w1/r ≤ h_max2) by r ≥ 0
             T::axiom_le_mul_nonneg_monotone(h1, h_max2, ratio);
-            // gives (w1/r)*r ≤ h_max2*r
-            // (w1/r)*r ≡ w1 by div_mul_cancel
+            //  gives (w1/r)*r ≤ h_max2*r
+            //  (w1/r)*r ≡ w1 by div_mul_cancel
             verus_algebra::lemmas::field_lemmas::lemma_div_mul_cancel::<T>(w1, ratio);
-            // w1 ≤ h_max2*r by congruence
+            //  w1 ≤ h_max2*r by congruence
             T::axiom_eqv_reflexive(h_max2.mul(ratio));
             T::axiom_le_congruence(
                 h1.mul(ratio), w1,
@@ -3645,21 +3645,21 @@ proof fn lemma_aspect_ratio_eff_monotone<T: OrderedField>(
             );
         }
     } else {
-        // L1 takes height-first: ¬(w1/r ≤ h_max1) → h_max1 ≤ w1/r
+        //  L1 takes height-first: ¬(w1/r ≤ h_max1) → h_max1 ≤ w1/r
         T::axiom_le_total(h1, h_max1);
-        // h_max1.le(h1) = h_max1 ≤ w1/r
+        //  h_max1.le(h1) = h_max1 ≤ w1/r
 
         if h2.le(h_max2) {
-            // Case HF→WF: eff1=(h_max1*r, h_max1), eff2=(w2, w2/r)
-            // h_max1 ≤ w1/r ≤ w2/r (div monotone + transitive)
+            //  Case HF→WF: eff1=(h_max1*r, h_max1), eff2=(w2, w2/r)
+            //  h_max1 ≤ w1/r ≤ w2/r (div monotone + transitive)
             verus_algebra::lemmas::ordered_field_lemmas::lemma_le_div_monotone::<T>(
                 w1, w2, ratio,
             );
             T::axiom_le_transitive(h_max1, h1, h2);
-            // So h_max1 ≤ w2/r ✓
-            // For h_max1*r ≤ w2: multiply (h_max1 ≤ w1/r) by r ≥ 0
+            //  So h_max1 ≤ w2/r ✓
+            //  For h_max1*r ≤ w2: multiply (h_max1 ≤ w1/r) by r ≥ 0
             T::axiom_le_mul_nonneg_monotone(h_max1, h1, ratio);
-            // h_max1*r ≤ (w1/r)*r ≡ w1 ≤ w2
+            //  h_max1*r ≤ (w1/r)*r ≡ w1 ≤ w2
             verus_algebra::lemmas::field_lemmas::lemma_div_mul_cancel::<T>(w1, ratio);
             T::axiom_eqv_reflexive(h_max1.mul(ratio));
             T::axiom_le_congruence(
@@ -3668,17 +3668,17 @@ proof fn lemma_aspect_ratio_eff_monotone<T: OrderedField>(
             );
             T::axiom_le_transitive(h_max1.mul(ratio), w1, w2);
         } else {
-            // Case HF→HF: eff1=(h_max1*r, h_max1), eff2=(h_max2*r, h_max2)
-            // h_max1 ≤ h_max2 from limits
-            // h_max1*r ≤ h_max2*r by mul nonneg monotone
+            //  Case HF→HF: eff1=(h_max1*r, h_max1), eff2=(h_max2*r, h_max2)
+            //  h_max1 ≤ h_max2 from limits
+            //  h_max1*r ≤ h_max2*r by mul nonneg monotone
             T::axiom_le_mul_nonneg_monotone(h_max1, h_max2, ratio);
         }
     }
 }
 
-/// Predicate: widget tree contains no Wrap nodes (for which pointwise-size
-/// monotonicity doesn't hold). AspectRatio requires ratio > 0.
-/// Grid children are excluded from the check because they use fixed cell limits.
+///  Predicate: widget tree contains no Wrap nodes (for which pointwise-size
+///  monotonicity doesn't hold). AspectRatio requires ratio > 0.
+///  Grid children are excluded from the check because they use fixed cell limits.
 pub open spec fn widget_size_monotone_ok<T: OrderedRing>(
     widget: Widget<T>,
     fuel: nat,
@@ -3722,13 +3722,13 @@ pub open spec fn widget_size_monotone_ok<T: OrderedRing>(
     }
 }
 
-/// Recursive well-formedness predicate for monotonicity proofs.
+///  Recursive well-formedness predicate for monotonicity proofs.
 ///
-/// Tracks that AspectRatio effective limits are wf through the widget tree.
-/// For containers, recurses into children under the same inner limits that
-/// the monotonicity proof uses. For Flex/Grid/Leaf/Wrap, returns true
-/// (Flex/Grid don't recurse in the monotonicity proof, Leaf is trivial,
-/// Wrap is excluded by widget_size_monotone_ok).
+///  Tracks that AspectRatio effective limits are wf through the widget tree.
+///  For containers, recurses into children under the same inner limits that
+///  the monotonicity proof uses. For Flex/Grid/Leaf/Wrap, returns true
+///  (Flex/Grid don't recurse in the monotonicity proof, Leaf is trivial,
+///  Wrap is excluded by widget_size_monotone_ok).
 pub closed spec fn widget_monotone_wf<T: OrderedField>(
     limits: Limits<T>,
     widget: Widget<T>,
@@ -3796,7 +3796,7 @@ pub closed spec fn widget_monotone_wf<T: OrderedField>(
     }
 }
 
-/// Master monotonicity: widening limits.max (with same min) widens the output size.
+///  Master monotonicity: widening limits.max (with same min) widens the output size.
 pub proof fn lemma_layout_widget_monotone<T: OrderedField>(
     limits1: Limits<T>,
     limits2: Limits<T>,
@@ -3818,7 +3818,7 @@ pub proof fn lemma_layout_widget_monotone<T: OrderedField>(
 {
     reveal(widget_monotone_wf);
     if fuel == 0 {
-        // Both return zero node → trivially equal
+        //  Both return zero node → trivially equal
         T::axiom_le_reflexive(T::zero());
         return;
     }
@@ -3847,7 +3847,7 @@ pub proof fn lemma_layout_widget_monotone<T: OrderedField>(
             lemma_layout_widget_monotone(inner1, inner2, *child, (fuel - 1) as nat);
             let cs1 = layout_widget(inner1, *child, (fuel - 1) as nat).size;
             let cs2 = layout_widget(inner2, *child, (fuel - 1) as nat).size;
-            // total1 = (h + cs1.w, v + cs1.h) ≤ (h + cs2.w, v + cs2.h) = total2
+            //  total1 = (h + cs1.w, v + cs1.h) ≤ (h + cs2.w, v + cs2.h) = total2
             T::axiom_le_add_monotone(cs1.width, cs2.width, h);
             T::axiom_add_commutative(cs1.width, h);
             T::axiom_add_commutative(cs2.width, h);
@@ -3871,19 +3871,19 @@ pub proof fn lemma_layout_widget_monotone<T: OrderedField>(
         Widget::Wrapper(WrapperWidget::SizedBox { inner_limits, child }) => {
             let eff1 = limits1.intersect(inner_limits);
             let eff2 = limits2.intersect(inner_limits);
-            // intersect monotone in self.max
+            //  intersect monotone in self.max
             lemma_intersect_monotone_max(limits1, limits2, inner_limits);
-            // intersect preserves min eqv (max of eqv components)
+            //  intersect preserves min eqv (max of eqv components)
             lemma_max_congruence_left::<T>(
                 limits1.min.width, limits2.min.width, inner_limits.min.width,
             );
             lemma_max_congruence_left::<T>(
                 limits1.min.height, limits2.min.height, inner_limits.min.height,
             );
-            // eff wf: intersect of wf limits is wf
-            // (min ≤ max by construction: max = max(new_min, min(self.max, other.max)) ≥ new_min = min)
-            // Need to establish wf for eff1, eff2
-            // intersect.min ≤ intersect.max: max is defined as max(new_min, ...) ≥ new_min = min
+            //  eff wf: intersect of wf limits is wf
+            //  (min ≤ max by construction: max = max(new_min, min(self.max, other.max)) ≥ new_min = min)
+            //  Need to establish wf for eff1, eff2
+            //  intersect.min ≤ intersect.max: max is defined as max(new_min, ...) ≥ new_min = min
             lemma_intersect_wf(limits1, inner_limits);
             lemma_intersect_wf(limits2, inner_limits);
             lemma_layout_widget_monotone(eff1, eff2, *child, (fuel - 1) as nat);
@@ -3909,7 +3909,7 @@ pub proof fn lemma_layout_widget_monotone<T: OrderedField>(
             by {
                 lemma_layout_widget_monotone(inner1, inner2, children[i], (fuel - 1) as nat);
             };
-            // main_dim monotone (Vertical → height)
+            //  main_dim monotone (Vertical → height)
             assert forall|i: int| 0 <= i < cs1.len() as int implies
                 cs1[i].main_dim(Axis::Vertical).le(cs2[i].main_dim(Axis::Vertical))
             by {};
@@ -3999,12 +3999,12 @@ pub proof fn lemma_layout_widget_monotone<T: OrderedField>(
             by {
                 lemma_layout_widget_monotone(inner1, inner2, children[i], (fuel - 1) as nat);
             };
-            // content = (max_width, max_height)
+            //  content = (max_width, max_height)
             lemma_max_width_pointwise_monotone::<T>(cs1, cs2, cs1.len() as nat);
             lemma_max_height_pointwise_monotone::<T>(cs1, cs2, cs1.len() as nat);
             let cont1 = crate::layout::stack::stack_content_size(cs1);
             let cont2 = crate::layout::stack::stack_content_size(cs2);
-            // total = (h + cont_w, v + cont_h)
+            //  total = (h + cont_w, v + cont_h)
             T::axiom_le_reflexive(h);
             T::axiom_le_reflexive(v);
             verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_add_both::<T>(
@@ -4022,7 +4022,7 @@ pub proof fn lemma_layout_widget_monotone<T: OrderedField>(
         Widget::Container(ContainerWidget::Flex { padding, spacing, alignment, direction, children }) => {
             reveal(flex_column_layout);
             reveal(flex_row_layout);
-            // Flex output size = limits.resolve(limits.max) regardless of direction
+            //  Flex output size = limits.resolve(limits.max) regardless of direction
             lemma_resolve_monotone_input_and_max(
                 limits1, limits2, limits1.max, limits2.max,
             );
@@ -4030,9 +4030,9 @@ pub proof fn lemma_layout_widget_monotone<T: OrderedField>(
         Widget::Container(ContainerWidget::Grid { padding, h_spacing, v_spacing, h_align, v_align,
                        col_widths, row_heights, children }) => {
             reveal(grid_layout);
-            // Grid content is fixed (determined by col_widths, row_heights)
-            // Output = limits.resolve(Size(h + content_w, v + content_h))
-            // Same content → resolve_monotone_max
+            //  Grid content is fixed (determined by col_widths, row_heights)
+            //  Output = limits.resolve(Size(h + content_w, v + content_h))
+            //  Same content → resolve_monotone_max
             let h = padding.horizontal();
             let v = padding.vertical();
             let cw = grid_content_width(col_widths, h_spacing);
@@ -4053,18 +4053,18 @@ pub proof fn lemma_layout_widget_monotone<T: OrderedField>(
             lemma_shrink_monotone_max(limits1, limits2, h, v);
             let cn1 = absolute_widget_child_nodes(inner1, children, (fuel - 1) as nat);
             let cn2 = absolute_widget_child_nodes(inner2, children, (fuel - 1) as nat);
-            // Inductive: child sizes monotone
+            //  Inductive: child sizes monotone
             assert forall|i: int| 0 <= i < children.len() implies
                 cn1[i].size.le(cn2[i].size)
             by {
                 lemma_layout_widget_monotone(inner1, inner2, children[i].child, (fuel - 1) as nat);
             };
-            // Content bounding box monotone (same offsets, wider sizes)
+            //  Content bounding box monotone (same offsets, wider sizes)
             let cd1 = Seq::new(cn1.len(), |i: int|
                 (children[i].x, children[i].y, cn1[i].size));
             let cd2 = Seq::new(cn2.len(), |i: int|
                 (children[i].x, children[i].y, cn2[i].size));
-            // Bridge: cd matches what layout_absolute_body constructs
+            //  Bridge: cd matches what layout_absolute_body constructs
             let offsets = Seq::new(children.len(), |i: int|
                 (children[i].x, children[i].y));
             let body_cd1 = Seq::new(cn1.len(), |i: int|
@@ -4091,12 +4091,12 @@ pub proof fn lemma_layout_widget_monotone<T: OrderedField>(
             );
         },
         Widget::Container(ContainerWidget::Wrap { .. }) => {
-            // Excluded by widget_size_monotone_ok (returns false)
-            // Precondition is vacuously false
+            //  Excluded by widget_size_monotone_ok (returns false)
+            //  Precondition is vacuously false
             assert(false);
         },
         Widget::Wrapper(WrapperWidget::AspectRatio { ratio, child }) => {
-            // Compute eff1 and eff2 (same branch logic as layout_widget)
+            //  Compute eff1 and eff2 (same branch logic as layout_widget)
             let w1_1 = limits1.max.width;
             let h1_1 = w1_1.div(ratio);
             let eff1 = if h1_1.le(limits1.max.height) {
@@ -4114,23 +4114,23 @@ pub proof fn lemma_layout_widget_monotone<T: OrderedField>(
                 Limits { min: limits2.min, max: Size::new(w2_2, limits2.max.height) }
             };
 
-            // eff1.wf() from widget_monotone_wf
-            // eff1.max ≤ eff2.max from lemma_aspect_ratio_eff_monotone
+            //  eff1.wf() from widget_monotone_wf
+            //  eff1.max ≤ eff2.max from lemma_aspect_ratio_eff_monotone
             lemma_aspect_ratio_eff_monotone(limits1, limits2, ratio);
 
-            // eff1.min ≡ eff2.min (both are limits.min, which are eqv)
-            // (eff1.min = limits1.min, eff2.min = limits2.min)
+            //  eff1.min ≡ eff2.min (both are limits.min, which are eqv)
+            //  (eff1.min = limits1.min, eff2.min = limits2.min)
 
-            // Derive eff2.wf() from eff1.wf() + eff1.max ≤ eff2.max + same min
-            // min ≤ eff1.max (from eff1.wf) and eff1.max ≤ eff2.max → min ≤ eff2.max
+            //  Derive eff2.wf() from eff1.wf() + eff1.max ≤ eff2.max + same min
+            //  min ≤ eff1.max (from eff1.wf) and eff1.max ≤ eff2.max → min ≤ eff2.max
             T::axiom_le_transitive(
                 eff1.min.width, eff1.max.width, eff2.max.width,
             );
             T::axiom_le_transitive(
                 eff1.min.height, eff1.max.height, eff2.max.height,
             );
-            // eff2.min = limits2.min, eff1.min = limits1.min, limits1.min ≡ limits2.min
-            // So eff1.min ≡ eff2.min → eff2.min ≤ eff2.max by congruence
+            //  eff2.min = limits2.min, eff1.min = limits1.min, limits1.min ≡ limits2.min
+            //  So eff1.min ≡ eff2.min → eff2.min ≤ eff2.max by congruence
             T::axiom_eqv_reflexive(eff2.max.width);
             T::axiom_eqv_reflexive(eff2.max.height);
             T::axiom_le_congruence(
@@ -4141,8 +4141,8 @@ pub proof fn lemma_layout_widget_monotone<T: OrderedField>(
                 eff1.min.height, eff2.min.height,
                 eff2.max.height, eff2.max.height,
             );
-            // eff2.min nonneg: from limits2.wf()
-            // eff2.max nonneg: 0 ≤ eff2.min ≤ eff2.max
+            //  eff2.min nonneg: from limits2.wf()
+            //  eff2.max nonneg: 0 ≤ eff2.min ≤ eff2.max
             T::axiom_le_transitive(
                 T::zero(), eff2.min.width, eff2.max.width,
             );
@@ -4150,22 +4150,22 @@ pub proof fn lemma_layout_widget_monotone<T: OrderedField>(
                 T::zero(), eff2.min.height, eff2.max.height,
             );
 
-            // Recursive call: child sizes monotone under eff1 vs eff2
+            //  Recursive call: child sizes monotone under eff1 vs eff2
             lemma_layout_widget_monotone(eff1, eff2, *child, (fuel - 1) as nat);
             let cs1 = layout_widget(eff1, *child, (fuel - 1) as nat).size;
             let cs2 = layout_widget(eff2, *child, (fuel - 1) as nat).size;
 
-            // Output = limits.resolve(child_size), monotone in both limits.max and input
+            //  Output = limits.resolve(child_size), monotone in both limits.max and input
             lemma_resolve_monotone_input_and_max(limits1, limits2, cs1, cs2);
         },
         Widget::Wrapper(WrapperWidget::ScrollView { viewport, scroll_x, scroll_y, child }) => {
-            // Output = limits.resolve(viewport), same viewport for both.
-            // Monotone in limits.max only.
+            //  Output = limits.resolve(viewport), same viewport for both.
+            //  Monotone in limits.max only.
             lemma_resolve_monotone_max(limits1, limits2, viewport);
         },
         Widget::Container(ContainerWidget::ListView { spacing, scroll_y, viewport, children }) => {
             reveal(layout_listview_body);
-            // Output = limits.resolve(viewport), same viewport for both.
+            //  Output = limits.resolve(viewport), same viewport for both.
             lemma_resolve_monotone_max(limits1, limits2, viewport);
         },
         Widget::Leaf(LeafWidget::TextInput { preferred_size, .. }) => {
@@ -4174,7 +4174,7 @@ pub proof fn lemma_layout_widget_monotone<T: OrderedField>(
     }
 }
 
-/// Absolute content size is monotone: same offsets, larger child sizes → larger bounding box.
+///  Absolute content size is monotone: same offsets, larger child sizes → larger bounding box.
 proof fn lemma_absolute_content_monotone<T: OrderedRing>(
     cd1: Seq<(T, T, Size<T>)>,
     cd2: Seq<(T, T, Size<T>)>,
@@ -4182,8 +4182,8 @@ proof fn lemma_absolute_content_monotone<T: OrderedRing>(
     requires
         cd1.len() == cd2.len(),
         forall|i: int| 0 <= i < cd1.len() ==> {
-            &&& cd1[i].0 === cd2[i].0  // same x offsets
-            &&& cd1[i].1 === cd2[i].1  // same y offsets
+            &&& cd1[i].0 === cd2[i].0  //  same x offsets
+            &&& cd1[i].1 === cd2[i].1  //  same y offsets
             &&& cd1[i].2.width.le(cd2[i].2.width)
             &&& cd1[i].2.height.le(cd2[i].2.height)
         },
@@ -4213,7 +4213,7 @@ proof fn lemma_absolute_max_right_monotone<T: OrderedRing>(
 {
     if count > 0 {
         lemma_absolute_max_right_monotone::<T>(cd1, cd2, (count - 1) as nat);
-        // x + w1 ≤ x + w2 (same x, w1 ≤ w2)
+        //  x + w1 ≤ x + w2 (same x, w1 ≤ w2)
         T::axiom_le_add_monotone(
             cd1[(count - 1) as int].2.width,
             cd2[(count - 1) as int].2.width,
@@ -4280,11 +4280,11 @@ proof fn lemma_absolute_max_bottom_monotone<T: OrderedRing>(
     }
 }
 
-// ══════════════════════════════════════════════════════════════════════
-// ── Unified linear layout proofs (axis-parameterized) ────────────────
-// ══════════════════════════════════════════════════════════════════════
+//  ══════════════════════════════════════════════════════════════════════
+//  ── Unified linear layout proofs (axis-parameterized) ────────────────
+//  ══════════════════════════════════════════════════════════════════════
 
-/// sum_main(sizes, axis, 0) ≡ zero.
+///  sum_main(sizes, axis, 0) ≡ zero.
 pub proof fn lemma_sum_main_zero<T: OrderedRing>(sizes: Seq<Size<T>>, axis: Axis)
     ensures
         sum_main(sizes, axis, 0).eqv(T::zero()),
@@ -4292,7 +4292,7 @@ pub proof fn lemma_sum_main_zero<T: OrderedRing>(sizes: Seq<Size<T>>, axis: Axis
     T::axiom_eqv_reflexive(T::zero());
 }
 
-/// If all main-axis dimensions are non-negative, sum_main is non-negative.
+///  If all main-axis dimensions are non-negative, sum_main is non-negative.
 pub proof fn lemma_sum_main_nonneg<T: OrderedRing>(
     sizes: Seq<Size<T>>,
     axis: Axis,
@@ -4326,7 +4326,7 @@ pub proof fn lemma_sum_main_nonneg<T: OrderedRing>(
     }
 }
 
-/// sum_main is monotone: i <= j implies sum_main(sizes, axis, i) <= sum_main(sizes, axis, j).
+///  sum_main is monotone: i <= j implies sum_main(sizes, axis, i) <= sum_main(sizes, axis, j).
 pub proof fn lemma_sum_main_monotone<T: OrderedRing>(
     sizes: Seq<Size<T>>,
     axis: Axis,
@@ -4357,7 +4357,7 @@ pub proof fn lemma_sum_main_monotone<T: OrderedRing>(
     }
 }
 
-/// sum_main gives the same result when the first `count` elements are identical.
+///  sum_main gives the same result when the first `count` elements are identical.
 pub proof fn lemma_sum_main_ext_equal<T: OrderedRing>(
     a: Seq<Size<T>>,
     b: Seq<Size<T>>,
@@ -4378,7 +4378,7 @@ pub proof fn lemma_sum_main_ext_equal<T: OrderedRing>(
     }
 }
 
-/// sum_main is monotone in pointwise-larger main-axis dimensions.
+///  sum_main is monotone in pointwise-larger main-axis dimensions.
 pub proof fn lemma_sum_main_pointwise_monotone<T: OrderedRing>(
     sizes1: Seq<Size<T>>,
     sizes2: Seq<Size<T>>,
@@ -4407,7 +4407,7 @@ pub proof fn lemma_sum_main_pointwise_monotone<T: OrderedRing>(
     }
 }
 
-/// The linear content main-axis dimension is non-negative.
+///  The linear content main-axis dimension is non-negative.
 pub proof fn lemma_linear_content_main_nonneg<T: OrderedRing>(
     child_sizes: Seq<Size<T>>,
     axis: Axis,
@@ -4440,7 +4440,7 @@ pub proof fn lemma_linear_content_main_nonneg<T: OrderedRing>(
     }
 }
 
-/// Adding a child increases linear content main dimension.
+///  Adding a child increases linear content main dimension.
 pub proof fn lemma_linear_content_main_monotone<T: OrderedRing>(
     child_sizes: Seq<Size<T>>,
     new_size: Size<T>,
@@ -4485,7 +4485,7 @@ pub proof fn lemma_linear_content_main_monotone<T: OrderedRing>(
     }
 }
 
-/// child_main_position(ps, sizes, axis, sp, i) ≡ ps + sum_main(sizes, axis, i) + repeated_add(sp, i).
+///  child_main_position(ps, sizes, axis, sp, i) ≡ ps + sum_main(sizes, axis, i) + repeated_add(sp, i).
 pub proof fn lemma_child_main_position_identity<T: OrderedRing>(
     ps: T,
     sizes: Seq<Size<T>>,
@@ -4553,7 +4553,7 @@ pub proof fn lemma_child_main_position_identity<T: OrderedRing>(
     }
 }
 
-/// Consecutive children don't overlap on main axis.
+///  Consecutive children don't overlap on main axis.
 pub proof fn lemma_linear_children_nonoverlapping<T: OrderedRing>(
     padding_start: T,
     child_sizes: Seq<Size<T>>,
@@ -4588,7 +4588,7 @@ pub proof fn lemma_linear_children_nonoverlapping<T: OrderedRing>(
     );
 }
 
-/// Main-axis lower bound: padding_start <= child_main_position.
+///  Main-axis lower bound: padding_start <= child_main_position.
 pub proof fn lemma_linear_child_main_lower_bound<T: OrderedRing>(
     padding_start: T,
     child_sizes: Seq<Size<T>>,
@@ -4619,7 +4619,7 @@ pub proof fn lemma_linear_child_main_lower_bound<T: OrderedRing>(
     }
 }
 
-/// Main-axis upper bound: child end <= start + content_main.
+///  Main-axis upper bound: child end <= start + content_main.
 pub proof fn lemma_linear_child_main_upper_bound<T: OrderedRing>(
     ps: T,
     sizes: Seq<Size<T>>,
@@ -4717,7 +4717,7 @@ pub proof fn lemma_linear_child_main_upper_bound<T: OrderedRing>(
     );
 }
 
-/// Length of linear_children sequence.
+///  Length of linear_children sequence.
 pub proof fn lemma_linear_children_len<T: OrderedField>(
     padding: Padding<T>,
     spacing: T,
@@ -4740,7 +4740,7 @@ pub proof fn lemma_linear_children_len<T: OrderedField>(
     }
 }
 
-/// Element access into linear_children (shifted).
+///  Element access into linear_children (shifted).
 proof fn lemma_linear_children_element_shifted<T: OrderedField>(
     padding: Padding<T>,
     spacing: T,
@@ -4784,7 +4784,7 @@ proof fn lemma_linear_children_element_shifted<T: OrderedField>(
     }
 }
 
-/// Element access into linear_children at index k from the beginning.
+///  Element access into linear_children at index k from the beginning.
 pub proof fn lemma_linear_children_element<T: OrderedField>(
     padding: Padding<T>,
     spacing: T,
@@ -4815,7 +4815,7 @@ pub proof fn lemma_linear_children_element<T: OrderedField>(
     lemma_linear_children_element_shifted(padding, spacing, alignment, child_sizes, axis, available_cross, 0, k);
 }
 
-/// Linear children within bounds proof (unified column/row CWB).
+///  Linear children within bounds proof (unified column/row CWB).
 pub proof fn lemma_linear_children_within_bounds<T: OrderedField>(
     limits: Limits<T>,
     padding: Padding<T>,
@@ -4862,19 +4862,19 @@ pub proof fn lemma_linear_children_within_bounds<T: OrderedField>(
     let total_main = padding.main_padding(axis).add(content_main);
     let input_size = Size::from_axes(axis, total_main, limits.max.cross_dim(axis));
 
-    // Padding sums are nonneg
+    //  Padding sums are nonneg
     lemma_nonneg_sum(padding.left, padding.right);
     lemma_nonneg_sum(padding.top, padding.bottom);
 
-    // inner.wf() + shrink bounds (always shrink by (h, v))
+    //  inner.wf() + shrink bounds (always shrink by (h, v))
     lemma_shrink_wf(limits, h, v);
     lemma_add_comm_le(h, limits.min.width, limits.max.width);
     lemma_add_comm_le(v, limits.min.height, limits.max.height);
     lemma_shrink_max_bound(limits, h, v);
 
-    // inner.max.cross_dim(axis) ≤ avail_cross
-    // For Vertical: cross=width, avail_cross = max.w - h, inner.max.w + h ≤ max.w
-    // For Horizontal: cross=height, avail_cross = max.h - v, inner.max.h + v ≤ max.h
+    //  inner.max.cross_dim(axis) ≤ avail_cross
+    //  For Vertical: cross=width, avail_cross = max.w - h, inner.max.w + h ≤ max.w
+    //  For Horizontal: cross=height, avail_cross = max.h - v, inner.max.h + v ≤ max.h
     match axis {
         Axis::Vertical => {
             verus_algebra::lemmas::additive_group_lemmas::lemma_sub_then_add_cancel::<T>(
@@ -4898,7 +4898,7 @@ pub proof fn lemma_linear_children_within_bounds<T: OrderedField>(
         },
     }
 
-    // Each child: cross_dim ≤ avail_cross and both dims nonneg
+    //  Each child: cross_dim ≤ avail_cross and both dims nonneg
     assert forall|k: int| 0 <= k < cn.len() implies
         child_sizes[k].cross_dim(axis).le(avail_cross)
         && T::zero().le(child_sizes[k].width)
@@ -4918,27 +4918,27 @@ pub proof fn lemma_linear_children_within_bounds<T: OrderedField>(
         T::axiom_le_transitive(T::zero(), inner.min.height, child_sizes[k].height);
     };
 
-    // Resolve: cross dimension is fixed at max, so resolves to max
+    //  Resolve: cross dimension is fixed at max, so resolves to max
     T::axiom_le_reflexive(limits.max.cross_dim(axis));
     lemma_resolve_ge_input(limits, input_size);
 
     match axis {
         Axis::Vertical => {
-            // resolve.w ≡ max.w
+            //  resolve.w ≡ max.w
             lemma_resolve_le_max_width(limits, input_size);
             T::axiom_le_antisymmetric(limits.resolve(input_size).width, limits.max.width);
         },
         Axis::Horizontal => {
-            // resolve.h ≡ max.h
+            //  resolve.h ≡ max.h
             lemma_resolve_le_max_height(limits, input_size);
             T::axiom_le_antisymmetric(limits.resolve(input_size).height, limits.max.height);
         },
     }
 
-    // cross_start + avail_cross ≤ max_cross
+    //  cross_start + avail_cross ≤ max_cross
     match axis {
         Axis::Vertical => {
-            // left + avail_w ≤ max.w
+            //  left + avail_w ≤ max.w
             lemma_le_add_nonneg(padding.left, padding.right);
             T::axiom_le_add_monotone(padding.left, h, avail_cross);
             T::axiom_add_commutative(h, avail_cross);
@@ -4953,7 +4953,7 @@ pub proof fn lemma_linear_children_within_bounds<T: OrderedField>(
             );
         },
         Axis::Horizontal => {
-            // top + avail_h ≤ max.h
+            //  top + avail_h ≤ max.h
             lemma_le_add_nonneg(padding.top, padding.bottom);
             T::axiom_le_add_monotone(padding.top, v, avail_cross);
             T::axiom_add_commutative(v, avail_cross);
@@ -4969,7 +4969,7 @@ pub proof fn lemma_linear_children_within_bounds<T: OrderedField>(
         },
     }
 
-    // main_start + content_main ≤ total_main
+    //  main_start + content_main ≤ total_main
     match axis {
         Axis::Vertical => {
             lemma_le_add_nonneg(padding.top, padding.bottom);
@@ -4981,7 +4981,7 @@ pub proof fn lemma_linear_children_within_bounds<T: OrderedField>(
         },
     }
 
-    // Linear children structure
+    //  Linear children structure
     lemma_linear_children_len(padding, spacing, alignment, child_sizes, axis, avail_cross, 0);
 
     reveal(linear_layout);
@@ -4990,9 +4990,9 @@ pub proof fn lemma_linear_children_within_bounds<T: OrderedField>(
     let cs = padding.cross_start(axis);
     let ms = padding.main_start(axis);
 
-    // Per-child bounds: prove children_within_bounds directly on linear_layout result.
-    // layout.children[i] = linear_children[i] = Node::leaf(x, y, child_sizes[i])
-    // so layout.children[i].size == child_sizes[i]
+    //  Per-child bounds: prove children_within_bounds directly on linear_layout result.
+    //  layout.children[i] = linear_children[i] = Node::leaf(x, y, child_sizes[i])
+    //  so layout.children[i].size == child_sizes[i]
     assert forall|i: int| 0 <= i < layout.children.len() implies
         T::zero().le(layout.children[i].x)
         && T::zero().le(layout.children[i].y)
@@ -5003,31 +5003,31 @@ pub proof fn lemma_linear_children_within_bounds<T: OrderedField>(
             padding, spacing, alignment, child_sizes, axis, avail_cross, i as nat,
         );
 
-        // Cross-axis lower: 0 ≤ cross_start ≤ cross_start + align_offset
+        //  Cross-axis lower: 0 ≤ cross_start ≤ cross_start + align_offset
         lemma_column_child_x_lower_bound(
             cs, alignment, avail_cross, child_sizes[i].cross_dim(axis),
         );
 
-        // Cross-axis upper: cross_pos + cross_dim ≤ cross_start + avail_cross
+        //  Cross-axis upper: cross_pos + cross_dim ≤ cross_start + avail_cross
         lemma_column_child_x_upper_bound(
             cs, alignment, avail_cross, child_sizes[i].cross_dim(axis),
         );
 
-        // Main-axis lower: 0 ≤ main_start ≤ child_main_position
+        //  Main-axis lower: 0 ≤ main_start ≤ child_main_position
         lemma_linear_child_main_lower_bound(ms, child_sizes, axis, spacing, i as nat);
 
-        // Main-axis upper
+        //  Main-axis upper
         if child_sizes.len() > 0 {
             lemma_linear_child_main_upper_bound(ms, child_sizes, axis, spacing, i as nat);
         }
 
-        // Map cross/main bounds to x/y bounds depending on axis
+        //  Map cross/main bounds to x/y bounds depending on axis
         match axis {
             Axis::Vertical => {
-                // x = cross, y = main
+                //  x = cross, y = main
                 T::axiom_le_transitive(T::zero(), padding.left, layout.children[i].x);
                 T::axiom_le_transitive(T::zero(), padding.top, layout.children[i].y);
-                // x + w ≤ left + avail_w ≤ max.w ≡ parent.w
+                //  x + w ≤ left + avail_w ≤ max.w ≡ parent.w
                 T::axiom_le_transitive(
                     layout.children[i].x.add(child_sizes[i].width),
                     padding.left.add(avail_cross),
@@ -5041,7 +5041,7 @@ pub proof fn lemma_linear_children_within_bounds<T: OrderedField>(
                     limits.max.width,
                     limits.resolve(input_size).width,
                 );
-                // y + h ≤ top + content_h ≤ total_h ≤ resolve.h
+                //  y + h ≤ top + content_h ≤ total_h ≤ resolve.h
                 if child_sizes.len() > 0 {
                     T::axiom_le_transitive(
                         layout.children[i].y.add(child_sizes[i].height),
@@ -5056,10 +5056,10 @@ pub proof fn lemma_linear_children_within_bounds<T: OrderedField>(
                 }
             },
             Axis::Horizontal => {
-                // x = main, y = cross
+                //  x = main, y = cross
                 T::axiom_le_transitive(T::zero(), padding.left, layout.children[i].x);
                 T::axiom_le_transitive(T::zero(), padding.top, layout.children[i].y);
-                // x + w ≤ left + content_w ≤ total_w ≤ resolve.w
+                //  x + w ≤ left + content_w ≤ total_w ≤ resolve.w
                 if child_sizes.len() > 0 {
                     T::axiom_le_transitive(
                         layout.children[i].x.add(child_sizes[i].width),
@@ -5072,7 +5072,7 @@ pub proof fn lemma_linear_children_within_bounds<T: OrderedField>(
                         limits.resolve(input_size).width,
                     );
                 }
-                // y + h ≤ top + avail_h ≤ max.h ≡ parent.h
+                //  y + h ≤ top + avail_h ≤ max.h ≡ parent.h
                 T::axiom_le_transitive(
                     layout.children[i].y.add(child_sizes[i].height),
                     padding.top.add(avail_cross),
@@ -5091,7 +5091,7 @@ pub proof fn lemma_linear_children_within_bounds<T: OrderedField>(
     };
 }
 
-/// A column with zero children produces a node with no children.
+///  A column with zero children produces a node with no children.
 pub proof fn lemma_column_zero_children<T: OrderedField>(
     limits: Limits<T>,
     padding: Padding<T>,
@@ -5108,7 +5108,7 @@ pub proof fn lemma_column_zero_children<T: OrderedField>(
     assert(column_children(padding, spacing, alignment, sizes, available_width, 0) =~= Seq::<Node<T>>::empty());
 }
 
-/// A row with zero children produces a node with no children.
+///  A row with zero children produces a node with no children.
 pub proof fn lemma_row_zero_children<T: OrderedField>(
     limits: Limits<T>,
     padding: Padding<T>,
@@ -5125,7 +5125,7 @@ pub proof fn lemma_row_zero_children<T: OrderedField>(
     assert(row_children(padding, spacing, alignment, sizes, available_height, 0) =~= Seq::<Node<T>>::empty());
 }
 
-/// Linear layout with zero children produces a node with no children.
+///  Linear layout with zero children produces a node with no children.
 pub proof fn lemma_linear_zero_children<T: OrderedField>(
     limits: Limits<T>,
     padding: Padding<T>,
@@ -5146,4 +5146,4 @@ pub proof fn lemma_linear_zero_children<T: OrderedField>(
     assert(linear_children(padding, spacing, alignment, sizes, axis, available_cross, 0) =~= Seq::<Node<T>>::empty());
 }
 
-} // verus!
+} //  verus!

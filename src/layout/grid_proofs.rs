@@ -8,9 +8,9 @@ use crate::layout::proofs::*;
 
 verus! {
 
-// ── Grid content size non-negativity ────────────────────────────────
+//  ── Grid content size non-negativity ────────────────────────────────
 
-/// Grid content width is non-negative.
+///  Grid content width is non-negative.
 pub proof fn lemma_grid_content_width_nonneg<T: OrderedRing>(
     col_widths: Seq<Size<T>>,
     h_spacing: T,
@@ -42,7 +42,7 @@ pub proof fn lemma_grid_content_width_nonneg<T: OrderedRing>(
     }
 }
 
-/// Grid content height is non-negative.
+///  Grid content height is non-negative.
 pub proof fn lemma_grid_content_height_nonneg<T: OrderedRing>(
     row_heights: Seq<Size<T>>,
     v_spacing: T,
@@ -74,11 +74,11 @@ pub proof fn lemma_grid_content_height_nonneg<T: OrderedRing>(
     }
 }
 
-// ── Grid cells don't overlap ────────────────────────────────────────
+//  ── Grid cells don't overlap ────────────────────────────────────────
 
-/// grid_cell_x(pl, cw, sp, col) ≡ child_x_position(pl, cw, sp, col).
+///  grid_cell_x(pl, cw, sp, col) ≡ child_x_position(pl, cw, sp, col).
 ///
-/// The closed-form grid position matches the recursive column position.
+///  The closed-form grid position matches the recursive column position.
 proof fn lemma_grid_cell_x_eq_child_x<T: OrderedRing>(
     padding_left: T,
     col_widths: Seq<Size<T>>,
@@ -92,12 +92,12 @@ proof fn lemma_grid_cell_x_eq_child_x<T: OrderedRing>(
             grid_cell_x(padding_left, col_widths, h_spacing, col)
         ),
 {
-    // child_x_position ≡ pl + sum_widths + repeated_add by identity lemma
-    // grid_cell_x is DEFINED as pl + sum_widths + repeated_add
+    //  child_x_position ≡ pl + sum_widths + repeated_add by identity lemma
+    //  grid_cell_x is DEFINED as pl + sum_widths + repeated_add
     lemma_child_x_position_identity(padding_left, col_widths, h_spacing, col);
 }
 
-/// grid_cell_y(pt, rh, sp, row) ≡ child_y_position(pt, rh, sp, row).
+///  grid_cell_y(pt, rh, sp, row) ≡ child_y_position(pt, rh, sp, row).
 proof fn lemma_grid_cell_y_eq_child_y<T: OrderedRing>(
     padding_top: T,
     row_heights: Seq<Size<T>>,
@@ -114,8 +114,8 @@ proof fn lemma_grid_cell_y_eq_child_y<T: OrderedRing>(
     lemma_child_y_position_identity(padding_top, row_heights, v_spacing, row);
 }
 
-/// Cells in the same row at consecutive columns don't overlap horizontally:
-/// grid_cell_x(col) + col_widths[col].width <= grid_cell_x(col + 1).
+///  Cells in the same row at consecutive columns don't overlap horizontally:
+///  grid_cell_x(col) + col_widths[col].width <= grid_cell_x(col + 1).
 pub proof fn lemma_grid_columns_nonoverlapping<T: OrderedRing>(
     padding_left: T,
     col_widths: Seq<Size<T>>,
@@ -130,25 +130,25 @@ pub proof fn lemma_grid_columns_nonoverlapping<T: OrderedRing>(
             .add(col_widths[col as int].width)
             .le(grid_cell_x(padding_left, col_widths, h_spacing, col + 1)),
 {
-    // child_x_position(col) + cw[col].width <= child_x_position(col+1)
-    // (from row non-overlapping lemma, which uses child_x_position)
+    //  child_x_position(col) + cw[col].width <= child_x_position(col+1)
+    //  (from row non-overlapping lemma, which uses child_x_position)
     lemma_row_children_nonoverlapping(padding_left, col_widths, h_spacing, col);
 
-    // child_x_position(col) ≡ grid_cell_x(col)
+    //  child_x_position(col) ≡ grid_cell_x(col)
     lemma_grid_cell_x_eq_child_x(padding_left, col_widths, h_spacing, col);
-    // child_x_position(col+1) ≡ grid_cell_x(col+1)
+    //  child_x_position(col+1) ≡ grid_cell_x(col+1)
     lemma_grid_cell_x_eq_child_x(padding_left, col_widths, h_spacing, col + 1);
 
-    // Chain congruence:
-    // child_x_position(col) + cw ≡ grid_cell_x(col) + cw
+    //  Chain congruence:
+    //  child_x_position(col) + cw ≡ grid_cell_x(col) + cw
     T::axiom_add_congruence_left(
         child_x_position(padding_left, col_widths, h_spacing, col),
         grid_cell_x(padding_left, col_widths, h_spacing, col),
         col_widths[col as int].width,
     );
 
-    // left side: child_x(col)+cw ≡ grid_cell_x(col)+cw, and child_x(col)+cw <= child_x(col+1)
-    // so grid_cell_x(col)+cw <= child_x(col+1)
+    //  left side: child_x(col)+cw ≡ grid_cell_x(col)+cw, and child_x(col)+cw <= child_x(col+1)
+    //  so grid_cell_x(col)+cw <= child_x(col+1)
     T::axiom_eqv_symmetric(
         child_x_position(padding_left, col_widths, h_spacing, col)
             .add(col_widths[col as int].width),
@@ -163,7 +163,7 @@ pub proof fn lemma_grid_columns_nonoverlapping<T: OrderedRing>(
         child_x_position(padding_left, col_widths, h_spacing, col + 1),
     );
 
-    // right side: child_x(col+1) ≡ grid_cell_x(col+1)
+    //  right side: child_x(col+1) ≡ grid_cell_x(col+1)
     verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_right::<T>(
         grid_cell_x(padding_left, col_widths, h_spacing, col)
             .add(col_widths[col as int].width),
@@ -172,7 +172,7 @@ pub proof fn lemma_grid_columns_nonoverlapping<T: OrderedRing>(
     );
 }
 
-/// Cells in the same column at consecutive rows don't overlap vertically.
+///  Cells in the same column at consecutive rows don't overlap vertically.
 pub proof fn lemma_grid_rows_nonoverlapping<T: OrderedRing>(
     padding_top: T,
     row_heights: Seq<Size<T>>,
@@ -187,10 +187,10 @@ pub proof fn lemma_grid_rows_nonoverlapping<T: OrderedRing>(
             .add(row_heights[row as int].height)
             .le(grid_cell_y(padding_top, row_heights, v_spacing, row + 1)),
 {
-    // child_y_position(row) + rh[row].height <= child_y_position(row+1)
+    //  child_y_position(row) + rh[row].height <= child_y_position(row+1)
     lemma_column_children_nonoverlapping(padding_top, row_heights, v_spacing, row);
 
-    // Bridge via identity: child_y_position ≡ grid_cell_y
+    //  Bridge via identity: child_y_position ≡ grid_cell_y
     lemma_grid_cell_y_eq_child_y(padding_top, row_heights, v_spacing, row);
     lemma_grid_cell_y_eq_child_y(padding_top, row_heights, v_spacing, row + 1);
 
@@ -222,9 +222,9 @@ pub proof fn lemma_grid_rows_nonoverlapping<T: OrderedRing>(
     );
 }
 
-// ── sum_widths non-negativity ───────────────────────────────────────
+//  ── sum_widths non-negativity ───────────────────────────────────────
 
-/// If all child widths are non-negative, then sum_widths(sizes, n) is non-negative.
+///  If all child widths are non-negative, then sum_widths(sizes, n) is non-negative.
 pub proof fn lemma_sum_widths_nonneg<T: OrderedRing>(
     sizes: Seq<Size<T>>,
     n: nat,
@@ -257,9 +257,9 @@ pub proof fn lemma_sum_widths_nonneg<T: OrderedRing>(
     }
 }
 
-// ── Grid children length/element lemmas ───────────────────────────
+//  ── Grid children length/element lemmas ───────────────────────────
 
-/// Length of grid_row_children.
+///  Length of grid_row_children.
 pub proof fn lemma_grid_row_children_len<T: OrderedField>(
     padding: crate::padding::Padding<T>,
     col_widths: Seq<crate::size::Size<T>>,
@@ -292,7 +292,7 @@ pub proof fn lemma_grid_row_children_len<T: OrderedField>(
     }
 }
 
-/// Element access into grid_row_children.
+///  Element access into grid_row_children.
 pub proof fn lemma_grid_row_children_element<T: OrderedField>(
     padding: crate::padding::Padding<T>,
     col_widths: Seq<crate::size::Size<T>>,
@@ -380,7 +380,7 @@ proof fn lemma_grid_row_children_element_shifted<T: OrderedField>(
     }
 }
 
-/// Length of grid_all_children = (remaining rows) * num_cols.
+///  Length of grid_all_children = (remaining rows) * num_cols.
 pub proof fn lemma_grid_all_children_len<T: OrderedField>(
     padding: crate::padding::Padding<T>,
     col_widths: Seq<crate::size::Size<T>>,
@@ -434,7 +434,7 @@ pub proof fn lemma_grid_all_children_len<T: OrderedField>(
             padding, col_widths, row_heights, h_spacing, v_spacing,
             h_align, v_align, child_sizes, row,
         ).len() == rc.len() + rest.len());
-        // Bridge: rc.len() + rest.len() == target
+        //  Bridge: rc.len() + rest.len() == target
         assert(rc.len() + rest.len() == (row_heights.len() - row) * num_cols)
             by (nonlinear_arith)
             requires
@@ -442,7 +442,7 @@ pub proof fn lemma_grid_all_children_len<T: OrderedField>(
                 rest.len() == (row_heights.len() - row - 1) * num_cols,
                 row < row_heights.len(),
         ;
-        // Final chain
+        //  Final chain
         assert(grid_all_children(
             padding, col_widths, row_heights, h_spacing, v_spacing,
             h_align, v_align, child_sizes, row,
@@ -450,7 +450,7 @@ pub proof fn lemma_grid_all_children_len<T: OrderedField>(
     }
 }
 
-/// Flat element access: grid_all_children(0)[row * ncols + col] == grid_child(row, col, ...).
+///  Flat element access: grid_all_children(0)[row * ncols + col] == grid_child(row, col, ...).
 pub proof fn lemma_grid_all_children_element<T: OrderedField>(
     padding: crate::padding::Padding<T>,
     col_widths: Seq<crate::size::Size<T>>,
@@ -521,7 +521,7 @@ proof fn lemma_grid_all_children_element_shifted<T: OrderedField>(
         padding, col_widths, row_heights, h_spacing, v_spacing,
         h_align, v_align, start_row, child_sizes, 0,
     );
-    // rc.len() == ncols
+    //  rc.len() == ncols
 
     let rc = grid_row_children(
         padding, col_widths, row_heights, h_spacing, v_spacing,
@@ -550,7 +550,7 @@ proof fn lemma_grid_all_children_element_shifted<T: OrderedField>(
             padding, col_widths, row_heights, h_spacing, v_spacing,
             h_align, v_align, child_sizes, start_row + 1, ncols,
         );
-        // rest.len() == (row_heights.len() - start_row - 1) * ncols
+        //  rest.len() == (row_heights.len() - start_row - 1) * ncols
 
         lemma_grid_all_children_element_shifted(
             padding, col_widths, row_heights, h_spacing, v_spacing,
@@ -591,9 +591,9 @@ proof fn lemma_grid_all_children_element_shifted<T: OrderedField>(
     }
 }
 
-// ── Grid cell position lower bounds ─────────────────────────────────
+//  ── Grid cell position lower bounds ─────────────────────────────────
 
-/// grid_cell_x(col) >= padding_left when widths and spacing are nonneg.
+///  grid_cell_x(col) >= padding_left when widths and spacing are nonneg.
 proof fn lemma_grid_cell_x_lower_bound<T: OrderedRing>(
     padding_left: T,
     col_widths: Seq<Size<T>>,
@@ -607,8 +607,8 @@ proof fn lemma_grid_cell_x_lower_bound<T: OrderedRing>(
     ensures
         padding_left.le(grid_cell_x(padding_left, col_widths, h_spacing, col)),
 {
-    // grid_cell_x = padding_left + sum_widths(col) + repeated_add(h_sp, col)
-    // sum_widths(col) >= 0 and repeated_add(h_sp, col) >= 0
+    //  grid_cell_x = padding_left + sum_widths(col) + repeated_add(h_sp, col)
+    //  sum_widths(col) >= 0 and repeated_add(h_sp, col) >= 0
     lemma_sum_widths_nonneg(col_widths, col);
     lemma_repeated_add_nonneg(h_spacing, col);
     verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_add_both::<T>(
@@ -621,11 +621,11 @@ proof fn lemma_grid_cell_x_lower_bound<T: OrderedRing>(
     verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
         T::zero().add(T::zero()), T::zero(), offset,
     );
-    // 0 <= offset, so padding_left <= padding_left + offset
+    //  0 <= offset, so padding_left <= padding_left + offset
     lemma_le_add_nonneg(padding_left, offset);
-    // padding_left + offset ≡ grid_cell_x via associativity
-    // assoc: (pl + sw) + ra ≡ pl + (sw + ra) = pl + offset
-    // So grid_cell_x ≡ pl + offset. Need symmetric for le_congruence_right.
+    //  padding_left + offset ≡ grid_cell_x via associativity
+    //  assoc: (pl + sw) + ra ≡ pl + (sw + ra) = pl + offset
+    //  So grid_cell_x ≡ pl + offset. Need symmetric for le_congruence_right.
     T::axiom_add_associative(padding_left, sum_widths(col_widths, col),
         repeated_add(h_spacing, col));
     T::axiom_eqv_symmetric(
@@ -638,7 +638,7 @@ proof fn lemma_grid_cell_x_lower_bound<T: OrderedRing>(
     );
 }
 
-/// grid_cell_y(row) >= padding_top when heights and spacing are nonneg.
+///  grid_cell_y(row) >= padding_top when heights and spacing are nonneg.
 proof fn lemma_grid_cell_y_lower_bound<T: OrderedRing>(
     padding_top: T,
     row_heights: Seq<Size<T>>,
@@ -677,10 +677,10 @@ proof fn lemma_grid_cell_y_lower_bound<T: OrderedRing>(
     );
 }
 
-// ── Grid cell position upper bounds ─────────────────────────────────
+//  ── Grid cell position upper bounds ─────────────────────────────────
 
-/// grid_cell_x(col) + col_widths[col].width <= padding_left + content_width.
-/// Uses lemma_row_child_x_upper_bound + bridge via grid_cell_x ≡ child_x_position.
+///  grid_cell_x(col) + col_widths[col].width <= padding_left + content_width.
+///  Uses lemma_row_child_x_upper_bound + bridge via grid_cell_x ≡ child_x_position.
 proof fn lemma_grid_cell_x_plus_width_bounded<T: OrderedRing>(
     padding_left: T,
     col_widths: Seq<Size<T>>,
@@ -696,19 +696,19 @@ proof fn lemma_grid_cell_x_plus_width_bounded<T: OrderedRing>(
             .add(col_widths[col as int].width)
             .le(padding_left.add(grid_content_width(col_widths, h_spacing))),
 {
-    // child_x_position(pl, cw, sp, col) + cw[col].w <= pl + row_content_width(cw, sp)
+    //  child_x_position(pl, cw, sp, col) + cw[col].w <= pl + row_content_width(cw, sp)
     lemma_row_child_x_upper_bound(padding_left, col_widths, h_spacing, col);
-    // row_content_width == grid_content_width (definitionally equal)
+    //  row_content_width == grid_content_width (definitionally equal)
 
-    // child_x_position ≡ grid_cell_x
+    //  child_x_position ≡ grid_cell_x
     lemma_grid_cell_x_eq_child_x(padding_left, col_widths, h_spacing, col);
-    // Bridge: child_x_position(col) + cw ≡ grid_cell_x(col) + cw
+    //  Bridge: child_x_position(col) + cw ≡ grid_cell_x(col) + cw
     T::axiom_add_congruence_left(
         child_x_position(padding_left, col_widths, h_spacing, col),
         grid_cell_x(padding_left, col_widths, h_spacing, col),
         col_widths[col as int].width,
     );
-    // Symmetric direction for le_congruence_left
+    //  Symmetric direction for le_congruence_left
     T::axiom_eqv_symmetric(
         child_x_position(padding_left, col_widths, h_spacing, col)
             .add(col_widths[col as int].width),
@@ -724,7 +724,7 @@ proof fn lemma_grid_cell_x_plus_width_bounded<T: OrderedRing>(
     );
 }
 
-/// grid_cell_y(row) + row_heights[row].height <= padding_top + content_height.
+///  grid_cell_y(row) + row_heights[row].height <= padding_top + content_height.
 proof fn lemma_grid_cell_y_plus_height_bounded<T: OrderedRing>(
     padding_top: T,
     row_heights: Seq<Size<T>>,
@@ -741,7 +741,7 @@ proof fn lemma_grid_cell_y_plus_height_bounded<T: OrderedRing>(
             .le(padding_top.add(grid_content_height(row_heights, v_spacing))),
 {
     lemma_column_child_y_upper_bound(padding_top, row_heights, v_spacing, row);
-    // column_content_height == grid_content_height (definitionally equal)
+    //  column_content_height == grid_content_height (definitionally equal)
 
     lemma_grid_cell_y_eq_child_y(padding_top, row_heights, v_spacing, row);
     T::axiom_add_congruence_left(
@@ -764,9 +764,9 @@ proof fn lemma_grid_cell_y_plus_height_bounded<T: OrderedRing>(
     );
 }
 
-// ── Grid children within bounds ─────────────────────────────────────
+//  ── Grid children within bounds ─────────────────────────────────────
 
-/// Helper: per-child grid CWB for a single cell at (row, col).
+///  Helper: per-child grid CWB for a single cell at (row, col).
 proof fn lemma_grid_child_cwb<T: OrderedField>(
     padding: crate::padding::Padding<T>,
     col_widths: Seq<Size<T>>,
@@ -809,30 +809,30 @@ proof fn lemma_grid_child_cwb<T: OrderedField>(
     let child = grid_child(padding, col_widths, row_heights, h_spacing, v_spacing,
         h_align, v_align, row, col, child_size);
 
-    // --- Lower bounds ---
-    // cell_x >= padding.left >= 0
+    //  --- Lower bounds ---
+    //  cell_x >= padding.left >= 0
     lemma_grid_cell_x_lower_bound(padding.left, col_widths, h_spacing, col);
     T::axiom_le_transitive(T::zero(), padding.left, cell_x);
-    // align_offset >= 0
+    //  align_offset >= 0
     lemma_align_offset_nonneg(h_align, cell_w, child_size.width);
-    // child.x = cell_x + align_offset >= cell_x >= 0
+    //  child.x = cell_x + align_offset >= cell_x >= 0
     lemma_le_add_nonneg(cell_x, align_offset(h_align, cell_w, child_size.width));
     T::axiom_le_transitive(T::zero(), cell_x, child.x);
 
-    // cell_y >= padding.top >= 0
+    //  cell_y >= padding.top >= 0
     lemma_grid_cell_y_lower_bound(padding.top, row_heights, v_spacing, row);
     T::axiom_le_transitive(T::zero(), padding.top, cell_y);
     lemma_align_offset_nonneg(v_align, cell_h, child_size.height);
     lemma_le_add_nonneg(cell_y, align_offset(v_align, cell_h, child_size.height));
     T::axiom_le_transitive(T::zero(), cell_y, child.y);
 
-    // --- X upper bound ---
-    // child.x + child_w = (cell_x + align_off) + child_w ≡ cell_x + (align_off + child_w)
+    //  --- X upper bound ---
+    //  child.x + child_w = (cell_x + align_off) + child_w ≡ cell_x + (align_off + child_w)
     let ao_x = align_offset(h_align, cell_w, child_size.width);
     T::axiom_add_associative(cell_x, ao_x, child_size.width);
-    // align_off + child_w <= cell_w (from align_offset_bounded)
+    //  align_off + child_w <= cell_w (from align_offset_bounded)
     lemma_align_offset_bounded(h_align, cell_w, child_size.width);
-    // cell_x + (ao + child_w) <= cell_x + cell_w
+    //  cell_x + (ao + child_w) <= cell_x + cell_w
     T::axiom_le_add_monotone(ao_x.add(child_size.width), cell_w, cell_x);
     T::axiom_add_commutative(ao_x.add(child_size.width), cell_x);
     T::axiom_add_commutative(cell_w, cell_x);
@@ -840,25 +840,25 @@ proof fn lemma_grid_child_cwb<T: OrderedField>(
         ao_x.add(child_size.width).add(cell_x), cell_x.add(ao_x.add(child_size.width)),
         cell_w.add(cell_x), cell_x.add(cell_w),
     );
-    // assoc gives: child.x + child_w = (cell_x + ao) + cw ≡ cell_x + (ao + cw)
-    // Need symmetric for le_congruence_left
+    //  assoc gives: child.x + child_w = (cell_x + ao) + cw ≡ cell_x + (ao + cw)
+    //  Need symmetric for le_congruence_left
     T::axiom_eqv_symmetric(
         cell_x.add(ao_x).add(child_size.width),
         cell_x.add(ao_x.add(child_size.width)),
     );
-    // child.x.add(child_w) ≡ cell_x.add(ao.add(cw))  [a1.eqv(a2)]
-    // cell_x.add(ao.add(cw)).le(cell_x.add(cell_w))   [a1.le(b)]
-    // => child.x.add(child_w).le(cell_x.add(cell_w))  [a2.le(b)]
+    //  child.x.add(child_w) ≡ cell_x.add(ao.add(cw))  [a1.eqv(a2)]
+    //  cell_x.add(ao.add(cw)).le(cell_x.add(cell_w))   [a1.le(b)]
+    //  => child.x.add(child_w).le(cell_x.add(cell_w))  [a2.le(b)]
     verus_algebra::lemmas::ordered_ring_lemmas::lemma_le_congruence_left::<T>(
         cell_x.add(ao_x.add(child_size.width)),
         cell_x.add(ao_x).add(child_size.width),
         cell_x.add(cell_w),
     );
 
-    // cell_x + cell_w <= padding.left + content_width
+    //  cell_x + cell_w <= padding.left + content_width
     lemma_grid_cell_x_plus_width_bounded(padding.left, col_widths, h_spacing, col);
 
-    // padding.left + content_width <= h + content_width
+    //  padding.left + content_width <= h + content_width
     let gcw = grid_content_width(col_widths, h_spacing);
     lemma_le_add_nonneg(padding.left, padding.right);
     T::axiom_le_add_monotone(padding.left, padding.horizontal(), gcw);
@@ -869,7 +869,7 @@ proof fn lemma_grid_child_cwb<T: OrderedField>(
         padding.horizontal().add(gcw), gcw.add(padding.horizontal()),
     );
 
-    // Chain: child.x + child_w <= cell_x + cell_w <= left + gcw <= h + gcw <= parent_w
+    //  Chain: child.x + child_w <= cell_x + cell_w <= left + gcw <= h + gcw <= parent_w
     T::axiom_le_transitive(
         child.x.add(child_size.width), cell_x.add(cell_w),
         padding.left.add(gcw));
@@ -879,7 +879,7 @@ proof fn lemma_grid_child_cwb<T: OrderedField>(
     T::axiom_le_transitive(
         child.x.add(child_size.width), padding.horizontal().add(gcw), parent_w);
 
-    // --- Y upper bound ---
+    //  --- Y upper bound ---
     let ao_y = align_offset(v_align, cell_h, child_size.height);
     T::axiom_add_associative(cell_y, ao_y, child_size.height);
     lemma_align_offset_bounded(v_align, cell_h, child_size.height);
@@ -922,7 +922,7 @@ proof fn lemma_grid_child_cwb<T: OrderedField>(
         child.y.add(child_size.height), padding.vertical().add(gch), parent_h);
 }
 
-/// Per-child grid CWB: given (row, col) and child_size, prove bounds on the positioned child.
+///  Per-child grid CWB: given (row, col) and child_size, prove bounds on the positioned child.
 proof fn lemma_grid_per_child_cwb<T: OrderedField>(
     padding: crate::padding::Padding<T>,
     col_widths: Seq<Size<T>>,
@@ -941,21 +941,21 @@ proof fn lemma_grid_per_child_cwb<T: OrderedField>(
     requires
         row < row_heights.len(),
         col < col_widths.len(),
-        // child_sizes_2d structure
+        //  child_sizes_2d structure
         child_sizes_2d.len() >= row_heights.len(),
         forall|r: int| 0 <= r < child_sizes_2d.len() ==>
             (#[trigger] child_sizes_2d[r]).len() >= col_widths.len(),
         child_sizes_2d[row as int][col as int] === child_size,
-        // child fits in cell
+        //  child fits in cell
         child_size.width.le(col_widths[col as int].width),
         child_size.height.le(row_heights[row as int].height),
-        // Grid params
+        //  Grid params
         padding.is_nonneg(),
         T::zero().le(h_spacing),
         T::zero().le(v_spacing),
         forall|i: int| 0 <= i < col_widths.len() ==> T::zero().le(col_widths[i].width),
         forall|i: int| 0 <= i < row_heights.len() ==> T::zero().le(row_heights[i].height),
-        // Content fits in parent
+        //  Content fits in parent
         padding.horizontal().add(grid_content_width(col_widths, h_spacing)).le(parent_w),
         padding.vertical().add(grid_content_height(row_heights, v_spacing)).le(parent_h),
     ensures ({
@@ -981,7 +981,7 @@ proof fn lemma_grid_per_child_cwb<T: OrderedField>(
     );
 }
 
-/// Grid layout has children_within_bounds.
+///  Grid layout has children_within_bounds.
 pub proof fn lemma_grid_children_within_bounds<T: OrderedField>(
     limits: crate::limits::Limits<T>,
     padding: crate::padding::Padding<T>,
@@ -1005,13 +1005,13 @@ pub proof fn lemma_grid_children_within_bounds<T: OrderedField>(
         col_widths.len() > 0,
         row_heights.len() > 0,
         children.len() == col_widths.len() * row_heights.len(),
-        // Content fits
+        //  Content fits
         padding.horizontal().add(grid_content_width(col_widths, h_spacing)).le(limits.max.width),
         padding.vertical().add(grid_content_height(row_heights, v_spacing)).le(limits.max.height),
-        // Column widths and row heights are nonneg
+        //  Column widths and row heights are nonneg
         forall|i: int| 0 <= i < col_widths.len() ==> T::zero().le(col_widths[i].width),
         forall|i: int| 0 <= i < row_heights.len() ==> T::zero().le(row_heights[i].height),
-        // Each child fits in its cell
+        //  Each child fits in its cell
         crate::layout::proofs::widget_wf_grid_cells_fit(
             limits, padding, col_widths, row_heights,
             children, (fuel - 1) as nat,
@@ -1032,20 +1032,20 @@ pub proof fn lemma_grid_children_within_bounds<T: OrderedField>(
         ncols, (fuel - 1) as nat,
     );
 
-    // h, v >= 0
+    //  h, v >= 0
     lemma_nonneg_sum(padding.left, padding.right);
     lemma_nonneg_sum(padding.top, padding.bottom);
 
-    // inner.wf
+    //  inner.wf
     lemma_shrink_wf(limits, h, v);
     lemma_add_comm_le(h, limits.min.width, limits.max.width);
     lemma_add_comm_le(v, limits.min.height, limits.max.height);
 
-    // child_sizes_2d for grid_layout
+    //  child_sizes_2d for grid_layout
     let child_sizes_2d = Seq::new(nrows, |r: int|
         Seq::new(ncols, |c: int| cn[(r * ncols as int + c)].size)
     );
-    // Help Z3 with nested Seq::new (can't beta-reduce nested Seq::new)
+    //  Help Z3 with nested Seq::new (can't beta-reduce nested Seq::new)
     assert(child_sizes_2d.len() == nrows);
     assert forall|r: int| 0 <= r < nrows as int implies
         (#[trigger] child_sizes_2d[r]).len() == ncols
@@ -1055,7 +1055,7 @@ pub proof fn lemma_grid_children_within_bounds<T: OrderedField>(
         child_sizes_2d[r][c] === (#[trigger] cn[(r * ncols as int + c)]).size
     by {};
 
-    // total size <= max
+    //  total size <= max
     let content_w = grid_content_width(col_widths, h_spacing);
     let content_h = grid_content_height(row_heights, v_spacing);
     let total_w = h.add(content_w);
@@ -1069,7 +1069,7 @@ pub proof fn lemma_grid_children_within_bounds<T: OrderedField>(
     let layout = grid_layout(limits, padding, h_spacing, v_spacing, h_align, v_align,
         col_widths, row_heights, child_sizes_2d);
 
-    // layout.children.len() == cn.len()
+    //  layout.children.len() == cn.len()
     lemma_grid_all_children_len(
         padding, col_widths, row_heights, h_spacing, v_spacing,
         h_align, v_align, child_sizes_2d, 0, ncols,
@@ -1081,18 +1081,18 @@ pub proof fn lemma_grid_children_within_bounds<T: OrderedField>(
         requires ncols >= 0, nrows >= 0;
     assert(cn.len() == layout.children.len());
 
-    // Per-child bounds via extracted helper
+    //  Per-child bounds via extracted helper
     assert forall|idx: int| 0 <= idx < cn.len() implies
         T::zero().le(layout.children[idx].x)
         && T::zero().le(layout.children[idx].y)
         && layout.children[idx].x.add(cn[idx].size.width).le(layout.size.width)
         && layout.children[idx].y.add(cn[idx].size.height).le(layout.size.height)
     by {
-        // Compute (row, col) from flat index
+        //  Compute (row, col) from flat index
         let row: nat = (idx / ncols as int) as nat;
         let col: nat = (idx % ncols as int) as nat;
 
-        // Division/modulus bounds
+        //  Division/modulus bounds
         assert(col < ncols) by (nonlinear_arith)
             requires col == (idx % ncols as int) as nat, 0 <= idx, ncols > 0nat;
         assert(row < nrows) by (nonlinear_arith)
@@ -1105,7 +1105,7 @@ pub proof fn lemma_grid_children_within_bounds<T: OrderedField>(
                 0 <= idx, idx < (ncols * nrows) as int,
                 ncols > 0nat;
 
-        // Connect child_sizes_2d to cn
+        //  Connect child_sizes_2d to cn
         assert(child_sizes_2d[row as int][col as int] === cn[idx].size);
 
         lemma_grid_per_child_cwb(
@@ -1119,9 +1119,9 @@ pub proof fn lemma_grid_children_within_bounds<T: OrderedField>(
     crate::layout::proofs::lemma_merge_layout_cwb(layout, cn);
 }
 
-// ── Grid cell non-overlapping (arbitrary pairs) ─────────────────
+//  ── Grid cell non-overlapping (arbitrary pairs) ─────────────────
 
-/// Columns non-overlapping for arbitrary col1 < col2 (not just consecutive).
+///  Columns non-overlapping for arbitrary col1 < col2 (not just consecutive).
 pub proof fn lemma_grid_columns_nonoverlapping_any<T: OrderedRing>(
     padding_left: T,
     col_widths: Seq<Size<T>>,
@@ -1142,16 +1142,16 @@ pub proof fn lemma_grid_columns_nonoverlapping_any<T: OrderedRing>(
     if col1 + 1 == col2 {
         lemma_grid_columns_nonoverlapping(padding_left, col_widths, h_spacing, col1);
     } else {
-        // IH: col1's right edge ≤ cell_x(col1+1)
+        //  IH: col1's right edge ≤ cell_x(col1+1)
         lemma_grid_columns_nonoverlapping(padding_left, col_widths, h_spacing, col1);
-        // IH: cell_x(col1+1) + width[col1+1] ≤ cell_x(col2)
+        //  IH: cell_x(col1+1) + width[col1+1] ≤ cell_x(col2)
         lemma_grid_columns_nonoverlapping_any(
             padding_left, col_widths, h_spacing, col1 + 1, col2);
-        // cell_x(col1+1) ≤ cell_x(col1+1) + width[col1+1] (nonneg width)
+        //  cell_x(col1+1) ≤ cell_x(col1+1) + width[col1+1] (nonneg width)
         let cx = grid_cell_x(padding_left, col_widths, h_spacing, (col1 + 1) as nat);
         crate::layout::proofs::lemma_le_add_nonneg::<T>(
             cx, col_widths[(col1 + 1) as int].width);
-        // Chain: col1_right ≤ cell_x(col1+1) ≤ cell_x(col1+1)+w ≤ cell_x(col2)
+        //  Chain: col1_right ≤ cell_x(col1+1) ≤ cell_x(col1+1)+w ≤ cell_x(col2)
         T::axiom_le_transitive(
             grid_cell_x(padding_left, col_widths, h_spacing, col1)
                 .add(col_widths[col1 as int].width),
@@ -1165,7 +1165,7 @@ pub proof fn lemma_grid_columns_nonoverlapping_any<T: OrderedRing>(
     }
 }
 
-/// Rows non-overlapping for arbitrary row1 < row2.
+///  Rows non-overlapping for arbitrary row1 < row2.
 pub proof fn lemma_grid_rows_nonoverlapping_any<T: OrderedRing>(
     padding_top: T,
     row_heights: Seq<Size<T>>,
@@ -1205,8 +1205,8 @@ pub proof fn lemma_grid_rows_nonoverlapping_any<T: OrderedRing>(
     }
 }
 
-/// Any two distinct grid cells don't overlap in 2D.
-/// Either their column ranges or row ranges are disjoint.
+///  Any two distinct grid cells don't overlap in 2D.
+///  Either their column ranges or row ranges are disjoint.
 pub proof fn lemma_grid_cells_nonoverlapping<T: OrderedRing>(
     padding_left: T, padding_top: T,
     col_widths: Seq<Size<T>>, row_heights: Seq<Size<T>>,
@@ -1221,7 +1221,7 @@ pub proof fn lemma_grid_cells_nonoverlapping<T: OrderedRing>(
         forall|j: int| 0 <= j < col_widths.len() ==> T::zero().le(col_widths[j].width),
         forall|j: int| 0 <= j < row_heights.len() ==> T::zero().le(row_heights[j].height),
     ensures
-        // Either x-ranges disjoint or y-ranges disjoint
+        //  Either x-ranges disjoint or y-ranges disjoint
         grid_cell_x(padding_left, col_widths, h_spacing, c1)
             .add(col_widths[c1 as int].width)
             .le(grid_cell_x(padding_left, col_widths, h_spacing, c2))
@@ -1244,7 +1244,7 @@ pub proof fn lemma_grid_cells_nonoverlapping<T: OrderedRing>(
                 padding_left, col_widths, h_spacing, c2, c1);
         }
     } else {
-        // c1 == c2, so r1 != r2
+        //  c1 == c2, so r1 != r2
         if r1 < r2 {
             lemma_grid_rows_nonoverlapping_any(
                 padding_top, row_heights, v_spacing, r1, r2);
@@ -1255,4 +1255,4 @@ pub proof fn lemma_grid_cells_nonoverlapping<T: OrderedRing>(
     }
 }
 
-} // verus!
+} //  verus!

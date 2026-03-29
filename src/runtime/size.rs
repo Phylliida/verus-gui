@@ -6,7 +6,7 @@ use crate::layout::Axis;
 
 verus! {
 
-/// Runtime-backed Size with rational coordinates.
+///  Runtime-backed Size with rational coordinates.
 pub struct RuntimeSize {
     pub width: RuntimeRational,
     pub height: RuntimeRational,
@@ -22,7 +22,7 @@ impl View for RuntimeSize {
 }
 
 impl RuntimeSize {
-    /// Well-formedness: runtime fields are valid and consistent with the model.
+    ///  Well-formedness: runtime fields are valid and consistent with the model.
     pub open spec fn wf_spec(&self) -> bool {
         &&& self.width.wf_spec()
         &&& self.height.wf_spec()
@@ -30,7 +30,7 @@ impl RuntimeSize {
         &&& self.height@ == self@.height
     }
 
-    /// Construct a RuntimeSize from width and height.
+    ///  Construct a RuntimeSize from width and height.
     pub fn new(width: RuntimeRational, height: RuntimeRational) -> (out: Self)
         requires
             width.wf_spec(),
@@ -44,7 +44,7 @@ impl RuntimeSize {
         RuntimeSize { width, height, model: Ghost(model) }
     }
 
-    /// The zero size.
+    ///  The zero size.
     pub fn zero_exec() -> (out: Self)
         ensures
             out.wf_spec(),
@@ -56,7 +56,7 @@ impl RuntimeSize {
         RuntimeSize { width: w, height: h, model: Ghost(model) }
     }
 
-    /// Copy this RuntimeSize (deep copy of rational fields).
+    ///  Copy this RuntimeSize (deep copy of rational fields).
     pub fn copy_size(&self) -> (out: Self)
         requires
             self.wf_spec(),
@@ -71,7 +71,7 @@ impl RuntimeSize {
         }
     }
 
-    /// Main-axis dimension at runtime.
+    ///  Main-axis dimension at runtime.
     pub fn main_exec(&self, axis: &Axis) -> (out: RuntimeRational)
         requires
             self.wf_spec(),
@@ -85,7 +85,7 @@ impl RuntimeSize {
         }
     }
 
-    /// Cross-axis dimension at runtime.
+    ///  Cross-axis dimension at runtime.
     pub fn cross_exec(&self, axis: &Axis) -> (out: RuntimeRational)
         requires
             self.wf_spec(),
@@ -99,7 +99,7 @@ impl RuntimeSize {
         }
     }
 
-    /// Check semantic equality of two sizes.
+    ///  Check semantic equality of two sizes.
     pub fn eq_exec(&self, rhs: &Self) -> (out: bool)
         requires
             self.wf_spec(),
@@ -110,7 +110,7 @@ impl RuntimeSize {
         self.width.eq(&rhs.width) && self.height.eq(&rhs.height)
     }
 
-    /// Construct a RuntimeSize from main-axis and cross-axis values.
+    ///  Construct a RuntimeSize from main-axis and cross-axis values.
     pub fn from_axes_exec(axis: &Axis, main: RuntimeRational, cross: RuntimeRational) -> (out: Self)
         requires
             main.wf_spec(),
@@ -124,7 +124,7 @@ impl RuntimeSize {
             Axis::Horizontal => RuntimeSize::new(main, cross),
         }
     }
-    /// Normalize all rational fields, producing a size with normalized_spec models.
+    ///  Normalize all rational fields, producing a size with normalized_spec models.
     pub fn normalize_exec(self) -> (out: Self)
         requires self.wf_spec(),
         ensures
@@ -140,4 +140,4 @@ impl RuntimeSize {
     }
 }
 
-} // verus!
+} //  verus!

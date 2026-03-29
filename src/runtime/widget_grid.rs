@@ -20,7 +20,7 @@ use crate::layout::grid_proofs::*;
 
 verus! {
 
-/// Layout a grid widget: each child gets cell-sized limits.
+///  Layout a grid widget: each child gets cell-sized limits.
 pub fn layout_grid_widget_exec(
     limits: &RuntimeLimits,
     padding: &RuntimePadding,
@@ -75,7 +75,7 @@ pub fn layout_grid_widget_exec(
 
     let ghost inner_spec = limits@.shrink(pad_h@, pad_v@);
 
-    // Recursively layout each child with cell-sized limits (flat iteration)
+    //  Recursively layout each child with cell-sized limits (flat iteration)
     let mut child_nodes: Vec<RuntimeNode> = Vec::new();
     let mut child_sizes_2d: Vec<Vec<RuntimeSize>> = Vec::new();
     let mut flat_idx: usize = 0;
@@ -98,10 +98,10 @@ pub fn layout_grid_widget_exec(
                 (#[trigger] children@[i]).wf_spec((fuel - 1) as nat),
             child_nodes@.len() == flat_idx as int,
             child_sizes_2d@.len() == r as int,
-            // Each child node is wf
+            //  Each child node is wf
             forall|j: int| 0 <= j < flat_idx as int ==>
                 (#[trigger] child_nodes@[j]).wf_spec(),
-            // Each child node was laid out with cell-sized limits (using row/col indices)
+            //  Each child node was laid out with cell-sized limits (using row/col indices)
             forall|ri: int, ci: int| 0 <= ri < r as int && 0 <= ci < num_cols as int ==> {
                 child_nodes@[ri * num_cols as int + ci]@ == layout_widget::<RationalModel>(
                     Limits { min: inner_spec.min, max: Size::new(
@@ -109,7 +109,7 @@ pub fn layout_grid_widget_exec(
                     children@[ri * num_cols as int + ci].model(),
                     (fuel - 1) as nat)
             },
-            // child_sizes_2d rows have right length and wf, and match child node sizes
+            //  child_sizes_2d rows have right length and wf, and match child node sizes
             forall|ri: int| 0 <= ri < r as int ==> {
                 &&& (#[trigger] child_sizes_2d@[ri])@.len() == num_cols
                 &&& forall|ci: int| 0 <= ci < num_cols ==> {
@@ -143,14 +143,14 @@ pub fn layout_grid_widget_exec(
                 child_nodes@.len() == flat_idx as int,
                 child_sizes_2d@.len() == r as int,
                 row_sizes@.len() == c as int,
-                // Ghost snapshot: old elements unchanged
+                //  Ghost snapshot: old elements unchanged
                 pre_inner_cn.len() == row_base,
                 forall|j: int| 0 <= j < row_base ==>
                     child_nodes@[j] == (#[trigger] pre_inner_cn[j]),
-                // Preserve existing wf facts
+                //  Preserve existing wf facts
                 forall|j: int| 0 <= j < row_base ==>
                     (#[trigger] child_nodes@[j]).wf_spec(),
-                // Completed rows' layout facts (via snapshot, invariant through inner loop)
+                //  Completed rows' layout facts (via snapshot, invariant through inner loop)
                 forall|ri: int, ci: int| 0 <= ri < r as int && 0 <= ci < num_cols as int ==> {
                     pre_inner_cn[ri * num_cols as int + ci]@ == layout_widget::<RationalModel>(
                         Limits { min: inner_spec.min, max: Size::new(
@@ -158,7 +158,7 @@ pub fn layout_grid_widget_exec(
                         children@[ri * num_cols as int + ci].model(),
                         (fuel - 1) as nat)
                 },
-                // Completed rows' child_sizes_2d facts (via snapshot)
+                //  Completed rows' child_sizes_2d facts (via snapshot)
                 forall|ri: int| 0 <= ri < r as int ==> {
                     &&& (#[trigger] child_sizes_2d@[ri])@.len() == num_cols
                     &&& forall|ci: int| 0 <= ci < num_cols ==> {
@@ -166,7 +166,7 @@ pub fn layout_grid_widget_exec(
                         &&& child_sizes_2d@[ri]@[ci]@ == pre_inner_cn[ri * num_cols as int + ci]@.size
                     }
                 },
-                // New child nodes in this row
+                //  New child nodes in this row
                 forall|ci: int| 0 <= ci < c ==> {
                     &&& (#[trigger] child_nodes@[row_base + ci]).wf_spec()
                     &&& child_nodes@[row_base + ci]@ == layout_widget::<RationalModel>(
@@ -175,7 +175,7 @@ pub fn layout_grid_widget_exec(
                         children@[row_base + ci].model(),
                         (fuel - 1) as nat)
                 },
-                // Row sizes match child node sizes
+                //  Row sizes match child node sizes
                 forall|ci: int| 0 <= ci < c ==> {
                     &&& (#[trigger] row_sizes@[ci]).wf_spec()
                     &&& row_sizes@[ci]@ == child_nodes@[row_base + ci]@.size
@@ -187,7 +187,7 @@ pub fn layout_grid_widget_exec(
                     requires flat_idx == r * num_cols + c,
                         c < num_cols, r < num_rows,
                         n == num_cols * num_rows;
-                // Help Z3 instantiate quantifiers for preconditions
+                //  Help Z3 instantiate quantifiers for preconditions
                 assert(col_widths@[c as int].wf_spec());
                 assert(row_heights@[r as int].wf_spec());
                 assert(children@[flat_idx as int].wf_spec((fuel - 1) as nat));
@@ -204,20 +204,20 @@ pub fn layout_grid_widget_exec(
             c = c + 1;
             flat_idx = flat_idx + 1;
         }
-        // Capture row_sizes facts before push moves it
+        //  Capture row_sizes facts before push moves it
         let ghost row_sizes_len = row_sizes@.len();
         let ghost row_sizes_view: Seq<RuntimeSize> = row_sizes@;
 
         child_sizes_2d.push(row_sizes);
 
         proof {
-            // row_sizes had num_cols elements, all wf, matching child node sizes
+            //  row_sizes had num_cols elements, all wf, matching child node sizes
             assert(row_sizes_len == num_cols as int);
 
-            // child_sizes_2d@[r] is the just-pushed row_sizes
+            //  child_sizes_2d@[r] is the just-pushed row_sizes
             assert(child_sizes_2d@[r as int]@ =~= row_sizes_view);
 
-            // Combine child_nodes wf facts from both ranges
+            //  Combine child_nodes wf facts from both ranges
             assert forall|j: int| 0 <= j < flat_idx as int implies
                 (#[trigger] child_nodes@[j]).wf_spec()
             by {
@@ -228,7 +228,7 @@ pub fn layout_grid_widget_exec(
                 }
             }
 
-            // Establish snapshot preservation for old rows
+            //  Establish snapshot preservation for old rows
             assert forall|ri: int, ci: int|
                 0 <= ri < r as int && 0 <= ci < num_cols as int implies
                 #[trigger] child_nodes@[ri * (num_cols as int) + ci]
@@ -243,7 +243,7 @@ pub fn layout_grid_widget_exec(
                         ci < (num_cols as int);
             }
 
-            // Reconstruct completed rows' layout_widget facts from snapshot
+            //  Reconstruct completed rows' layout_widget facts from snapshot
             assert forall|ri: int, ci: int|
                 0 <= ri < (r + 1) as int && 0 <= ci < num_cols as int implies
                 child_nodes@[ri * num_cols as int + ci]@ == layout_widget::<RationalModel>(
@@ -261,7 +261,7 @@ pub fn layout_grid_widget_exec(
                 }
             }
 
-            // child_sizes_2d invariant for all rows including the new one
+            //  child_sizes_2d invariant for all rows including the new one
             assert forall|ri: int| 0 <= ri < (r + 1) as int implies {
                 &&& (#[trigger] child_sizes_2d@[ri])@.len() == num_cols
                 &&& forall|ci: int| 0 <= ci < num_cols ==> {
@@ -285,7 +285,7 @@ pub fn layout_grid_widget_exec(
                 }
             }
 
-            // flat_idx arithmetic
+            //  flat_idx arithmetic
             assert(flat_idx == r * num_cols + num_cols);
             assert((r + 1) * num_cols == r * num_cols + num_cols) by(nonlinear_arith)
                 requires r >= 0nat, num_cols >= 0nat;
@@ -294,50 +294,50 @@ pub fn layout_grid_widget_exec(
         r = r + 1;
     }
 
-    // Call grid_layout_exec
+    //  Call grid_layout_exec
     let layout_result = grid_layout_exec(
         limits, padding, h_spacing, v_spacing, h_align, v_align,
         col_widths, row_heights, &child_sizes_2d);
 
-    // Merge
+    //  Merge
     let ghost cn_models: Seq<Node<RationalModel>> =
         Seq::new(n as nat, |j: int| child_nodes@[j]@);
     proof {
-        // After outer loop: r == num_rows, flat_idx == num_rows * num_cols
-        // n == num_cols * num_rows (commutativity: flat_idx == n)
+        //  After outer loop: r == num_rows, flat_idx == num_rows * num_cols
+        //  n == num_cols * num_rows (commutativity: flat_idx == n)
         assert(flat_idx == n) by(nonlinear_arith)
             requires flat_idx == (num_rows as int) * (num_cols as int),
                 n == (num_cols as int) * (num_rows as int);
         assert(child_nodes@.len() == n as int);
         assert(cn_models.len() == n as nat);
 
-        // Bridge child_sizes_2d to cn_models BEFORE child_nodes is consumed by merge
+        //  Bridge child_sizes_2d to cn_models BEFORE child_nodes is consumed by merge
         assert forall|ri: int, ci: int|
             0 <= ri < num_rows as int && 0 <= ci < num_cols as int implies
             child_sizes_2d@[ri]@[ci]@ == cn_models[ri * (num_cols as int) + ci].size
         by {
             let nc = num_cols as int;
             let j = ri * nc + ci;
-            // j is in range [0, n)
+            //  j is in range [0, n)
             assert(j < (n as int)) by(nonlinear_arith)
                 requires 0 <= ri, ri < (num_rows as int), 0 <= ci, ci < nc,
                     (n as int) == nc * (num_rows as int), j == ri * nc + ci;
             assert(child_sizes_2d@[ri]@[ci]@ == child_nodes@[j]@.size);
-            // Seq::new trigger: cn_models[j] == child_nodes@[j]@
+            //  Seq::new trigger: cn_models[j] == child_nodes@[j]@
         }
     }
     let merged = merge_layout_exec(layout_result, child_nodes, Ghost(cn_models));
 
-    // Connect to spec layout_widget
+    //  Connect to spec layout_widget
     proof {
         let spec_cn: Seq<Node<RationalModel>> = grid_widget_child_nodes(
             inner_spec, spec_cw, spec_rh, spec_wc,
             num_cols as nat, (fuel - 1) as nat);
 
-        // cn_models matches spec_cn: each element is the same layout_widget call
+        //  cn_models matches spec_cn: each element is the same layout_widget call
         assert(cn_models.len() == spec_cn.len());
 
-        // When n > 0, we have num_cols > 0 (needed for div/mod)
+        //  When n > 0, we have num_cols > 0 (needed for div/mod)
         if n > 0 {
             assert(num_cols > 0 && num_rows > 0) by(nonlinear_arith)
                 requires n as int == (num_cols as int) * (num_rows as int),
@@ -350,16 +350,16 @@ pub fn layout_grid_widget_exec(
                 let nr = num_rows as int;
                 let ri = j / nc;
                 let ci = j % nc;
-                // vstd div/mod lemma: j == nc * (j / nc) + (j % nc)
+                //  vstd div/mod lemma: j == nc * (j / nc) + (j % nc)
                 lemma_fundamental_div_mod(j, nc);
                 assert(nc * ri + ci == j);
                 assert(0 <= ci && ci < nc);
                 assert(ri >= 0);
-                // Now use nonlinear_arith with these Z3-derived facts:
+                //  Now use nonlinear_arith with these Z3-derived facts:
                 assert(ri < nr) by(nonlinear_arith)
                     requires ri >= 0, nc * ri + ci == j, 0 <= ci, ci < nc,
                         j < nc * nr, nc > 0;
-                // Trigger Seq::new unfoldings for spec sequences
+                //  Trigger Seq::new unfoldings for spec sequences
                 let cw_ci = spec_cw[ci];
                 assert(cw_ci == col_widths@[ci]@);
                 let rh_ri = spec_rh[ri];
@@ -370,7 +370,7 @@ pub fn layout_grid_widget_exec(
         }
         assert(cn_models =~= spec_cn);
 
-        // child_sizes_2d view matches layout_grid_body's computed child_sizes
+        //  child_sizes_2d view matches layout_grid_body's computed child_sizes
         let spec_cs_view: Seq<Seq<Size<RationalModel>>> =
             Seq::new(child_sizes_2d@.len() as nat, |i: int|
                 Seq::new(child_sizes_2d@[i]@.len() as nat, |j: int| child_sizes_2d@[i]@[j]@));
@@ -386,10 +386,10 @@ pub fn layout_grid_widget_exec(
                     spec_cs_view[ri][ci] == body_cs[ri][ci]
                 by {
                     let j = ri * (num_cols as int) + ci;
-                    // From pre-merge bridging proof:
-                    //   child_sizes_2d@[ri]@[ci]@ == cn_models[j].size
-                    // From cn_models =~= spec_cn:
-                    //   cn_models[j].size == spec_cn[j].size == body_cs[ri][ci]
+                    //  From pre-merge bridging proof:
+                    //    child_sizes_2d@[ri]@[ci]@ == cn_models[j].size
+                    //  From cn_models =~= spec_cn:
+                    //    cn_models[j].size == spec_cn[j].size == body_cs[ri][ci]
                     assert(child_sizes_2d@[ri]@[ci]@ == cn_models[j].size);
                     assert(cn_models[j] == spec_cn[j]);
                 }
@@ -400,4 +400,4 @@ pub fn layout_grid_widget_exec(
     merged
 }
 
-} // verus!
+} //  verus!

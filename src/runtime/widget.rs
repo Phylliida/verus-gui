@@ -36,20 +36,20 @@ use crate::runtime::text_input::RuntimeTextInputConfig;
 
 verus! {
 
-/// Runtime flex child: weight + child widget.
+///  Runtime flex child: weight + child widget.
 pub struct RuntimeFlexItem {
     pub weight: RuntimeRational,
     pub child: RuntimeWidget,
 }
 
-/// Runtime absolute child: explicit (x, y) offset + child widget.
+///  Runtime absolute child: explicit (x, y) offset + child widget.
 pub struct RuntimeAbsoluteChild {
     pub x: RuntimeRational,
     pub y: RuntimeRational,
     pub child: RuntimeWidget,
 }
 
-/// Runtime leaf widget: no children.
+///  Runtime leaf widget: no children.
 pub enum RuntimeLeafWidget {
     Leaf {
         size: RuntimeSize,
@@ -63,7 +63,7 @@ pub enum RuntimeLeafWidget {
     },
 }
 
-/// Runtime wrapper widget: exactly one child.
+///  Runtime wrapper widget: exactly one child.
 pub enum RuntimeWrapperWidget {
     Margin {
         margin: RuntimePadding,
@@ -94,7 +94,7 @@ pub enum RuntimeWrapperWidget {
     },
 }
 
-/// Runtime container widget: multiple children.
+///  Runtime container widget: multiple children.
 #[allow(inconsistent_fields)]
 pub enum RuntimeContainerWidget {
     Column {
@@ -158,7 +158,7 @@ pub enum RuntimeContainerWidget {
     },
 }
 
-/// Runtime Widget: stratified to mirror spec Widget hierarchy.
+///  Runtime Widget: stratified to mirror spec Widget hierarchy.
 pub enum RuntimeWidget {
     Leaf(RuntimeLeafWidget),
     Wrapper(RuntimeWrapperWidget),
@@ -177,7 +177,7 @@ impl RuntimeAbsoluteChild {
     }
 }
 
-// ── Sub-enum impls ──────────────────────────────────────────────
+//  ── Sub-enum impls ──────────────────────────────────────────────
 
 impl RuntimeLeafWidget {
     pub open spec fn model(&self) -> LeafWidget<RationalModel> {
@@ -378,10 +378,10 @@ impl RuntimeContainerWidget {
 
 }
 
-// ── RuntimeWidget delegation ────────────────────────────────────
+//  ── RuntimeWidget delegation ────────────────────────────────────
 
 impl RuntimeWidget {
-    /// Extract the ghost model.
+    ///  Extract the ghost model.
     pub open spec fn model(&self) -> Widget<RationalModel> {
         match self {
             RuntimeWidget::Leaf(l) => Widget::Leaf(l.model()),
@@ -390,7 +390,7 @@ impl RuntimeWidget {
         }
     }
 
-    /// Shallow well-formedness: direct fields match model, no recursive child check.
+    ///  Shallow well-formedness: direct fields match model, no recursive child check.
     pub open spec fn wf_shallow(&self) -> bool {
         match self {
             RuntimeWidget::Leaf(l) => l.wf_shallow(),
@@ -399,7 +399,7 @@ impl RuntimeWidget {
         }
     }
 
-    /// Full well-formedness at a given fuel depth.
+    ///  Full well-formedness at a given fuel depth.
     pub open spec fn wf_spec(&self, fuel: nat) -> bool
         decreases fuel,
     {
@@ -459,8 +459,8 @@ impl RuntimeWidget {
         }
     }
 
-    /// Whether all Rational fields in this widget's model are in normalized (canonical) form.
-    /// When true and wf_shallow holds, comparing rational fields via eqv implies structural equality.
+    ///  Whether all Rational fields in this widget's model are in normalized (canonical) form.
+    ///  When true and wf_shallow holds, comparing rational fields via eqv implies structural equality.
     pub open spec fn model_normalized(&self, fuel: nat) -> bool
         decreases fuel,
     {
@@ -554,9 +554,9 @@ impl RuntimeWidget {
     }
 }
 
-// ── Widget shallow comparison ────────────────────────────────────
+//  ── Widget shallow comparison ────────────────────────────────────
 
-/// Match-based Alignment comparison (Verus enums lack derived PartialEq).
+///  Match-based Alignment comparison (Verus enums lack derived PartialEq).
 fn alignment_eq(a: &Alignment, b: &Alignment) -> (out: bool)
     ensures out ==> *a == *b,
 {
@@ -568,7 +568,7 @@ fn alignment_eq(a: &Alignment, b: &Alignment) -> (out: bool)
     }
 }
 
-/// Match-based FlexDirection comparison.
+///  Match-based FlexDirection comparison.
 fn flex_direction_eq(a: &FlexDirection, b: &FlexDirection) -> (out: bool)
     ensures out ==> *a == *b,
 {
@@ -579,8 +579,8 @@ fn flex_direction_eq(a: &FlexDirection, b: &FlexDirection) -> (out: bool)
     }
 }
 
-/// Compare two RuntimeTextInputConfigs for structural equality.
-/// Compare two Option<usize> values, proving spec equality when equal.
+///  Compare two RuntimeTextInputConfigs for structural equality.
+///  Compare two Option<usize> values, proving spec equality when equal.
 fn option_usize_eq(a: &Option<usize>, b: &Option<usize>) -> (out: bool)
     ensures out ==> match (a, b) {
         (Some(va), Some(vb)) => *va == *vb,
@@ -604,10 +604,10 @@ fn text_input_config_eq(a: &RuntimeTextInputConfig, b: &RuntimeTextInputConfig) 
     line_eq && max_eq && edit_eq
 }
 
-/// Shallow comparison of two widgets: same variant, same parameters, same child count.
-/// Does NOT compare children recursively.
-/// When true: the two widgets have the same structure and parameters,
-/// so given identical child layout results they would produce identical output.
+///  Shallow comparison of two widgets: same variant, same parameters, same child count.
+///  Does NOT compare children recursively.
+///  When true: the two widgets have the same structure and parameters,
+///  so given identical child layout results they would produce identical output.
 pub fn widgets_shallow_equal_exec(a: &RuntimeWidget, b: &RuntimeWidget) -> (out: bool)
     requires
         a.wf_shallow(),
@@ -689,7 +689,7 @@ pub fn widgets_shallow_equal_exec(a: &RuntimeWidget, b: &RuntimeWidget) -> (out:
                          ca.len() == cb.len()) {
                         false
                     } else {
-                        // Compare col_widths and row_heights element-wise
+                        //  Compare col_widths and row_heights element-wise
                         let mut ok = true;
                         let mut i: usize = 0;
                         while i < cwa.len()
@@ -737,9 +737,9 @@ pub fn widgets_shallow_equal_exec(a: &RuntimeWidget, b: &RuntimeWidget) -> (out:
     }
 }
 
-// ── Deep widget comparison ──────────────────────────────────────
+//  ── Deep widget comparison ──────────────────────────────────────
 
-/// Compare two Vec<RuntimeWidget> element-wise using deep comparison.
+///  Compare two Vec<RuntimeWidget> element-wise using deep comparison.
 fn vec_widgets_deep_equal(a: &Vec<RuntimeWidget>, b: &Vec<RuntimeWidget>, depth: usize) -> (out: bool)
     requires
         a@.len() == b@.len(),
@@ -775,7 +775,7 @@ fn vec_widgets_deep_equal(a: &Vec<RuntimeWidget>, b: &Vec<RuntimeWidget>, depth:
     true
 }
 
-/// Compare two Vec<RuntimeFlexItem> element-wise: weights + child widgets.
+///  Compare two Vec<RuntimeFlexItem> element-wise: weights + child widgets.
 fn vec_flex_deep_equal(a: &Vec<RuntimeFlexItem>, b: &Vec<RuntimeFlexItem>, depth: usize) -> (out: bool)
     requires
         a@.len() == b@.len(),
@@ -826,7 +826,7 @@ fn vec_flex_deep_equal(a: &Vec<RuntimeFlexItem>, b: &Vec<RuntimeFlexItem>, depth
                 Rational::lemma_normalized_eqv_implies_equal(
                     a@[i as int].weight@, b@[i as int].weight@,
                 );
-                // child model equality follows from widgets_deep_equal_exec ensures
+                //  child model equality follows from widgets_deep_equal_exec ensures
                 assert(a@[i as int].model() === b@[i as int].model());
             }
         }
@@ -835,7 +835,7 @@ fn vec_flex_deep_equal(a: &Vec<RuntimeFlexItem>, b: &Vec<RuntimeFlexItem>, depth
     true
 }
 
-/// Compare two Vec<RuntimeAbsoluteChild> element-wise: offsets + child widgets.
+///  Compare two Vec<RuntimeAbsoluteChild> element-wise: offsets + child widgets.
 fn vec_absolute_deep_equal(a: &Vec<RuntimeAbsoluteChild>, b: &Vec<RuntimeAbsoluteChild>, depth: usize) -> (out: bool)
     requires
         a@.len() == b@.len(),
@@ -906,10 +906,10 @@ fn vec_absolute_deep_equal(a: &Vec<RuntimeAbsoluteChild>, b: &Vec<RuntimeAbsolut
     true
 }
 
-/// Deep comparison of two widgets: same variant, same parameters, and
-/// recursively equal children. Returns false conservatively when depth
-/// is insufficient (non-leaf widgets need depth >= 2).
-/// When true and both sides are model_normalized, the models are structurally equal.
+///  Deep comparison of two widgets: same variant, same parameters, and
+///  recursively equal children. Returns false conservatively when depth
+///  is insufficient (non-leaf widgets need depth >= 2).
+///  When true and both sides are model_normalized, the models are structurally equal.
 pub fn widgets_deep_equal_exec(a: &RuntimeWidget, b: &RuntimeWidget, depth: usize) -> (out: bool)
     requires
         depth > 0,
@@ -920,14 +920,14 @@ pub fn widgets_deep_equal_exec(a: &RuntimeWidget, b: &RuntimeWidget, depth: usiz
             ==> a.model() === b.model(),
     decreases depth, 0nat,
 {
-    // Check shallow equality first (parameters + variant match + child count)
+    //  Check shallow equality first (parameters + variant match + child count)
     if !widgets_shallow_equal_exec(a, b) {
         return false;
     }
 
-    // Parameters match. Now re-compare fields for proof evidence and recursively compare children.
+    //  Parameters match. Now re-compare fields for proof evidence and recursively compare children.
     match (a, b) {
-        // ── Leaf variants ──────────────────────────────────────────
+        //  ── Leaf variants ──────────────────────────────────────────
         (RuntimeWidget::Leaf(RuntimeLeafWidget::Leaf { size: sa, .. }),
          RuntimeWidget::Leaf(RuntimeLeafWidget::Leaf { size: sb, .. })) => {
             let size_eq = sa.eq_exec(sb);
@@ -958,7 +958,7 @@ pub fn widgets_deep_equal_exec(a: &RuntimeWidget, b: &RuntimeWidget, depth: usiz
             true
         },
 
-        // ── Wrapper variants ───────────────────────────────────────
+        //  ── Wrapper variants ───────────────────────────────────────
         (RuntimeWidget::Wrapper(RuntimeWrapperWidget::Margin { margin: ma, child: ca, .. }),
          RuntimeWidget::Wrapper(RuntimeWrapperWidget::Margin { margin: mb, child: cb, .. })) => {
             if depth <= 1 { return false; }
@@ -1040,7 +1040,7 @@ pub fn widgets_deep_equal_exec(a: &RuntimeWidget, b: &RuntimeWidget, depth: usiz
             true
         },
 
-        // ── Container variants ─────────────────────────────────────
+        //  ── Container variants ─────────────────────────────────────
         (RuntimeWidget::Container(RuntimeContainerWidget::Column {
             padding: pa, spacing: sa, alignment: aa, children: ca, ..
         }),
@@ -1222,7 +1222,7 @@ pub fn widgets_deep_equal_exec(a: &RuntimeWidget, b: &RuntimeWidget, depth: usiz
             if cwa.len() != cwb.len() { return false; }
             if rha.len() != rhb.len() { return false; }
             if ca.len() != cb.len() { return false; }
-            // Capture normalization state as ghost booleans (avoids unfolding in loop invariants)
+            //  Capture normalization state as ghost booleans (avoids unfolding in loop invariants)
             let ghost cwa_norm: bool = forall|j: int| 0 <= j < cwa@.len() ==>
                 cwa@[j].width@.normalized_spec() && cwa@[j].height@.normalized_spec();
             let ghost cwb_norm: bool = forall|j: int| 0 <= j < cwb@.len() ==>
@@ -1231,7 +1231,7 @@ pub fn widgets_deep_equal_exec(a: &RuntimeWidget, b: &RuntimeWidget, depth: usiz
                 rha@[j].width@.normalized_spec() && rha@[j].height@.normalized_spec();
             let ghost rhb_norm: bool = forall|j: int| 0 <= j < rhb@.len() ==>
                 rhb@[j].width@.normalized_spec() && rhb@[j].height@.normalized_spec();
-            // Compare col_widths element-wise
+            //  Compare col_widths element-wise
             let mut ci: usize = 0;
             while ci < cwa.len()
                 invariant
@@ -1264,7 +1264,7 @@ pub fn widgets_deep_equal_exec(a: &RuntimeWidget, b: &RuntimeWidget, depth: usiz
                 }
                 ci = ci + 1;
             }
-            // Compare row_heights element-wise
+            //  Compare row_heights element-wise
             let mut ri: usize = 0;
             while ri < rha.len()
                 invariant
@@ -1297,16 +1297,16 @@ pub fn widgets_deep_equal_exec(a: &RuntimeWidget, b: &RuntimeWidget, depth: usiz
                 }
                 ri = ri + 1;
             }
-            // Compare children
+            //  Compare children
             let children_eq = vec_widgets_deep_equal(ca, cb, depth - 1);
             if !children_eq { return false; }
             proof {
                 if a.model_normalized(depth as nat) && b.model_normalized(depth as nat) {
-                    // Unfold model_normalized for Grid: establishes normalization for all fields
-                    // a.model_normalized(depth) for Grid gives us:
-                    //   pa normalized, hsa/vsa normalized, col_widths normalized, row_heights normalized,
-                    //   children model_normalized at depth-1
-                    // Similarly for b.
+                    //  Unfold model_normalized for Grid: establishes normalization for all fields
+                    //  a.model_normalized(depth) for Grid gives us:
+                    //    pa normalized, hsa/vsa normalized, col_widths normalized, row_heights normalized,
+                    //    children model_normalized at depth-1
+                    //  Similarly for b.
                     assert(forall|j: int| 0 <= j < cwa@.len() ==>
                         cwa@[j].width@.normalized_spec() && cwa@[j].height@.normalized_spec());
                     assert(forall|j: int| 0 <= j < cwb@.len() ==>
@@ -1327,7 +1327,7 @@ pub fn widgets_deep_equal_exec(a: &RuntimeWidget, b: &RuntimeWidget, depth: usiz
                     assert(pa@ == pb@);
                     Rational::lemma_normalized_eqv_implies_equal(hsa@, hsb@);
                     Rational::lemma_normalized_eqv_implies_equal(vsa@, vsb@);
-                    // col_widths extensional equality
+                    //  col_widths extensional equality
                     assert forall|j: int| 0 <= j < cwa@.len() implies
                         cwa@[j]@ == cwb@[j]@
                     by {
@@ -1337,7 +1337,7 @@ pub fn widgets_deep_equal_exec(a: &RuntimeWidget, b: &RuntimeWidget, depth: usiz
                     let nc = cwa@.len() as nat;
                     assert(Seq::new(nc, |i: int| cwa@[i]@) =~=
                            Seq::new(nc, |i: int| cwb@[i]@));
-                    // row_heights extensional equality
+                    //  row_heights extensional equality
                     assert forall|j: int| 0 <= j < rha@.len() implies
                         rha@[j]@ == rhb@[j]@
                     by {
@@ -1347,7 +1347,7 @@ pub fn widgets_deep_equal_exec(a: &RuntimeWidget, b: &RuntimeWidget, depth: usiz
                     let nr = rha@.len() as nat;
                     assert(Seq::new(nr, |i: int| rha@[i]@) =~=
                            Seq::new(nr, |i: int| rhb@[i]@));
-                    // children extensional equality
+                    //  children extensional equality
                     assert forall|j: int| 0 <= j < ca@.len() implies
                         ca@[j].model() === cb@[j].model()
                     by {
@@ -1421,9 +1421,9 @@ pub fn widgets_deep_equal_exec(a: &RuntimeWidget, b: &RuntimeWidget, depth: usiz
     }
 }
 
-// ── Conditional widget helper ────────────────────────────────────
+//  ── Conditional widget helper ────────────────────────────────────
 
-/// Layout a conditional widget: visible child or zero-sized leaf.
+///  Layout a conditional widget: visible child or zero-sized leaf.
 fn layout_conditional_exec(
     limits: &RuntimeLimits,
     visible: bool,
@@ -1468,9 +1468,9 @@ fn layout_conditional_exec(
     }
 }
 
-// ── Flex widget helper ──────────────────────────────────────────
+//  ── Flex widget helper ──────────────────────────────────────────
 
-/// Layout a flex widget: each child gets per-weight limits.
+///  Layout a flex widget: each child gets per-weight limits.
 fn layout_flex_widget_exec(
     limits: &RuntimeLimits,
     padding: &RuntimePadding,
@@ -1515,7 +1515,7 @@ fn layout_flex_widget_exec(
     let inner = limits.shrink_exec(&pad_h, &pad_v);
     let n = children.len();
 
-    // Compute weights and total_weight
+    //  Compute weights and total_weight
     let mut weights: Vec<RuntimeRational> = Vec::new();
     let mut total_weight = RuntimeRational::from_int(0);
     let mut i: usize = 0;
@@ -1539,7 +1539,7 @@ fn layout_flex_widget_exec(
         i = i + 1;
     }
 
-    // Compute total_spacing
+    //  Compute total_spacing
     let total_spacing = if n > 0 {
         let sp_count = n - 1;
         let mut sp = RuntimeRational::from_int(0);
@@ -1559,7 +1559,7 @@ fn layout_flex_widget_exec(
         RuntimeRational::from_int(0)
     };
 
-    // Recursively layout each child with per-weight limits, collecting child nodes + cross sizes
+    //  Recursively layout each child with per-weight limits, collecting child nodes + cross sizes
     let mut child_nodes: Vec<RuntimeNode> = Vec::new();
     let mut cross_sizes: Vec<RuntimeRational> = Vec::new();
     let mut k: usize = 0;
@@ -1613,7 +1613,7 @@ fn layout_flex_widget_exec(
                 k = k + 1;
             }
 
-            // Prove flex_column_layout_exec preconditions
+            //  Prove flex_column_layout_exec preconditions
             proof {
                 assert(Seq::new(weights@.len() as nat, |i: int| weights@[i]@)
                     =~= spec_weights);
@@ -1624,19 +1624,19 @@ fn layout_flex_widget_exec(
             let layout_result = flex_column_layout_exec(
                 limits, padding, spacing, alignment, &weights, &cross_sizes);
 
-            // Merge — layout_result.children@.len() == n from flex_column_layout_exec postcondition
+            //  Merge — layout_result.children@.len() == n from flex_column_layout_exec postcondition
             let ghost cn_models: Seq<Node<RationalModel>> =
                 Seq::new(n as nat, |j: int| child_nodes@[j]@);
             let merged = merge_layout_exec(layout_result, child_nodes, Ghost(cn_models));
 
-            // Connect merged result to spec layout_widget
+            //  Connect merged result to spec layout_widget
             proof {
                 let inner_spec = limits@.shrink(padding@.horizontal(), padding@.vertical());
                 let spec_cn = flex_column_widget_child_nodes(
                     inner_spec, spec_fi, spec_weights, total_weight@,
                     avail_spec, (fuel - 1) as nat);
 
-                // 1. cn_models =~= spec_cn
+                //  1. cn_models =~= spec_cn
                 assert(cn_models.len() == spec_cn.len());
                 assert forall|j: int| 0 <= j < cn_models.len() as int implies
                     cn_models[j] == spec_cn[j]
@@ -1647,7 +1647,7 @@ fn layout_flex_widget_exec(
                 }
                 assert(cn_models =~= spec_cn);
 
-                // 2. Cross sizes view matches what layout_flex_column_body computes
+                //  2. Cross sizes view matches what layout_flex_column_body computes
                 let cross_view: Seq<RationalModel> =
                     Seq::new(cross_sizes@.len() as nat, |i: int| cross_sizes@[i]@);
                 let spec_cross: Seq<RationalModel> =
@@ -1657,11 +1657,11 @@ fn layout_flex_widget_exec(
                     assert forall|j: int| 0 <= j < cross_view.len() as int implies
                         cross_view[j] == spec_cross[j]
                     by {
-                        // cross_sizes@[j]@ == child_nodes@[j]@.size.width == cn_models[j].size.width == spec_cn[j].size.width
+                        //  cross_sizes@[j]@ == child_nodes@[j]@.size.width == cn_models[j].size.width == spec_cn[j].size.width
                     }
                 }
 
-                // 3. Weights from spec_fi match spec_weights
+                //  3. Weights from spec_fi match spec_weights
                 let spec_weights_fi: Seq<RationalModel> =
                     Seq::new(spec_fi.len(), |i: int| spec_fi[i].weight);
                 assert(spec_weights_fi =~= spec_weights) by {
@@ -1673,12 +1673,12 @@ fn layout_flex_widget_exec(
                     }
                 }
 
-                // 4. Bridge: layout_widget uses flex_linear_widget_child_nodes dispatch
+                //  4. Bridge: layout_widget uses flex_linear_widget_child_nodes dispatch
                 assert(spec_cn === flex_linear_widget_child_nodes(
                     inner_spec, spec_fi, spec_weights, total_weight@,
                     avail_spec, Axis::Vertical, (fuel - 1) as nat));
 
-                // 5. merged@ == layout_flex_column_body(...)
+                //  5. merged@ == layout_flex_column_body(...)
                 assert(merged@ == layout_flex_column_body::<RationalModel>(
                     limits@, padding@, spacing@, *alignment, spec_weights_fi, spec_cn));
             }
@@ -1743,7 +1743,7 @@ fn layout_flex_widget_exec(
             let layout_result = flex_row_layout_exec(
                 limits, padding, spacing, alignment, &weights, &cross_sizes);
 
-            // Merge — layout_result.children@.len() == n from flex_row_layout_exec postcondition
+            //  Merge — layout_result.children@.len() == n from flex_row_layout_exec postcondition
             let ghost cn_models: Seq<Node<RationalModel>> =
                 Seq::new(n as nat, |j: int| child_nodes@[j]@);
             let merged = merge_layout_exec(layout_result, child_nodes, Ghost(cn_models));
@@ -1754,7 +1754,7 @@ fn layout_flex_widget_exec(
                     inner_spec, spec_fi, spec_weights, total_weight@,
                     avail_spec, (fuel - 1) as nat);
 
-                // 1. cn_models =~= spec_cn
+                //  1. cn_models =~= spec_cn
                 assert(cn_models.len() == spec_cn.len());
                 assert forall|j: int| 0 <= j < cn_models.len() as int implies
                     cn_models[j] == spec_cn[j]
@@ -1765,7 +1765,7 @@ fn layout_flex_widget_exec(
                 }
                 assert(cn_models =~= spec_cn);
 
-                // 2. Cross sizes view matches
+                //  2. Cross sizes view matches
                 let cross_view: Seq<RationalModel> =
                     Seq::new(cross_sizes@.len() as nat, |i: int| cross_sizes@[i]@);
                 let spec_cross: Seq<RationalModel> =
@@ -1777,7 +1777,7 @@ fn layout_flex_widget_exec(
                     by {}
                 }
 
-                // 3. Weights from spec_fi match
+                //  3. Weights from spec_fi match
                 let spec_weights_fi: Seq<RationalModel> =
                     Seq::new(spec_fi.len(), |i: int| spec_fi[i].weight);
                 assert(spec_weights_fi =~= spec_weights) by {
@@ -1789,12 +1789,12 @@ fn layout_flex_widget_exec(
                     }
                 }
 
-                // 4. Bridge: layout_widget uses flex_linear_widget_child_nodes dispatch
+                //  4. Bridge: layout_widget uses flex_linear_widget_child_nodes dispatch
                 assert(spec_cn === flex_linear_widget_child_nodes(
                     inner_spec, spec_fi, spec_weights, total_weight@,
                     avail_spec, Axis::Horizontal, (fuel - 1) as nat));
 
-                // 5. merged@ == layout_flex_row_body(...)
+                //  5. merged@ == layout_flex_row_body(...)
                 assert(merged@ == layout_flex_row_body::<RationalModel>(
                     limits@, padding@, spacing@, *alignment, spec_weights_fi, spec_cn));
             }
@@ -1804,9 +1804,9 @@ fn layout_flex_widget_exec(
     }
 }
 
-// ── Layout widget exec ───────────────────────────────────────────
+//  ── Layout widget exec ───────────────────────────────────────────
 
-/// Recursively lay out a RuntimeWidget tree.
+///  Recursively lay out a RuntimeWidget tree.
 pub fn layout_widget_exec(
     limits: &RuntimeLimits,
     widget: &RuntimeWidget,
@@ -1821,12 +1821,12 @@ pub fn layout_widget_exec(
     decreases fuel, 1nat,
 {
     if fuel == 0 {
-        // Unreachable: wf_spec(0) is false
+        //  Unreachable: wf_spec(0) is false
         let z1 = RuntimeRational::from_int(0);
         let z2 = RuntimeRational::from_int(0);
         RuntimeNode::leaf_exec(z1, z2, RuntimeSize::zero_exec())
     } else {
-        // Fuel bridge: one proof for all variants
+        //  Fuel bridge: one proof for all variants
         proof { assert((fuel as nat - 1) as nat == (fuel - 1) as nat); }
 
         match widget {
@@ -1909,9 +1909,9 @@ pub fn layout_widget_exec(
     }
 }
 
-/// Layout with verified children-within-bounds guarantee.
-/// Wraps `layout_widget_exec` and calls `lemma_layout_widget_cwb` in a proof block
-/// to establish that all children are positioned within the parent's bounds.
+///  Layout with verified children-within-bounds guarantee.
+///  Wraps `layout_widget_exec` and calls `lemma_layout_widget_cwb` in a proof block
+///  to establish that all children are positioned within the parent's bounds.
 pub fn layout_widget_checked(
     limits: &RuntimeLimits,
     widget: &RuntimeWidget,
@@ -1936,21 +1936,21 @@ pub fn layout_widget_checked(
     out
 }
 
-/// Which layout strategy to use.
+///  Which layout strategy to use.
 pub enum ContainerKind {
     Linear(Axis),
     Stack,
     Wrap,
 }
 
-/// Shared container layout: recursively compute children, call layout exec, merge.
+///  Shared container layout: recursively compute children, call layout exec, merge.
 fn layout_container_exec(
     limits: &RuntimeLimits,
     padding: &RuntimePadding,
-    spacing1: &RuntimeRational,  // spacing (col/row), h_spacing (wrap), unused (stack)
-    align1: &Alignment,          // alignment (row), h_align (stack), unused (col/wrap)
-    align2: &Alignment,          // alignment (col), v_align (stack), unused (row/wrap)
-    spacing2: &RuntimeRational,  // v_spacing (wrap), unused (col/row/stack)
+    spacing1: &RuntimeRational,  //  spacing (col/row), h_spacing (wrap), unused (stack)
+    align1: &Alignment,          //  alignment (row), h_align (stack), unused (col/wrap)
+    align2: &Alignment,          //  alignment (col), v_align (stack), unused (row/wrap)
+    spacing2: &RuntimeRational,  //  v_spacing (wrap), unused (col/row/stack)
     children: &Vec<RuntimeWidget>,
     fuel: usize,
     kind: ContainerKind,
@@ -1986,11 +1986,11 @@ fn layout_container_exec(
 
     let n = children.len();
 
-    // Ghost: spec-level children sequence
+    //  Ghost: spec-level children sequence
     let ghost spec_wc: Seq<Widget<RationalModel>> =
         Seq::new(children@.len() as nat, |j: int| children@[j].model());
 
-    // 1. Recursively compute child nodes
+    //  1. Recursively compute child nodes
     let mut child_nodes: Vec<RuntimeNode> = Vec::new();
     let mut child_sizes: Vec<RuntimeSize> = Vec::new();
     let mut i: usize = 0;
@@ -2000,7 +2000,7 @@ fn layout_container_exec(
             0 <= i <= n,
             n == children@.len(),
             spec_wc.len() == n as nat,
-            // Pointwise Seq::new unfolding (ghost let not available in loop)
+            //  Pointwise Seq::new unfolding (ghost let not available in loop)
             forall|j: int| 0 <= j < n ==>
                 spec_wc[j] == (#[trigger] children@[j]).model(),
             inner.wf_spec(),
@@ -2027,16 +2027,16 @@ fn layout_container_exec(
         i = i + 1;
     }
 
-    // Assert child_sizes wf for layout exec preconditions
+    //  Assert child_sizes wf for layout exec preconditions
     proof {
         assert forall|j: int| 0 <= j < child_sizes@.len() implies
             (#[trigger] child_sizes@[j]).wf_spec()
         by {
-            // From loop invariant: child_sizes@[j].wf_spec() for j < i == n
+            //  From loop invariant: child_sizes@[j].wf_spec() for j < i == n
         }
     }
 
-    // 2. Call the appropriate layout exec
+    //  2. Call the appropriate layout exec
     let layout_result = match kind {
         ContainerKind::Linear(axis) => {
             linear_layout_exec(limits, padding, spacing1, align1, &child_sizes, &axis)
@@ -2049,7 +2049,7 @@ fn layout_container_exec(
         },
     };
 
-    // Prove layout_result has n children (needed for merge precondition)
+    //  Prove layout_result has n children (needed for merge precondition)
     proof {
         let child_sizes_seq: Seq<Size<RationalModel>> =
             Seq::new(child_sizes@.len() as nat, |j: int| child_sizes@[j]@);
@@ -2077,25 +2077,25 @@ fn layout_container_exec(
         assert(layout_result.children@.len() == child_nodes@.len());
     }
 
-    // 3. Merge positions from layout_result with child_nodes
+    //  3. Merge positions from layout_result with child_nodes
     let ghost cn_models: Seq<Node<RationalModel>> =
         Seq::new(n as nat, |j: int| child_nodes@[j]@);
 
     let merged = merge_layout_exec(layout_result, child_nodes, Ghost(cn_models));
 
-    // 4. Connect to spec
+    //  4. Connect to spec
     proof {
         let inner_spec = limits@.shrink(padding@.horizontal(), padding@.vertical());
         let spec_cn = widget_child_nodes(inner_spec, spec_wc, (fuel - 1) as nat);
 
-        // Show cn_models == spec_cn via extensional equality
+        //  Show cn_models == spec_cn via extensional equality
         assert(cn_models.len() == spec_cn.len());
         assert forall|j: int| 0 <= j < cn_models.len() as int implies
             cn_models[j] == spec_cn[j]
         by {
-            // cn_models[j] = child_nodes@[j]@ = layout_widget(inner@, spec_wc[j], fuel-1)
-            // spec_cn[j] = layout_widget(inner_spec, spec_wc[j], fuel-1)
-            // inner@ == inner_spec, so they're equal
+            //  cn_models[j] = child_nodes@[j]@ = layout_widget(inner@, spec_wc[j], fuel-1)
+            //  spec_cn[j] = layout_widget(inner_spec, spec_wc[j], fuel-1)
+            //  inner@ == inner_spec, so they're equal
         }
         assert(cn_models =~= spec_cn);
 
@@ -2110,9 +2110,9 @@ fn layout_container_exec(
     merged
 }
 
-// ── Merge layout exec ────────────────────────────────────────────
+//  ── Merge layout exec ────────────────────────────────────────────
 
-/// Merge positions from a layout result with recursively computed child nodes.
+///  Merge positions from a layout result with recursively computed child nodes.
 pub fn merge_layout_exec(
     layout_result: RuntimeNode,
     mut child_nodes: Vec<RuntimeNode>,
@@ -2147,7 +2147,7 @@ pub fn merge_layout_exec(
             spec_cn.len() == n as nat,
             merged_model.children.len() == n as nat,
             layout_result@.children.len() == n as nat,
-            // Pointwise merge_layout unfolding (ghost let not available in loop)
+            //  Pointwise merge_layout unfolding (ghost let not available in loop)
             forall|j: int| 0 <= j < n ==>
                 (#[trigger] merged_model.children[j]) == (Node::<RationalModel> {
                     x: layout_result@.children[j].x,
@@ -2155,12 +2155,12 @@ pub fn merge_layout_exec(
                     size: spec_cn[j].size,
                     children: spec_cn[j].children,
                 }),
-            // Elements [i..n) still original
+            //  Elements [i..n) still original
             forall|j: int| i as int <= j < n as int ==> {
                 &&& (#[trigger] child_nodes@[j]).wf_spec()
                 &&& child_nodes@[j]@ == spec_cn[j]
             },
-            // Merged elements match model
+            //  Merged elements match model
             forall|j: int| 0 <= j < i ==> {
                 &&& (#[trigger] merged_children@[j]).wf_shallow()
                 &&& merged_children@[j]@ == merged_model.children[j]
@@ -2170,13 +2170,13 @@ pub fn merge_layout_exec(
         let x = copy_rational(&layout_result.children[i].x);
         let y = copy_rational(&layout_result.children[i].y);
 
-        // Capture facts about child_nodes[i] before the swap
+        //  Capture facts about child_nodes[i] before the swap
         proof {
             assert(child_nodes@[i as int].wf_spec());
             assert(child_nodes@[i as int]@ == spec_cn[i as int]);
         }
 
-        // Swap child_nodes[i] with a dummy to take ownership
+        //  Swap child_nodes[i] with a dummy to take ownership
         let mut swap_val = RuntimeNode::leaf_exec(
             RuntimeRational::from_int(0),
             RuntimeRational::from_int(0),
@@ -2185,7 +2185,7 @@ pub fn merge_layout_exec(
         child_nodes.set_and_swap(i, &mut swap_val);
         let cn = swap_val;
 
-        // Construct ghost model directly from components
+        //  Construct ghost model directly from components
         let ghost child_model = Node::<RationalModel> {
             x: layout_result@.children[i as int].x,
             y: layout_result@.children[i as int].y,
@@ -2202,9 +2202,9 @@ pub fn merge_layout_exec(
         };
 
         proof {
-            // child_model == merged_model.children[i] from pointwise invariant
+            //  child_model == merged_model.children[i] from pointwise invariant
             assert(child_model == merged_model.children[i as int]);
-            // wf_shallow: fields match model
+            //  wf_shallow: fields match model
             assert(layout_result.children@[i as int].wf_shallow());
             assert(layout_result.children@[i as int]@ == layout_result@.children[i as int]);
             assert(merged_child.wf_shallow());
@@ -2224,9 +2224,9 @@ pub fn merge_layout_exec(
     }
 }
 
-// ── Widget normalization ─────────────────────────────────────────
+//  ── Widget normalization ─────────────────────────────────────────
 
-/// Normalize a Vec<RuntimeFlexItem> using set_and_swap.
+///  Normalize a Vec<RuntimeFlexItem> using set_and_swap.
 fn normalize_flex_vec_exec(mut items: Vec<RuntimeFlexItem>, fuel: usize) -> (out: Vec<RuntimeFlexItem>)
     requires
         items@.len() > 0 ==> fuel > 0,
@@ -2238,7 +2238,7 @@ fn normalize_flex_vec_exec(mut items: Vec<RuntimeFlexItem>, fuel: usize) -> (out
         forall|i: int| 0 <= i < out@.len() ==> (#[trigger] out@[i]).weight@.normalized_spec(),
         forall|i: int| 0 <= i < out@.len() ==> (#[trigger] out@[i]).child.wf_spec(fuel as nat),
         forall|i: int| 0 <= i < out@.len() ==> (#[trigger] out@[i]).child.model_normalized(fuel as nat),
-        // Weight eqv preservation: each normalized weight is eqv to the original
+        //  Weight eqv preservation: each normalized weight is eqv to the original
         forall|i: int| 0 <= i < out@.len() ==>
             (#[trigger] out@[i]).weight@.eqv_spec(items@[i].weight@),
     decreases fuel, 2nat,
@@ -2257,13 +2257,13 @@ fn normalize_flex_vec_exec(mut items: Vec<RuntimeFlexItem>, fuel: usize) -> (out
             0 <= i <= n, n == orig.len(), result@.len() == i as int, n > 0 ==> fuel > 0,
             forall|j: int| i <= j < n ==> (#[trigger] items@[j]).weight.wf_spec(),
             forall|j: int| i <= j < n ==> (#[trigger] items@[j]).child.wf_spec(fuel as nat),
-            // Items not yet processed retain original weight models
+            //  Items not yet processed retain original weight models
             forall|j: int| i <= j < n ==> items@[j].weight@ == orig[j].weight@,
             forall|j: int| 0 <= j < i ==> (#[trigger] result@[j]).weight.wf_spec(),
             forall|j: int| 0 <= j < i ==> (#[trigger] result@[j]).weight@.normalized_spec(),
             forall|j: int| 0 <= j < i ==> (#[trigger] result@[j]).child.wf_spec(fuel as nat),
             forall|j: int| 0 <= j < i ==> (#[trigger] result@[j]).child.model_normalized(fuel as nat),
-            // Weight eqv tracking
+            //  Weight eqv tracking
             forall|j: int| 0 <= j < i ==>
                 (#[trigger] result@[j]).weight@.eqv_spec(orig[j].weight@),
             items@.len() == n,
@@ -2273,9 +2273,9 @@ fn normalize_flex_vec_exec(mut items: Vec<RuntimeFlexItem>, fuel: usize) -> (out
         let wn = dummy.weight.normalize();
         let cn = normalize_widget_exec(dummy.child, fuel);
         proof {
-            // wn@ eqv dummy.weight@ == orig[i].weight@ (from set_and_swap + invariant)
-            // normalize ensures: wn@.eqv_spec(dummy.weight@)
-            // dummy.weight@ == items@[i].weight@ (before swap) == orig[i].weight@
+            //  wn@ eqv dummy.weight@ == orig[i].weight@ (from set_and_swap + invariant)
+            //  normalize ensures: wn@.eqv_spec(dummy.weight@)
+            //  dummy.weight@ == items@[i].weight@ (before swap) == orig[i].weight@
         }
         result.push(RuntimeFlexItem { weight: wn, child: cn });
         dummy = RuntimeFlexItem { weight: RuntimeRational::from_int(0), child: make_dummy_widget() };
@@ -2284,7 +2284,7 @@ fn normalize_flex_vec_exec(mut items: Vec<RuntimeFlexItem>, fuel: usize) -> (out
     result
 }
 
-/// Normalize a Vec<RuntimeAbsoluteChild> using set_and_swap.
+///  Normalize a Vec<RuntimeAbsoluteChild> using set_and_swap.
 fn normalize_absolute_vec_exec(mut items: Vec<RuntimeAbsoluteChild>, fuel: usize) -> (out: Vec<RuntimeAbsoluteChild>)
     requires
         items@.len() > 0 ==> fuel > 0,
@@ -2338,7 +2338,7 @@ fn normalize_absolute_vec_exec(mut items: Vec<RuntimeAbsoluteChild>, fuel: usize
     result
 }
 
-/// Normalize a Vec<RuntimeSize> (for Grid col_widths/row_heights).
+///  Normalize a Vec<RuntimeSize> (for Grid col_widths/row_heights).
 fn normalize_size_vec_exec(mut sizes: Vec<RuntimeSize>) -> (out: Vec<RuntimeSize>)
     requires
         forall|i: int| 0 <= i < sizes@.len() ==> (#[trigger] sizes@[i]).wf_spec(),
@@ -2375,7 +2375,7 @@ fn normalize_size_vec_exec(mut sizes: Vec<RuntimeSize>) -> (out: Vec<RuntimeSize
     result
 }
 
-/// Create a dummy RuntimeWidget for set_and_swap operations.
+///  Create a dummy RuntimeWidget for set_and_swap operations.
 fn make_dummy_widget() -> (out: RuntimeWidget)
 {
     let s = RuntimeSize::zero_exec();
@@ -2385,7 +2385,7 @@ fn make_dummy_widget() -> (out: RuntimeWidget)
     })
 }
 
-/// Normalize all RuntimeRational fields in a Vec of widgets using set_and_swap.
+///  Normalize all RuntimeRational fields in a Vec of widgets using set_and_swap.
 fn normalize_widget_vec_exec(mut widgets: Vec<RuntimeWidget>, fuel: usize) -> (out: Vec<RuntimeWidget>)
     requires
         widgets@.len() > 0 ==> fuel > 0,
@@ -2429,9 +2429,9 @@ fn normalize_widget_vec_exec(mut widgets: Vec<RuntimeWidget>, fuel: usize) -> (o
     result
 }
 
-/// Normalize all RuntimeRational fields in a widget tree.
-/// Produces a widget with `model_normalized(fuel)` — all rational Ghost models
-/// are in canonical (normalized) form.
+///  Normalize all RuntimeRational fields in a widget tree.
+///  Produces a widget with `model_normalized(fuel)` — all rational Ghost models
+///  are in canonical (normalized) form.
 pub fn normalize_widget_exec(widget: RuntimeWidget, fuel: usize) -> (out: RuntimeWidget)
     requires
         fuel > 0,
@@ -2448,7 +2448,7 @@ pub fn normalize_widget_exec(widget: RuntimeWidget, fuel: usize) -> (out: Runtim
     }
 }
 
-/// Normalize a leaf widget's rational fields.
+///  Normalize a leaf widget's rational fields.
 fn normalize_leaf_exec(leaf: RuntimeLeafWidget, fuel: Ghost<nat>) -> (out: RuntimeWidget)
     requires leaf.wf_shallow(), fuel@ > 0,
     ensures out.wf_spec(fuel@), out.model_normalized(fuel@),
@@ -2477,7 +2477,7 @@ fn normalize_leaf_exec(leaf: RuntimeLeafWidget, fuel: Ghost<nat>) -> (out: Runti
     }
 }
 
-/// Normalize a wrapper widget's rational fields.
+///  Normalize a wrapper widget's rational fields.
 fn normalize_wrapper_exec(wrapper: RuntimeWrapperWidget, fuel: usize) -> (out: RuntimeWidget)
     requires fuel > 0, RuntimeWidget::Wrapper(wrapper).wf_spec(fuel as nat),
     ensures out.wf_spec(fuel as nat), out.model_normalized(fuel as nat),
@@ -2485,7 +2485,7 @@ fn normalize_wrapper_exec(wrapper: RuntimeWrapperWidget, fuel: usize) -> (out: R
 {
     match wrapper {
             RuntimeWrapperWidget::Margin { margin, child, .. } => {
-                assert(child.wf_spec((fuel - 1) as nat)); // from widget.wf_spec(fuel) unfolding
+                assert(child.wf_spec((fuel - 1) as nat)); //  from widget.wf_spec(fuel) unfolding
                 let mn = margin.normalize_exec();
                 let cn = normalize_widget_exec(*child, fuel - 1);
                 RuntimeWidget::Wrapper(RuntimeWrapperWidget::Margin {
@@ -2557,7 +2557,7 @@ fn normalize_wrapper_exec(wrapper: RuntimeWrapperWidget, fuel: usize) -> (out: R
     }
 }
 
-/// Normalize a container widget's rational fields.
+///  Normalize a container widget's rational fields.
 fn normalize_container_exec(container: RuntimeContainerWidget, fuel: usize) -> (out: RuntimeWidget)
     requires fuel > 0, RuntimeWidget::Container(container).wf_spec(fuel as nat),
     ensures out.wf_spec(fuel as nat), out.model_normalized(fuel as nat),
@@ -2638,34 +2638,34 @@ fn normalize_container_exec(container: RuntimeContainerWidget, fuel: usize) -> (
             RuntimeContainerWidget::Flex { padding, spacing, alignment, direction, children, .. } => {
                 assert(forall|i: int| 0 <= i < children@.len() ==> (#[trigger] children@[i]).child.wf_spec((fuel - 1) as nat));
                 if children.len() > 0 { assert(children@[0].child.wf_spec((fuel - 1) as nat)); }
-                // Capture original weights before normalization
+                //  Capture original weights before normalization
                 let ghost orig_weights = Seq::new(children@.len() as nat, |i: int| children@[i].weight@);
                 let pn = padding.normalize_exec();
                 let sn = spacing.normalize();
                 let cn = normalize_flex_vec_exec(children, fuel - 1);
-                // sum_weights of normalized weights is eqv to original sum
-                // (each weight eqv-preserves through normalize, and add is congruent)
-                // This ensures the nonzero sum condition carries over.
+                //  sum_weights of normalized weights is eqv to original sum
+                //  (each weight eqv-preserves through normalize, and add is congruent)
+                //  This ensures the nonzero sum condition carries over.
                 let ghost new_weights = Seq::new(cn@.len() as nat, |i: int| cn@[i].weight@);
                 proof {
                     if cn@.len() > 0 {
-                        // The original wf_spec guarantees !sum_weights(orig, n).eqv(0)
-                        // normalized weights are eqv to original weights
-                        // sum_weights is congruent → new sum eqv to old sum
-                        // So new sum is also not eqv to 0.
-                        // Z3 needs help: assert the nonzero sum for normalized weights
+                        //  The original wf_spec guarantees !sum_weights(orig, n).eqv(0)
+                        //  normalized weights are eqv to original weights
+                        //  sum_weights is congruent → new sum eqv to old sum
+                        //  So new sum is also not eqv to 0.
+                        //  Z3 needs help: assert the nonzero sum for normalized weights
                         assert(!sum_weights::<RationalModel>(
                             orig_weights, orig_weights.len() as nat,
                         ).eqv_spec(RationalModel::from_int_spec(0)));
-                        // The normalized weights are eqv to original (from normalize ensures)
-                        // sum_weights congruence: proved in congruence_proofs
-                        // For now, help Z3 with the conclusion:
-                        // cn@[i].weight@ eqv orig_weights[i] (from vec helper ensures)
-                        // sum_weights congruence + original nonzero → normalized nonzero
+                        //  The normalized weights are eqv to original (from normalize ensures)
+                        //  sum_weights congruence: proved in congruence_proofs
+                        //  For now, help Z3 with the conclusion:
+                        //  cn@[i].weight@ eqv orig_weights[i] (from vec helper ensures)
+                        //  sum_weights congruence + original nonzero → normalized nonzero
                         crate::layout::congruence_proofs::lemma_sum_weights_congruence(
                             new_weights, orig_weights, new_weights.len() as nat);
-                        // new_sum eqv orig_sum. orig_sum not eqv 0.
-                        // If new_sum eqv 0, then orig_sum eqv new_sum eqv 0 → contradiction.
+                        //  new_sum eqv orig_sum. orig_sum not eqv 0.
+                        //  If new_sum eqv 0, then orig_sum eqv new_sum eqv 0 → contradiction.
                         RationalModel::lemma_eqv_symmetric(
                             sum_weights::<RationalModel>(new_weights, new_weights.len() as nat),
                             sum_weights::<RationalModel>(orig_weights, orig_weights.len() as nat));
@@ -2725,4 +2725,4 @@ fn normalize_container_exec(container: RuntimeContainerWidget, fuel: usize) -> (
     }
 }
 
-} // verus!
+} //  verus!

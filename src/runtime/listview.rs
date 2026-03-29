@@ -20,7 +20,7 @@ use crate::measure::measure_children;
 
 verus! {
 
-/// Measure all children at runtime, producing sizes matching measure_children spec.
+///  Measure all children at runtime, producing sizes matching measure_children spec.
 fn listview_measure_children_exec(
     child_limits: &RuntimeLimits,
     children: &Vec<RuntimeWidget>,
@@ -75,7 +75,7 @@ fn listview_measure_children_exec(
     child_sizes
 }
 
-/// Find the visible range [first, end) for a ListView given child sizes and scroll state.
+///  Find the visible range [first, end) for a ListView given child sizes and scroll state.
 fn listview_find_visible_range_exec(
     child_sizes: &Vec<RuntimeSize>,
     Ghost(spec_sizes): Ghost<Seq<Size<RationalModel>>>,
@@ -99,7 +99,7 @@ fn listview_find_visible_range_exec(
     let n = child_sizes.len();
     let scroll_bottom = scroll_y.add(&viewport.height);
 
-    // Find first visible index
+    //  Find first visible index
     let mut first: usize = 0;
     let mut cur_y = RuntimeRational::from_int(0);
     let mut first_visible_at_cur: bool = false;
@@ -148,7 +148,7 @@ fn listview_find_visible_range_exec(
         lemma_first_visible_loop_matches::<RationalModel>(spec_sizes, spacing@, scroll_y@, first as nat);
     }
 
-    // Find end visible index
+    //  Find end visible index
     let mut end: usize = 0;
     let mut end_y = RuntimeRational::from_int(0);
     let mut end_past_visible: bool = false;
@@ -194,7 +194,7 @@ fn listview_find_visible_range_exec(
     (first, end)
 }
 
-/// Position visible children: accumulate y-offsets and build positioned nodes.
+///  Position visible children: accumulate y-offsets and build positioned nodes.
 fn listview_position_children_exec(
     visible_nodes: &Vec<RuntimeNode>,
     child_sizes: &Vec<RuntimeSize>,
@@ -240,7 +240,7 @@ fn listview_position_children_exec(
     let mut positioned: Vec<RuntimeNode> = Vec::new();
     let mut k: usize = 0;
 
-    // Compute child_y(first) by accumulation
+    //  Compute child_y(first) by accumulation
     let mut pos_y = RuntimeRational::from_int(0);
     {
         let mut fi: usize = 0;
@@ -321,7 +321,7 @@ fn listview_position_children_exec(
 
         positioned.push(positioned_child);
 
-        // Advance pos_y
+        //  Advance pos_y
         let h = copy_rational(&child_sizes[first + k].height);
         pos_y = pos_y.add(&h).add(spacing);
         k = k + 1;
@@ -330,13 +330,13 @@ fn listview_position_children_exec(
     positioned
 }
 
-/// Layout a ListView widget at runtime.
+///  Layout a ListView widget at runtime.
 ///
-/// 1. Measure all children to get their heights
-/// 2. Scan for visible range [first, end) using cumulative heights
-/// 3. Layout only visible children
-/// 4. Position visible children at (0, child_y(i) - scroll_y)
-/// 5. Return limits.resolve(viewport)
+///  1. Measure all children to get their heights
+///  2. Scan for visible range [first, end) using cumulative heights
+///  3. Layout only visible children
+///  4. Position visible children at (0, child_y(i) - scroll_y)
+///  5. Return limits.resolve(viewport)
 pub fn layout_listview_widget_exec(
     limits: &RuntimeLimits,
     spacing: &RuntimeRational,
@@ -373,7 +373,7 @@ pub fn layout_listview_widget_exec(
     let ghost spec_wc: Seq<Widget<RationalModel>> =
         Seq::new(children@.len() as nat, |j: int| children@[j].model());
 
-    // Child limits: (zero, Size(viewport.width, viewport.height))
+    //  Child limits: (zero, Size(viewport.width, viewport.height))
     let child_min = RuntimeSize::zero_exec();
     let child_max = RuntimeSize::new(
         copy_rational(&viewport.width),
@@ -386,7 +386,7 @@ pub fn layout_listview_widget_exec(
         max: Size::new(viewport@.width, viewport@.height),
     };
 
-    // Step 1: Measure all children
+    //  Step 1: Measure all children
     let child_sizes = listview_measure_children_exec(
         &child_limits, children, fuel, Ghost(spec_wc), Ghost(spec_child_limits),
     );
@@ -403,16 +403,16 @@ pub fn layout_listview_widget_exec(
         assert(computed_sizes =~= spec_sizes);
     }
 
-    // Steps 2-3: Find visible range
+    //  Steps 2-3: Find visible range
     let (first, end) = listview_find_visible_range_exec(
         &child_sizes, Ghost(spec_sizes), spacing, scroll_y, viewport,
     );
 
-    // Steps 4-6: Layout and position visible children
+    //  Steps 4-6: Layout and position visible children
     let positioned = if end >= first {
         let count: usize = end - first;
 
-        // Step 4: Layout visible children
+        //  Step 4: Layout visible children
         let mut visible_nodes: Vec<RuntimeNode> = Vec::new();
         let mut vi: usize = 0;
 
@@ -447,7 +447,7 @@ pub fn layout_listview_widget_exec(
 
         let visible_nodes = visible_nodes;
 
-        // Steps 5-6: Position visible children
+        //  Steps 5-6: Position visible children
         listview_position_children_exec(
             &visible_nodes, &child_sizes, Ghost(spec_sizes), Ghost(spec_wc),
             Ghost(spec_child_limits), first, end, spacing, scroll_y, fuel,
@@ -456,7 +456,7 @@ pub fn layout_listview_widget_exec(
         Vec::new()
     };
 
-    // Build the parent node
+    //  Build the parent node
     let resolved = limits.resolve_exec(viewport.copy_size());
     let px = RuntimeRational::from_int(0);
     let py = RuntimeRational::from_int(0);
@@ -501,9 +501,9 @@ pub fn layout_listview_widget_exec(
     out
 }
 
-// ── Loop-to-spec correspondence helpers ──────────────────────────────
+//  ── Loop-to-spec correspondence helpers ──────────────────────────────
 
-/// The imperative first-visible loop matches the recursive spec.
+///  The imperative first-visible loop matches the recursive spec.
 proof fn lemma_first_visible_loop_matches<T: OrderedRing>(
     child_sizes: Seq<Size<T>>,
     spacing: T,
@@ -512,10 +512,10 @@ proof fn lemma_first_visible_loop_matches<T: OrderedRing>(
 )
     requires
         result <= child_sizes.len(),
-        // All items before `result` have bottom <= scroll_y
+        //  All items before `result` have bottom <= scroll_y
         forall|k: nat| k < result ==>
             !scroll_y.lt(listview_child_bottom(child_sizes, spacing, k)),
-        // Either result == total, or result's bottom > scroll_y
+        //  Either result == total, or result's bottom > scroll_y
         result < child_sizes.len() ==>
             scroll_y.lt(listview_child_bottom(child_sizes, spacing, result)),
     ensures
@@ -544,15 +544,15 @@ proof fn lemma_first_visible_from_loop_matches<T: OrderedRing>(
     decreases child_sizes.len() - from,
 {
     if from >= child_sizes.len() {
-        // result must be child_sizes.len()
+        //  result must be child_sizes.len()
     } else if scroll_y.lt(listview_child_bottom(child_sizes, spacing, from)) {
-        // from is the first visible => result == from
+        //  from is the first visible => result == from
     } else {
         lemma_first_visible_from_loop_matches(child_sizes, spacing, scroll_y, result, from + 1);
     }
 }
 
-/// The imperative end-visible loop matches the recursive spec.
+///  The imperative end-visible loop matches the recursive spec.
 proof fn lemma_end_visible_loop_matches<T: OrderedRing>(
     child_sizes: Seq<Size<T>>,
     spacing: T,
@@ -562,10 +562,10 @@ proof fn lemma_end_visible_loop_matches<T: OrderedRing>(
 )
     requires
         result <= child_sizes.len(),
-        // All items before `result` have top < scroll_bottom
+        //  All items before `result` have top < scroll_bottom
         forall|k: nat| k < result ==>
             !scroll_y.add(viewport_h).le(listview_child_y(child_sizes, spacing, k)),
-        // Either result == total, or result's top >= scroll_bottom
+        //  Either result == total, or result's top >= scroll_bottom
         result < child_sizes.len() ==>
             scroll_y.add(viewport_h).le(listview_child_y(child_sizes, spacing, result)),
     ensures
@@ -595,15 +595,15 @@ proof fn lemma_end_visible_from_loop_matches<T: OrderedRing>(
     decreases child_sizes.len() - from,
 {
     if from >= child_sizes.len() {
-        // result must be child_sizes.len()
+        //  result must be child_sizes.len()
     } else {
         let scroll_bottom = scroll_y.add(viewport_h);
         if scroll_bottom.le(listview_child_y(child_sizes, spacing, from)) {
-            // from is the end => result == from
+            //  from is the end => result == from
         } else {
             lemma_end_visible_from_loop_matches(child_sizes, spacing, scroll_y, viewport_h, result, from + 1);
         }
     }
 }
 
-} // verus!
+} //  verus!

@@ -12,9 +12,9 @@ use crate::runtime::event::*;
 
 verus! {
 
-// ──────────────────────────────────────────────────────────────────────
-// Runtime text input config
-// ──────────────────────────────────────────────────────────────────────
+//  ──────────────────────────────────────────────────────────────────────
+//  Runtime text input config
+//  ──────────────────────────────────────────────────────────────────────
 
 pub struct RuntimeTextInputConfig {
     pub line_width: Option<usize>,
@@ -39,9 +39,9 @@ impl View for RuntimeTextInputConfig {
     }
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// Runtime text input widget
-// ──────────────────────────────────────────────────────────────────────
+//  ──────────────────────────────────────────────────────────────────────
+//  Runtime text input widget
+//  ──────────────────────────────────────────────────────────────────────
 
 pub struct RuntimeTextInput {
     pub session: RuntimeTextEditSession,
@@ -51,7 +51,7 @@ pub struct RuntimeTextInput {
     pub blink_counter: usize,
 }
 
-/// Create a new text input with default viewport.
+///  Create a new text input with default viewport.
 pub fn new_text_input_exec(
     model: RuntimeTextModel,
     config: RuntimeTextInputConfig,
@@ -78,8 +78,8 @@ pub fn new_text_input_exec(
     }
 }
 
-/// Handle a key event on the text input.
-/// Filters keys per config, delegates to session, scrolls to cursor.
+///  Handle a key event on the text input.
+///  Filters keys per config, delegates to session, scrolls to cursor.
 pub fn text_input_handle_key_exec(
     mut input: RuntimeTextInput,
     event: &RuntimeKeyEvent,
@@ -105,7 +105,7 @@ pub fn text_input_handle_key_exec(
                 input.session.view_session(), input.config@, event@).clipboard,
         result.session.model.wf_spec(),
 {
-    // Mirror spec key_allowed_by_config structure exactly.
+    //  Mirror spec key_allowed_by_config structure exactly.
     let is_enter = match &event.kind {
         RuntimeKeyEventKind::Enter => true,
         _ => false,
@@ -137,10 +137,10 @@ pub fn text_input_handle_key_exec(
         return input;
     }
 
-    // Apply to session
+    //  Apply to session
     input.session = apply_key_to_session_exec(input.session, event);
 
-    // Compute cursor line and scroll to it
+    //  Compute cursor line and scroll to it
     let cursor_line = {
         let pos = input.session.model.focus;
         match input.config.line_width {
@@ -162,14 +162,14 @@ pub fn text_input_handle_key_exec(
     };
     input.viewport = scroll_to_cursor_exec(input.viewport, cursor_line);
 
-    // Reset blink
+    //  Reset blink
     input.cursor_visible = true;
     input.blink_counter = 0;
 
     input
 }
 
-/// Tick the blink timer. Toggle cursor visibility every `blink_rate` ticks.
+///  Tick the blink timer. Toggle cursor visibility every `blink_rate` ticks.
 pub fn text_input_tick_exec(
     mut input: RuntimeTextInput, blink_rate: usize,
 ) -> (result: RuntimeTextInput)
@@ -186,7 +186,7 @@ pub fn text_input_tick_exec(
     input
 }
 
-/// Handle a click on a text input: compute cursor position from local coords.
+///  Handle a click on a text input: compute cursor position from local coords.
 pub fn text_input_handle_click_exec(
     mut input: RuntimeTextInput,
     local_x: usize,
@@ -218,7 +218,7 @@ pub fn text_input_handle_click_exec(
         },
     };
 
-    // Clamp to text length
+    //  Clamp to text length
     let text_len = input.session.model.text.len();
     let clamped = if text_pos > text_len { text_len } else { text_pos };
 
@@ -230,11 +230,11 @@ pub fn text_input_handle_click_exec(
     }
     input.session.model.focus_affinity = Affinity::Downstream;
 
-    // Reset blink
+    //  Reset blink
     input.cursor_visible = true;
     input.blink_counter = 0;
 
     input
 }
 
-} // verus!
+} //  verus!

@@ -10,10 +10,10 @@ use crate::layout::{sum_widths, sum_heights, repeated_add};
 
 verus! {
 
-// ── Grid cell position helpers ──────────────────────────────────────
+//  ── Grid cell position helpers ──────────────────────────────────────
 
-/// X-position of a grid cell at column `col`:
-/// padding_left + sum_widths(col_widths, col) + col * h_spacing.
+///  X-position of a grid cell at column `col`:
+///  padding_left + sum_widths(col_widths, col) + col * h_spacing.
 pub open spec fn grid_cell_x<T: OrderedRing>(
     padding_left: T,
     col_widths: Seq<Size<T>>,
@@ -25,8 +25,8 @@ pub open spec fn grid_cell_x<T: OrderedRing>(
         .add(repeated_add(h_spacing, col))
 }
 
-/// Y-position of a grid cell at row `row`:
-/// padding_top + sum_heights(row_heights, row) + row * v_spacing.
+///  Y-position of a grid cell at row `row`:
+///  padding_top + sum_heights(row_heights, row) + row * v_spacing.
 pub open spec fn grid_cell_y<T: OrderedRing>(
     padding_top: T,
     row_heights: Seq<Size<T>>,
@@ -38,7 +38,7 @@ pub open spec fn grid_cell_y<T: OrderedRing>(
         .add(repeated_add(v_spacing, row))
 }
 
-/// Width of column `col`: col_widths[col].width.
+///  Width of column `col`: col_widths[col].width.
 pub open spec fn grid_col_width<T: OrderedRing>(
     col_widths: Seq<Size<T>>,
     col: nat,
@@ -46,7 +46,7 @@ pub open spec fn grid_col_width<T: OrderedRing>(
     col_widths[col as int].width
 }
 
-/// Height of row `row`: row_heights[row].height.
+///  Height of row `row`: row_heights[row].height.
 pub open spec fn grid_row_height<T: OrderedRing>(
     row_heights: Seq<Size<T>>,
     row: nat,
@@ -54,9 +54,9 @@ pub open spec fn grid_row_height<T: OrderedRing>(
     row_heights[row as int].height
 }
 
-// ── Grid child placement ────────────────────────────────────────────
+//  ── Grid child placement ────────────────────────────────────────────
 
-/// Place a single child in a grid cell, applying alignment within the cell.
+///  Place a single child in a grid cell, applying alignment within the cell.
 pub open spec fn grid_child<T: OrderedField>(
     padding: Padding<T>,
     col_widths: Seq<Size<T>>,
@@ -78,7 +78,7 @@ pub open spec fn grid_child<T: OrderedField>(
     Node::leaf(child_x, child_y, child_size)
 }
 
-/// Build children for a single row of the grid (columns col..num_cols).
+///  Build children for a single row of the grid (columns col..num_cols).
 pub open spec fn grid_row_children<T: OrderedField>(
     padding: Padding<T>,
     col_widths: Seq<Size<T>>,
@@ -109,7 +109,7 @@ pub open spec fn grid_row_children<T: OrderedField>(
     }
 }
 
-/// Build all children for the grid (rows row..num_rows, each containing all columns).
+///  Build all children for the grid (rows row..num_rows, each containing all columns).
 pub open spec fn grid_all_children<T: OrderedField>(
     padding: Padding<T>,
     col_widths: Seq<Size<T>>,
@@ -138,7 +138,7 @@ pub open spec fn grid_all_children<T: OrderedField>(
     }
 }
 
-/// Total grid content width: sum of column widths + (num_cols - 1) * h_spacing.
+///  Total grid content width: sum of column widths + (num_cols - 1) * h_spacing.
 pub open spec fn grid_content_width<T: OrderedRing>(
     col_widths: Seq<Size<T>>,
     h_spacing: T,
@@ -151,7 +151,7 @@ pub open spec fn grid_content_width<T: OrderedRing>(
     }
 }
 
-/// Total grid content height: sum of row heights + (num_rows - 1) * v_spacing.
+///  Total grid content height: sum of row heights + (num_rows - 1) * v_spacing.
 pub open spec fn grid_content_height<T: OrderedRing>(
     row_heights: Seq<Size<T>>,
     v_spacing: T,
@@ -164,7 +164,7 @@ pub open spec fn grid_content_height<T: OrderedRing>(
     }
 }
 
-/// Lay out children in a grid with fixed column widths and row heights.
+///  Lay out children in a grid with fixed column widths and row heights.
 #[verifier::opaque]
 pub open spec fn grid_layout<T: OrderedField>(
     limits: Limits<T>,
@@ -189,4 +189,4 @@ pub open spec fn grid_layout<T: OrderedField>(
     Node { x: T::zero(), y: T::zero(), size: parent_size, children }
 }
 
-} // verus!
+} //  verus!

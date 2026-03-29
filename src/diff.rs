@@ -6,8 +6,8 @@ use core::marker::PhantomData;
 
 verus! {
 
-/// Result of comparing two nodes.
-/// T is a phantom type parameter needed for Verus height-based termination.
+///  Result of comparing two nodes.
+///  T is a phantom type parameter needed for Verus height-based termination.
 #[verifier::reject_recursive_types(T)]
 pub enum DiffResult<T: OrderedRing> {
     Same,
@@ -17,7 +17,7 @@ pub enum DiffResult<T: OrderedRing> {
     ChildrenChanged { diffs: Seq<(nat, DiffResult<T>)>, _phantom: PhantomData<T> },
 }
 
-/// Compare two nodes, reporting what changed.
+///  Compare two nodes, reporting what changed.
 pub open spec fn diff_nodes<T: OrderedRing>(
     old: Node<T>,
     new: Node<T>,
@@ -43,7 +43,7 @@ pub open spec fn diff_nodes<T: OrderedRing>(
     }
 }
 
-/// Diff children [0..count), collecting non-Same diffs.
+///  Diff children [0..count), collecting non-Same diffs.
 pub open spec fn diff_children<T: OrderedRing>(
     old: Node<T>,
     new: Node<T>,
@@ -65,7 +65,7 @@ pub open spec fn diff_children<T: OrderedRing>(
     }
 }
 
-/// Diffing a node with itself yields Same (reflexivity).
+///  Diffing a node with itself yields Same (reflexivity).
 pub proof fn lemma_diff_reflexive<T: OrderedRing>(node: Node<T>, fuel: nat)
     requires fuel > 0,
     ensures diff_nodes::<T>(node, node, fuel) === DiffResult::<T>::Same,
@@ -94,11 +94,11 @@ proof fn lemma_diff_children_reflexive<T: OrderedRing>(
         if fuel > 0 {
             lemma_diff_reflexive::<T>(node.children[(count - 1) as int], fuel);
         }
-        // When fuel == 0, diff_nodes returns Same by definition
+        //  When fuel == 0, diff_nodes returns Same by definition
     }
 }
 
-/// If diff says Same (with fuel > 0), the top-level fields are actually equivalent.
+///  If diff says Same (with fuel > 0), the top-level fields are actually equivalent.
 pub proof fn lemma_diff_same_implies_eqv<T: OrderedRing>(
     old: Node<T>,
     new: Node<T>,
@@ -114,10 +114,10 @@ pub proof fn lemma_diff_same_implies_eqv<T: OrderedRing>(
         old.size.height.eqv(new.size.height),
         old.children.len() == new.children.len(),
 {
-    // Verus unfolds diff_nodes. Each non-Same early return contradicts the precondition.
+    //  Verus unfolds diff_nodes. Each non-Same early return contradicts the precondition.
 }
 
-/// If diff_children returns empty, every child pair had Same.
+///  If diff_children returns empty, every child pair had Same.
 proof fn lemma_diff_children_all_same<T: OrderedRing>(
     old: Node<T>,
     new: Node<T>,
@@ -135,13 +135,13 @@ proof fn lemma_diff_children_all_same<T: OrderedRing>(
     decreases count,
 {
     if count > 0 {
-        // Unfold: result = if d is Same then rest else rest.push(...)
-        // Since result.len() == 0, d must be Same and rest.len() == 0
+        //  Unfold: result = if d is Same then rest else rest.push(...)
+        //  Since result.len() == 0, d must be Same and rest.len() == 0
         lemma_diff_children_all_same::<T>(old, new, (count - 1) as nat, fuel);
     }
 }
 
-/// Full recursive version: Same implies eqv at top level AND every child is Same.
+///  Full recursive version: Same implies eqv at top level AND every child is Same.
 pub proof fn lemma_diff_same_implies_children_eqv<T: OrderedRing>(
     old: Node<T>,
     new: Node<T>,
@@ -165,7 +165,7 @@ pub proof fn lemma_diff_same_implies_children_eqv<T: OrderedRing>(
     lemma_diff_children_all_same::<T>(old, new, old.children.len(), (fuel - 1) as nat);
 }
 
-/// Deep equivalence: top-level fields eqv + children recursively eqv to given depth.
+///  Deep equivalence: top-level fields eqv + children recursively eqv to given depth.
 pub open spec fn nodes_deeply_eqv<T: OrderedRing>(
     a: Node<T>,
     b: Node<T>,
@@ -182,8 +182,8 @@ pub open spec fn nodes_deeply_eqv<T: OrderedRing>(
         nodes_deeply_eqv(a.children[i], b.children[i], (depth - 1) as nat))
 }
 
-/// diff_nodes returning Same implies deep equivalence to depth fuel-1.
-/// (At fuel=f, children are compared with fuel f-1, so field eqv holds to depth f-1.)
+///  diff_nodes returning Same implies deep equivalence to depth fuel-1.
+///  (At fuel=f, children are compared with fuel f-1, so field eqv holds to depth f-1.)
 pub proof fn lemma_diff_same_implies_deeply_eqv<T: OrderedRing>(
     old: Node<T>,
     new: Node<T>,
@@ -203,7 +203,7 @@ pub proof fn lemma_diff_same_implies_deeply_eqv<T: OrderedRing>(
                 old.children[i], new.children[i], (fuel - 2) as nat,
             )
         by {
-            // diff_nodes(child_old, child_new, fuel-1) === Same
+            //  diff_nodes(child_old, child_new, fuel-1) === Same
             lemma_diff_same_implies_deeply_eqv::<T>(
                 old.children[i], new.children[i], (fuel - 1) as nat,
             );
@@ -211,7 +211,7 @@ pub proof fn lemma_diff_same_implies_deeply_eqv<T: OrderedRing>(
     }
 }
 
-/// Deep equivalence is reflexive.
+///  Deep equivalence is reflexive.
 pub proof fn lemma_deeply_eqv_reflexive<T: OrderedRing>(node: Node<T>, depth: nat)
     ensures
         nodes_deeply_eqv(node, node, depth),
@@ -230,7 +230,7 @@ pub proof fn lemma_deeply_eqv_reflexive<T: OrderedRing>(node: Node<T>, depth: na
     }
 }
 
-/// Deep equivalence is symmetric.
+///  Deep equivalence is symmetric.
 pub proof fn lemma_deeply_eqv_symmetric<T: OrderedRing>(
     a: Node<T>,
     b: Node<T>,
@@ -257,7 +257,7 @@ pub proof fn lemma_deeply_eqv_symmetric<T: OrderedRing>(
     }
 }
 
-/// Deep equivalence is transitive.
+///  Deep equivalence is transitive.
 pub proof fn lemma_deeply_eqv_transitive<T: OrderedRing>(
     a: Node<T>,
     b: Node<T>,
@@ -286,9 +286,9 @@ pub proof fn lemma_deeply_eqv_transitive<T: OrderedRing>(
     }
 }
 
-// ── Diff Same symmetry ─────────────────────────────────────────
+//  ── Diff Same symmetry ─────────────────────────────────────────
 
-/// If diff_nodes(a, b) is Same, then diff_nodes(b, a) is Same (symmetry).
+///  If diff_nodes(a, b) is Same, then diff_nodes(b, a) is Same (symmetry).
 pub proof fn lemma_diff_symmetric_same<T: OrderedRing>(
     a: Node<T>,
     b: Node<T>,
@@ -302,17 +302,17 @@ pub proof fn lemma_diff_symmetric_same<T: OrderedRing>(
     decreases fuel, 0nat,
 {
     lemma_diff_same_implies_children_eqv::<T>(a, b, fuel);
-    // a.x.eqv(b.x), etc. → reverse via symmetric
+    //  a.x.eqv(b.x), etc. → reverse via symmetric
     T::axiom_eqv_symmetric(a.x, b.x);
     T::axiom_eqv_symmetric(a.y, b.y);
     T::axiom_eqv_symmetric(a.size.width, b.size.width);
     T::axiom_eqv_symmetric(a.size.height, b.size.height);
-    // Children: diff_nodes(a.children[i], b.children[i], fuel-1) === Same for all i
-    // Need: diff_children(b, a, len, fuel-1).len() == 0
+    //  Children: diff_nodes(a.children[i], b.children[i], fuel-1) === Same for all i
+    //  Need: diff_children(b, a, len, fuel-1).len() == 0
     lemma_diff_children_symmetric_same::<T>(a, b, a.children.len(), (fuel - 1) as nat);
 }
 
-/// Helper: if all children diffs a→b are Same, then all children diffs b→a are Same.
+///  Helper: if all children diffs a→b are Same, then all children diffs b→a are Same.
 proof fn lemma_diff_children_symmetric_same<T: OrderedRing>(
     a: Node<T>,
     b: Node<T>,
@@ -337,13 +337,13 @@ proof fn lemma_diff_children_symmetric_same<T: OrderedRing>(
                 fuel,
             );
         }
-        // When fuel == 0, diff_nodes returns Same by definition
+        //  When fuel == 0, diff_nodes returns Same by definition
     }
 }
 
-// ── Diff Same transitivity ────────────────────────────────────────
+//  ── Diff Same transitivity ────────────────────────────────────────
 
-/// If diff_nodes(a,b) and diff_nodes(b,c) are both Same, then diff_nodes(a,c) is Same.
+///  If diff_nodes(a,b) and diff_nodes(b,c) are both Same, then diff_nodes(a,c) is Same.
 pub proof fn lemma_diff_transitive_same<T: OrderedRing>(
     a: Node<T>,
     b: Node<T>,
@@ -360,18 +360,18 @@ pub proof fn lemma_diff_transitive_same<T: OrderedRing>(
 {
     lemma_diff_same_implies_children_eqv::<T>(a, b, fuel);
     lemma_diff_same_implies_children_eqv::<T>(b, c, fuel);
-    // Transitivity on fields
+    //  Transitivity on fields
     T::axiom_eqv_transitive(a.x, b.x, c.x);
     T::axiom_eqv_transitive(a.y, b.y, c.y);
     T::axiom_eqv_transitive(a.size.width, b.size.width, c.size.width);
     T::axiom_eqv_transitive(a.size.height, b.size.height, c.size.height);
-    // Children
+    //  Children
     lemma_diff_children_transitive_same::<T>(
         a, b, c, a.children.len(), (fuel - 1) as nat,
     );
 }
 
-/// Helper: transitive children Same.
+///  Helper: transitive children Same.
 proof fn lemma_diff_children_transitive_same<T: OrderedRing>(
     a: Node<T>,
     b: Node<T>,
@@ -404,9 +404,9 @@ proof fn lemma_diff_children_transitive_same<T: OrderedRing>(
     }
 }
 
-// ── Depth monotonicity ───────────────────────────────────────────
+//  ── Depth monotonicity ───────────────────────────────────────────
 
-/// nodes_deeply_eqv at depth d implies nodes_deeply_eqv at any d' <= d.
+///  nodes_deeply_eqv at depth d implies nodes_deeply_eqv at any d' <= d.
 pub proof fn lemma_deeply_eqv_depth_monotone<T: OrderedRing>(
     a: Node<T>, b: Node<T>, d1: nat, d2: nat,
 )
@@ -418,11 +418,11 @@ pub proof fn lemma_deeply_eqv_depth_monotone<T: OrderedRing>(
     decreases d2,
 {
     if d2 == 0 {
-        // depth 0: just check fields, no children recursion
+        //  depth 0: just check fields, no children recursion
     } else {
-        // d2 > 0, d1 >= d2 > 0
-        // nodes_deeply_eqv(a, b, d1) at d1 > 0 gives children at d1-1
-        // Need children at d2-1 where d2-1 <= d1-1
+        //  d2 > 0, d1 >= d2 > 0
+        //  nodes_deeply_eqv(a, b, d1) at d1 > 0 gives children at d1-1
+        //  Need children at d2-1 where d2-1 <= d1-1
         assert forall|i: int| 0 <= i < a.children.len() implies
             nodes_deeply_eqv(a.children[i], b.children[i], (d2 - 1) as nat)
         by {
@@ -432,11 +432,11 @@ pub proof fn lemma_deeply_eqv_depth_monotone<T: OrderedRing>(
     }
 }
 
-// ── Diff completeness: deeply_eqv implies diff Same ─────────────
+//  ── Diff completeness: deeply_eqv implies diff Same ─────────────
 
-/// If nodes are deeply eqv to depth d, then diff_nodes with fuel d+1 returns Same.
-/// This is the converse of lemma_diff_same_implies_deeply_eqv, making
-/// diff_nodes a decision procedure for node equivalence.
+///  If nodes are deeply eqv to depth d, then diff_nodes with fuel d+1 returns Same.
+///  This is the converse of lemma_diff_same_implies_deeply_eqv, making
+///  diff_nodes a decision procedure for node equivalence.
 pub proof fn lemma_deeply_eqv_implies_diff_same<T: OrderedRing>(
     a: Node<T>,
     b: Node<T>,
@@ -448,13 +448,13 @@ pub proof fn lemma_deeply_eqv_implies_diff_same<T: OrderedRing>(
         diff_nodes::<T>(a, b, depth + 1) === DiffResult::<T>::Same,
     decreases depth,
 {
-    // Fields are eqv → diff won't take any early-return branch
-    // diff_nodes at fuel=depth+1 checks fields, then calls diff_children with fuel=depth.
-    // We need diff_children(a, b, a.children.len(), depth).len() == 0.
+    //  Fields are eqv → diff won't take any early-return branch
+    //  diff_nodes at fuel=depth+1 checks fields, then calls diff_children with fuel=depth.
+    //  We need diff_children(a, b, a.children.len(), depth).len() == 0.
     lemma_deeply_eqv_children_diff_same::<T>(a, b, depth, a.children.len());
 }
 
-/// Helper: deeply_eqv at depth → diff_children with that fuel returns empty.
+///  Helper: deeply_eqv at depth → diff_children with that fuel returns empty.
 proof fn lemma_deeply_eqv_children_diff_same<T: OrderedRing>(
     a: Node<T>, b: Node<T>, depth: nat, count: nat,
 )
@@ -471,11 +471,11 @@ proof fn lemma_deeply_eqv_children_diff_same<T: OrderedRing>(
         lemma_deeply_eqv_children_diff_same::<T>(a, b, depth, (count - 1) as nat);
         let i = (count - 1) as nat;
         if depth == 0 {
-            // diff_nodes(_, _, 0) = Same by definition
+            //  diff_nodes(_, _, 0) = Same by definition
             assert(diff_nodes::<T>(a.children[i as int], b.children[i as int], 0)
                 === DiffResult::<T>::Same);
         } else {
-            // IH on the child: nodes_deeply_eqv at depth-1 → diff_nodes(_, _, depth) === Same
+            //  IH on the child: nodes_deeply_eqv at depth-1 → diff_nodes(_, _, depth) === Same
             lemma_deeply_eqv_implies_diff_same::<T>(
                 a.children[i as int],
                 b.children[i as int],
@@ -485,7 +485,7 @@ proof fn lemma_deeply_eqv_children_diff_same<T: OrderedRing>(
     }
 }
 
-/// Iff version: diff_nodes(a, b, fuel) === Same ↔ nodes_deeply_eqv(a, b, fuel-1).
+///  Iff version: diff_nodes(a, b, fuel) === Same ↔ nodes_deeply_eqv(a, b, fuel-1).
 pub proof fn lemma_diff_same_iff_deeply_eqv<T: OrderedRing>(
     a: Node<T>,
     b: Node<T>,
@@ -505,4 +505,4 @@ pub proof fn lemma_diff_same_iff_deeply_eqv<T: OrderedRing>(
     }
 }
 
-} // verus!
+} //  verus!

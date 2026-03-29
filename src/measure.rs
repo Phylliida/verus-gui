@@ -16,9 +16,9 @@ use crate::layout::listview::*;
 
 verus! {
 
-// ── Measure spec functions ─────────────────────────────────────────
+//  ── Measure spec functions ─────────────────────────────────────────
 
-/// Measure absolute children: recursively compute each child's preferred size.
+///  Measure absolute children: recursively compute each child's preferred size.
 pub open spec fn measure_absolute_children<T: OrderedField>(
     inner_limits: Limits<T>,
     children: Seq<AbsoluteChild<T>>,
@@ -29,7 +29,7 @@ pub open spec fn measure_absolute_children<T: OrderedField>(
     Seq::new(children.len(), |i: int| measure_widget(inner_limits, children[i].child, fuel))
 }
 
-/// Measure child sizes: recursively compute each child's preferred size.
+///  Measure child sizes: recursively compute each child's preferred size.
 pub open spec fn measure_children<T: OrderedField>(
     inner_limits: Limits<T>,
     children: Seq<Widget<T>>,
@@ -40,11 +40,11 @@ pub open spec fn measure_children<T: OrderedField>(
     Seq::new(children.len(), |i: int| measure_widget(inner_limits, children[i], fuel))
 }
 
-/// Compute the preferred size of a widget within constraints, without
-/// computing positions.
+///  Compute the preferred size of a widget within constraints, without
+///  computing positions.
 ///
-/// Equivalent to `layout_widget(limits, widget, fuel).size` — proved by
-/// `lemma_measure_is_layout_size`.
+///  Equivalent to `layout_widget(limits, widget, fuel).size` — proved by
+///  `lemma_measure_is_layout_size`.
 #[verifier::opaque]
 pub open spec fn measure_widget<T: OrderedField>(
     limits: Limits<T>,
@@ -90,7 +90,7 @@ pub open spec fn measure_widget<T: OrderedField>(
                 limits.resolve(Size::new(total_width, total_height))
             },
             Widget::Container(ContainerWidget::Flex { .. }) => {
-                // Flex fills its limits: parent_size = limits.resolve(limits.max)
+                //  Flex fills its limits: parent_size = limits.resolve(limits.max)
                 limits.resolve(limits.max)
             },
             Widget::Container(ContainerWidget::Grid { padding, h_spacing, v_spacing, h_align, v_align,
@@ -164,9 +164,9 @@ pub open spec fn measure_widget<T: OrderedField>(
     }
 }
 
-// ── Per-variant size helpers (used by runtime ensures) ─────────────
+//  ── Per-variant size helpers (used by runtime ensures) ─────────────
 
-/// Column container size from pre-measured child sizes.
+///  Column container size from pre-measured child sizes.
 pub open spec fn measure_column_result<T: OrderedField>(
     limits: Limits<T>,
     padding: Padding<T>,
@@ -178,7 +178,7 @@ pub open spec fn measure_column_result<T: OrderedField>(
     limits.resolve(Size::new(limits.max.width, total_height))
 }
 
-/// Row container size from pre-measured child sizes.
+///  Row container size from pre-measured child sizes.
 pub open spec fn measure_row_result<T: OrderedField>(
     limits: Limits<T>,
     padding: Padding<T>,
@@ -190,7 +190,7 @@ pub open spec fn measure_row_result<T: OrderedField>(
     limits.resolve(Size::new(total_width, limits.max.height))
 }
 
-/// Unified linear container size from pre-measured child sizes (axis-parameterized).
+///  Unified linear container size from pre-measured child sizes (axis-parameterized).
 pub open spec fn measure_linear_result<T: OrderedField>(
     limits: Limits<T>,
     padding: Padding<T>,
@@ -203,7 +203,7 @@ pub open spec fn measure_linear_result<T: OrderedField>(
     limits.resolve(Size::from_axes(axis, total_main, limits.max.cross_dim(axis)))
 }
 
-/// Stack container size from pre-measured child sizes.
+///  Stack container size from pre-measured child sizes.
 pub open spec fn measure_stack_result<T: OrderedField>(
     limits: Limits<T>,
     padding: Padding<T>,
@@ -215,14 +215,14 @@ pub open spec fn measure_stack_result<T: OrderedField>(
     limits.resolve(Size::new(total_width, total_height))
 }
 
-/// Flex container size: always fills limits.
+///  Flex container size: always fills limits.
 pub open spec fn measure_flex_result<T: OrderedField>(
     limits: Limits<T>,
 ) -> Size<T> {
     limits.resolve(limits.max)
 }
 
-/// Grid container size from column widths and row heights.
+///  Grid container size from column widths and row heights.
 pub open spec fn measure_grid_result<T: OrderedField>(
     limits: Limits<T>,
     padding: Padding<T>,
@@ -238,7 +238,7 @@ pub open spec fn measure_grid_result<T: OrderedField>(
     limits.resolve(Size::new(tw, th))
 }
 
-/// Wrap container size from pre-measured child sizes.
+///  Wrap container size from pre-measured child sizes.
 pub open spec fn measure_wrap_result<T: OrderedField>(
     limits: Limits<T>,
     padding: Padding<T>,
@@ -253,7 +253,7 @@ pub open spec fn measure_wrap_result<T: OrderedField>(
     limits.resolve(Size::new(total_width, total_height))
 }
 
-/// Absolute container size from pre-measured child sizes and offsets.
+///  Absolute container size from pre-measured child sizes and offsets.
 pub open spec fn measure_absolute_result<T: OrderedField>(
     limits: Limits<T>,
     padding: Padding<T>,
@@ -268,7 +268,7 @@ pub open spec fn measure_absolute_result<T: OrderedField>(
     limits.resolve(Size::new(tw, th))
 }
 
-/// Margin container size from pre-measured child size.
+///  Margin container size from pre-measured child size.
 pub open spec fn measure_margin_result<T: OrderedField>(
     limits: Limits<T>,
     margin: Padding<T>,
@@ -279,9 +279,9 @@ pub open spec fn measure_margin_result<T: OrderedField>(
     limits.resolve(Size::new(tw, th))
 }
 
-// ── Equivalence proof: measure == layout.size ──────────────────────
+//  ── Equivalence proof: measure == layout.size ──────────────────────
 
-/// Helper: measure_children matches the sizes of widget_child_nodes.
+///  Helper: measure_children matches the sizes of widget_child_nodes.
 proof fn lemma_measure_children_match<T: OrderedField>(
     inner_limits: Limits<T>,
     children: Seq<Widget<T>>,
@@ -298,10 +298,10 @@ proof fn lemma_measure_children_match<T: OrderedField>(
     let mc = measure_children(inner_limits, children, fuel);
     let cn = widget_child_nodes(inner_limits, children, fuel);
 
-    // Both are Seq::new with same length
+    //  Both are Seq::new with same length
     assert(mc.len() == cn.len());
 
-    // Pointwise: mc[i] == cn[i].size
+    //  Pointwise: mc[i] == cn[i].size
     assert forall|i: int| 0 <= i < children.len() implies
         mc[i] == cn[i].size
     by {
@@ -310,7 +310,7 @@ proof fn lemma_measure_children_match<T: OrderedField>(
     }
 }
 
-/// Helper: measure_absolute_children matches the sizes of absolute_widget_child_nodes.
+///  Helper: measure_absolute_children matches the sizes of absolute_widget_child_nodes.
 proof fn lemma_measure_absolute_children_match<T: OrderedField>(
     inner_limits: Limits<T>,
     children: Seq<AbsoluteChild<T>>,
@@ -335,7 +335,7 @@ proof fn lemma_measure_absolute_children_match<T: OrderedField>(
     }
 }
 
-/// Main equivalence: measure_widget computes layout_widget(...).size.
+///  Main equivalence: measure_widget computes layout_widget(...).size.
 pub proof fn lemma_measure_is_layout_size<T: OrderedField>(
     limits: Limits<T>,
     widget: Widget<T>,
@@ -348,11 +348,11 @@ pub proof fn lemma_measure_is_layout_size<T: OrderedField>(
 {
     reveal(measure_widget);
     if fuel == 0 {
-        // Both return Size::new(T::zero(), T::zero())
+        //  Both return Size::new(T::zero(), T::zero())
     } else {
         match widget {
             Widget::Leaf(LeafWidget::Leaf { size }) => {
-                // Both return limits.resolve(size)
+                //  Both return limits.resolve(size)
             },
             Widget::Container(ContainerWidget::Column { padding, spacing, alignment, children }) => {
                 reveal(linear_layout);
@@ -364,7 +364,7 @@ pub proof fn lemma_measure_is_layout_size<T: OrderedField>(
                 let l_sizes = Seq::new(cn.len(), |i: int| cn[i].size);
                 assert(m_sizes =~= l_sizes);
 
-                // Bridge: column_content_height uses sum_heights, linear_layout uses sum_main
+                //  Bridge: column_content_height uses sum_heights, linear_layout uses sum_main
                 lemma_sum_main_eq_sum_heights::<T>(l_sizes, l_sizes.len() as nat);
 
                 let layout = linear_layout(limits, padding, spacing, alignment, l_sizes, Axis::Vertical);
@@ -381,7 +381,7 @@ pub proof fn lemma_measure_is_layout_size<T: OrderedField>(
                 let l_sizes = Seq::new(cn.len(), |i: int| cn[i].size);
                 assert(m_sizes =~= l_sizes);
 
-                // Bridge: row_content_width uses sum_widths, linear_layout uses sum_main
+                //  Bridge: row_content_width uses sum_widths, linear_layout uses sum_main
                 lemma_sum_main_eq_sum_widths::<T>(l_sizes, l_sizes.len() as nat);
 
                 let layout = linear_layout(limits, padding, spacing, alignment, l_sizes, Axis::Horizontal);
@@ -420,8 +420,8 @@ pub proof fn lemma_measure_is_layout_size<T: OrderedField>(
             Widget::Container(ContainerWidget::Flex { padding, spacing, alignment, direction, children }) => {
                 reveal(flex_column_layout);
                 reveal(flex_row_layout);
-                // Flex fills limits.max regardless of direction
-                // flex_column_layout / flex_row_layout both set parent_size = limits.resolve(limits.max)
+                //  Flex fills limits.max regardless of direction
+                //  flex_column_layout / flex_row_layout both set parent_size = limits.resolve(limits.max)
                 let inner = limits.shrink(padding.horizontal(), padding.vertical());
                 let weights = Seq::new(children.len(), |i: int| children[i].weight);
                 let total_weight = sum_weights(weights, weights.len() as nat);
@@ -453,7 +453,7 @@ pub proof fn lemma_measure_is_layout_size<T: OrderedField>(
             Widget::Container(ContainerWidget::Grid { padding, h_spacing, v_spacing, h_align, v_align,
                            col_widths, row_heights, children }) => {
                 reveal(grid_layout);
-                // Grid parent size depends only on col_widths and row_heights
+                //  Grid parent size depends only on col_widths and row_heights
                 let inner = limits.shrink(padding.horizontal(), padding.vertical());
                 let cn = grid_widget_child_nodes(
                     inner, col_widths, row_heights, children,
@@ -480,11 +480,11 @@ pub proof fn lemma_measure_is_layout_size<T: OrderedField>(
                 let l_sizes = Seq::new(cn.len(), |i: int| cn[i].size);
                 assert(m_sizes =~= l_sizes);
 
-                // measure computes child_data from m_sizes
+                //  measure computes child_data from m_sizes
                 let m_data = Seq::new(children.len(), |i: int|
                     (children[i].x, children[i].y, m_sizes[i]));
 
-                // layout_absolute_body computes child_data from cn
+                //  layout_absolute_body computes child_data from cn
                 let offsets = Seq::new(children.len(), |i: int|
                     (children[i].x, children[i].y));
                 let body_data = Seq::new(cn.len(), |i: int|
@@ -497,15 +497,15 @@ pub proof fn lemma_measure_is_layout_size<T: OrderedField>(
             Widget::Wrapper(WrapperWidget::Margin { margin, child }) => {
                 let inner = limits.shrink(margin.horizontal(), margin.vertical());
                 lemma_measure_is_layout_size(inner, *child, (fuel - 1) as nat);
-                // measure returns limits.resolve(Size::new(tw, th))
-                // layout returns Node { size: limits.resolve(Size::new(tw, th)), ... }
-                // where tw/th are the same in both cases
+                //  measure returns limits.resolve(Size::new(tw, th))
+                //  layout returns Node { size: limits.resolve(Size::new(tw, th)), ... }
+                //  where tw/th are the same in both cases
             },
             Widget::Wrapper(WrapperWidget::Conditional { visible, child }) => {
                 if visible {
                     lemma_measure_is_layout_size(limits, *child, (fuel - 1) as nat);
                 } else {
-                    // Both return limits.resolve(Size::zero_size())
+                    //  Both return limits.resolve(Size::zero_size())
                 }
             },
             Widget::Wrapper(WrapperWidget::SizedBox { inner_limits, child }) => {
@@ -532,26 +532,26 @@ pub proof fn lemma_measure_is_layout_size<T: OrderedField>(
                 }
             },
             Widget::Wrapper(WrapperWidget::ScrollView { viewport, scroll_x, scroll_y, child }) => {
-                // measure = limits.resolve(viewport) = layout_widget(...).size
-                // No recursion needed — child doesn't affect output size
+                //  measure = limits.resolve(viewport) = layout_widget(...).size
+                //  No recursion needed — child doesn't affect output size
             },
             Widget::Container(ContainerWidget::ListView { spacing, scroll_y, viewport, children }) => {
                 reveal(layout_listview_body);
-                // measure = limits.resolve(viewport) = layout_widget(...).size
-                // Output size depends only on viewport, not children
+                //  measure = limits.resolve(viewport) = layout_widget(...).size
+                //  Output size depends only on viewport, not children
             },
             Widget::Leaf(LeafWidget::TextInput { preferred_size, .. }) => {
-                // Both return limits.resolve(preferred_size)
+                //  Both return limits.resolve(preferred_size)
             },
         }
     }
 }
 
-// ── Fuel convergence for measure ───────────────────────────────────
+//  ── Fuel convergence for measure ───────────────────────────────────
 
-/// Measure is fuel-monotone: extra fuel doesn't change the result when converged.
+///  Measure is fuel-monotone: extra fuel doesn't change the result when converged.
 ///
-/// Follows from the equivalence with layout_widget.size and layout's fuel monotonicity.
+///  Follows from the equivalence with layout_widget.size and layout's fuel monotonicity.
 pub proof fn lemma_measure_fuel_monotone<T: OrderedField>(
     limits: Limits<T>,
     widget: Widget<T>,
@@ -567,7 +567,7 @@ pub proof fn lemma_measure_fuel_monotone<T: OrderedField>(
     lemma_measure_is_layout_size(limits, widget, fuel);
     lemma_measure_is_layout_size(limits, widget, fuel + 1);
     lemma_layout_widget_fuel_monotone(limits, widget, fuel);
-    // measure(fuel) == layout(fuel).size == layout(fuel+1).size == measure(fuel+1)
+    //  measure(fuel) == layout(fuel).size == layout(fuel+1).size == measure(fuel+1)
 }
 
-} // verus!
+} //  verus!

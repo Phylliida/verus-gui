@@ -8,12 +8,12 @@ use crate::event::*;
 
 verus! {
 
-// ──────────────────────────────────────────────────────────────────────
-// Text edit session
-// ──────────────────────────────────────────────────────────────────────
+//  ──────────────────────────────────────────────────────────────────────
+//  Text edit session
+//  ──────────────────────────────────────────────────────────────────────
 
-/// A stateful editing session wrapping a TextModel with undo/redo,
-/// merge tracking for consecutive character inserts, and clipboard.
+///  A stateful editing session wrapping a TextModel with undo/redo,
+///  merge tracking for consecutive character inserts, and clipboard.
 pub struct TextEditSession {
     pub model: TextModel,
     pub undo_stack: UndoStack,
@@ -23,7 +23,7 @@ pub struct TextEditSession {
     pub style_history: Seq<Seq<StyleSet>>,
 }
 
-/// Create a new session from a model with empty undo and clipboard.
+///  Create a new session from a model with empty undo and clipboard.
 pub open spec fn new_session(model: TextModel) -> TextEditSession {
     TextEditSession {
         model,
@@ -35,7 +35,7 @@ pub open spec fn new_session(model: TextModel) -> TextEditSession {
     }
 }
 
-/// Well-formedness of a session.
+///  Well-formedness of a session.
 pub open spec fn session_wf(s: TextEditSession) -> bool {
     &&& s.model.wf()
     &&& undo_stack_wf(s.undo_stack)
@@ -45,7 +45,7 @@ pub open spec fn session_wf(s: TextEditSession) -> bool {
     &&& s.style_history[s.undo_stack.position as int] =~= s.model.styles
 }
 
-/// Whether a key event kind is a character insertion (Char, Enter, Tab).
+///  Whether a key event kind is a character insertion (Char, Enter, Tab).
 pub open spec fn is_insert_key(kind: KeyEventKind) -> bool {
     match kind {
         KeyEventKind::Char(_) => true,
@@ -55,8 +55,8 @@ pub open spec fn is_insert_key(kind: KeyEventKind) -> bool {
     }
 }
 
-/// Helper: record an edit in the session's undo stack from old_model to new_model,
-/// using the selection range and splice parameters.
+///  Helper: record an edit in the session's undo stack from old_model to new_model,
+///  using the selection range and splice parameters.
 pub open spec fn session_record_edit(
     session: TextEditSession,
     new_model: TextModel,
@@ -72,7 +72,7 @@ pub open spec fn session_record_edit(
     push_undo_or_merge(session.undo_stack, entry, merge)
 }
 
-/// Update history after a push_undo_or_merge operation.
+///  Update history after a push_undo_or_merge operation.
 pub open spec fn update_history_for_push(
     stack: UndoStack, history: Seq<Seq<char>>,
     entry: UndoEntry, new_text: Seq<char>, merge: bool,
@@ -80,15 +80,15 @@ pub open spec fn update_history_for_push(
     if merge && can_undo(stack)
         && can_merge_entries(stack.entries[(stack.position - 1) as int], entry)
     {
-        // Merge: drop history[position], append new_text after history[0..position]
+        //  Merge: drop history[position], append new_text after history[0..position]
         history.subrange(0, stack.position as int).push(new_text)
     } else {
-        // Push: truncate to position+1 entries, append new_text
+        //  Push: truncate to position+1 entries, append new_text
         history.subrange(0, stack.position as int + 1).push(new_text)
     }
 }
 
-/// Update style history after a push_undo_or_merge operation.
+///  Update style history after a push_undo_or_merge operation.
 pub open spec fn update_style_history_for_push(
     stack: UndoStack, style_history: Seq<Seq<StyleSet>>,
     entry: UndoEntry, new_styles: Seq<StyleSet>, merge: bool,
@@ -102,7 +102,7 @@ pub open spec fn update_style_history_for_push(
     }
 }
 
-/// Whether a key event kind is a text-modifying operation that needs an undo entry.
+///  Whether a key event kind is a text-modifying operation that needs an undo entry.
 pub open spec fn is_text_edit_key(kind: KeyEventKind, model: TextModel) -> bool {
     match kind {
         KeyEventKind::Char(_) | KeyEventKind::Enter | KeyEventKind::Tab => true,
@@ -112,7 +112,7 @@ pub open spec fn is_text_edit_key(kind: KeyEventKind, model: TextModel) -> bool 
     }
 }
 
-/// Compute the actual splice parameters for an undo entry, per operation kind.
+///  Compute the actual splice parameters for an undo entry, per operation kind.
 pub open spec fn undo_splice_params(
     kind: KeyEventKind, model: TextModel,
 ) -> (nat, nat, Seq<char>, Seq<StyleSet>) {
@@ -128,15 +128,15 @@ pub open spec fn undo_splice_params(
             if has_selection(model.anchor, model.focus) {
                 (sel_start, sel_end, Seq::empty(), Seq::empty())
             } else if model.focus == 0 {
-                // No-op (dispatch returns None), unreachable in NewModel
+                //  No-op (dispatch returns None), unreachable in NewModel
                 (0, 0, Seq::empty(), Seq::empty())
             } else {
-                // dispatch_key checks ctrl modifier, but we only have KeyEventKind here.
-                // The ctrl case is handled by Backspace kind at dispatch level.
-                // Actually, dispatch_key checks event.modifiers.ctrl which we don't have here.
-                // We need to pass modifiers. Let's use the full event instead.
-                // For now, use the non-ctrl case (prev_grapheme).
-                // The ctrl case will be a separate match in the full function.
+                //  dispatch_key checks ctrl modifier, but we only have KeyEventKind here.
+                //  The ctrl case is handled by Backspace kind at dispatch level.
+                //  Actually, dispatch_key checks event.modifiers.ctrl which we don't have here.
+                //  We need to pass modifiers. Let's use the full event instead.
+                //  For now, use the non-ctrl case (prev_grapheme).
+                //  The ctrl case will be a separate match in the full function.
                 let prev = prev_grapheme_boundary(model.text, model.focus);
                 (prev, model.focus, Seq::empty(), Seq::empty())
             }
@@ -162,7 +162,7 @@ pub open spec fn undo_splice_params(
     }
 }
 
-/// Compute undo splice params, taking modifiers into account for word deletion.
+///  Compute undo splice params, taking modifiers into account for word deletion.
 #[verifier::opaque]
 pub open spec fn undo_splice_params_full(
     event: KeyEvent, model: TextModel,
@@ -201,8 +201,8 @@ pub open spec fn undo_splice_params_full(
     }
 }
 
-/// Apply a key event to the entire session: dispatches via dispatch_key,
-/// then handles undo/redo/clipboard at the session level.
+///  Apply a key event to the entire session: dispatches via dispatch_key,
+///  then handles undo/redo/clipboard at the session level.
 #[verifier::opaque]
 pub open spec fn apply_key_to_session(
     session: TextEditSession,
@@ -231,7 +231,7 @@ pub open spec fn apply_key_to_session(
                     style_history: new_style_history,
                 }
             } else {
-                // Non-text-modifying operation: no undo entry
+                //  Non-text-modifying operation: no undo entry
                 TextEditSession {
                     model: new_model,
                     last_was_insert: false,
@@ -338,8 +338,8 @@ pub open spec fn apply_key_to_session(
                 session
             }
         },
-        // Find/replace external actions are handled by separate session functions,
-        // not through apply_key_to_session.
+        //  Find/replace external actions are handled by separate session functions,
+        //  not through apply_key_to_session.
         KeyAction::External(ExternalAction::FindNext(_)) => session,
         KeyAction::External(ExternalAction::FindPrev(_)) => session,
         KeyAction::External(ExternalAction::ReplaceAt(_, _, _)) => session,
@@ -348,11 +348,11 @@ pub open spec fn apply_key_to_session(
     }
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// Find/replace session handlers
-// ──────────────────────────────────────────────────────────────────────
+//  ──────────────────────────────────────────────────────────────────────
+//  Find/replace session handlers
+//  ──────────────────────────────────────────────────────────────────────
 
-/// Find next occurrence of pattern and select it. No undo entry.
+///  Find next occurrence of pattern and select it. No undo entry.
 pub open spec fn session_find_next(
     session: TextEditSession, pattern: Seq<char>,
 ) -> TextEditSession {
@@ -369,7 +369,7 @@ pub open spec fn session_find_next(
     }
 }
 
-/// Find previous occurrence of pattern and select it. No undo entry.
+///  Find previous occurrence of pattern and select it. No undo entry.
 pub open spec fn session_find_prev(
     session: TextEditSession, pattern: Seq<char>,
 ) -> TextEditSession {
@@ -386,7 +386,7 @@ pub open spec fn session_find_prev(
     }
 }
 
-/// Replace text at `[start..start+pat_len)` with `repl`. Creates undo entry.
+///  Replace text at `[start..start+pat_len)` with `repl`. Creates undo entry.
 pub open spec fn session_replace_at(
     session: TextEditSession, start: nat, pat_len: nat, repl: Seq<char>,
 ) -> TextEditSession {
@@ -410,8 +410,8 @@ pub open spec fn session_replace_at(
     }
 }
 
-/// Replace all occurrences of `pattern` with `repl`. Uses fuel for termination.
-/// Creates a single undo entry covering the entire text replacement.
+///  Replace all occurrences of `pattern` with `repl`. Uses fuel for termination.
+///  Creates a single undo entry covering the entire text replacement.
 pub open spec fn session_replace_all(
     session: TextEditSession, pattern: Seq<char>, repl: Seq<char>,
     fuel: nat,
@@ -420,7 +420,7 @@ pub open spec fn session_replace_all(
     if new_model.text =~= session.model.text {
         session
     } else {
-        // Full-text replacement: undo entry from 0..old_len to new text
+        //  Full-text replacement: undo entry from 0..old_len to new text
         let entry = undo_entry_for_splice(
             session.model, 0, session.model.text.len(),
             new_model.text, new_model.styles, new_model.focus);
@@ -440,4 +440,4 @@ pub open spec fn session_replace_all(
     }
 }
 
-} // verus!
+} //  verus!

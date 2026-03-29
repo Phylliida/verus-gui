@@ -31,18 +31,18 @@ pub mod constraint;
 
 verus! {
 
-// ── Axis enum ───────────────────────────────────────────────────────
+//  ── Axis enum ───────────────────────────────────────────────────────
 
-/// Layout axis: Vertical for column-like layouts, Horizontal for row-like layouts.
+///  Layout axis: Vertical for column-like layouts, Horizontal for row-like layouts.
 #[derive(PartialEq, Eq, Copy, Clone)]
 pub enum Axis {
     Horizontal,
     Vertical,
 }
 
-// ── Helper spec functions ───────────────────────────────────────────
+//  ── Helper spec functions ───────────────────────────────────────────
 
-/// Sum of child heights for children at indices 0..count.
+///  Sum of child heights for children at indices 0..count.
 pub open spec fn sum_heights<T: OrderedRing>(
     sizes: Seq<Size<T>>,
     count: nat,
@@ -57,7 +57,7 @@ pub open spec fn sum_heights<T: OrderedRing>(
     }
 }
 
-/// Sum of child widths for children at indices 0..count.
+///  Sum of child widths for children at indices 0..count.
 pub open spec fn sum_widths<T: OrderedRing>(
     sizes: Seq<Size<T>>,
     count: nat,
@@ -72,7 +72,7 @@ pub open spec fn sum_widths<T: OrderedRing>(
     }
 }
 
-/// Repeated addition: val added n times (n * val without requiring multiplication by nat).
+///  Repeated addition: val added n times (n * val without requiring multiplication by nat).
 pub open spec fn repeated_add<T: OrderedRing>(val: T, n: nat) -> T
     decreases n,
 {
@@ -83,12 +83,12 @@ pub open spec fn repeated_add<T: OrderedRing>(val: T, n: nat) -> T
     }
 }
 
-// ── Column layout ───────────────────────────────────────────────────
+//  ── Column layout ───────────────────────────────────────────────────
 
-/// Compute the y-position of child at `index` in a column layout.
+///  Compute the y-position of child at `index` in a column layout.
 ///
-/// child_y(0) = padding.top
-/// child_y(i) = child_y(i-1) + child_sizes[i-1].height + spacing
+///  child_y(0) = padding.top
+///  child_y(i) = child_y(i-1) + child_sizes[i-1].height + spacing
 pub open spec fn child_y_position<T: OrderedRing>(
     padding_top: T,
     child_sizes: Seq<Size<T>>,
@@ -106,7 +106,7 @@ pub open spec fn child_y_position<T: OrderedRing>(
     }
 }
 
-/// Build the sequence of child Nodes for a column layout.
+///  Build the sequence of child Nodes for a column layout.
 pub open spec fn column_children<T: OrderedField>(
     padding: Padding<T>,
     spacing: T,
@@ -131,8 +131,8 @@ pub open spec fn column_children<T: OrderedField>(
     }
 }
 
-/// Total height consumed by children in a column layout:
-/// sum of child heights + (n-1) * spacing  (for n > 0).
+///  Total height consumed by children in a column layout:
+///  sum of child heights + (n-1) * spacing  (for n > 0).
 pub open spec fn column_content_height<T: OrderedRing>(
     child_sizes: Seq<Size<T>>,
     spacing: T,
@@ -145,13 +145,13 @@ pub open spec fn column_content_height<T: OrderedRing>(
     }
 }
 
-/// Lay out children in a vertical column.
+///  Lay out children in a vertical column.
 ///
-/// Algorithm:
-/// 1. Subtract padding from available space
-/// 2. Place each child vertically, separated by spacing
-/// 3. Align children on cross-axis (horizontal) per Alignment
-/// 4. Return parent Node with positioned children
+///  Algorithm:
+///  1. Subtract padding from available space
+///  2. Place each child vertically, separated by spacing
+///  3. Align children on cross-axis (horizontal) per Alignment
+///  4. Return parent Node with positioned children
 #[verifier::opaque]
 pub open spec fn column_layout<T: OrderedField>(
     limits: Limits<T>,
@@ -170,9 +170,9 @@ pub open spec fn column_layout<T: OrderedField>(
     Node { x: T::zero(), y: T::zero(), size: parent_size, children }
 }
 
-// ── Unified linear layout ────────────────────────────────────────────
+//  ── Unified linear layout ────────────────────────────────────────────
 
-/// Sum of main-axis dimensions for children at indices 0..count.
+///  Sum of main-axis dimensions for children at indices 0..count.
 pub open spec fn sum_main<T: OrderedRing>(
     sizes: Seq<Size<T>>,
     axis: Axis,
@@ -188,7 +188,7 @@ pub open spec fn sum_main<T: OrderedRing>(
     }
 }
 
-/// Compute the main-axis position of child at `index` in a linear layout.
+///  Compute the main-axis position of child at `index` in a linear layout.
 pub open spec fn child_main_position<T: OrderedRing>(
     padding_start: T,
     child_sizes: Seq<Size<T>>,
@@ -207,7 +207,7 @@ pub open spec fn child_main_position<T: OrderedRing>(
     }
 }
 
-/// Build the sequence of child Nodes for a linear layout.
+///  Build the sequence of child Nodes for a linear layout.
 pub open spec fn linear_children<T: OrderedField>(
     padding: Padding<T>,
     spacing: T,
@@ -239,7 +239,7 @@ pub open spec fn linear_children<T: OrderedField>(
     }
 }
 
-/// Total main-axis content size: sum of main dimensions + (n-1) * spacing.
+///  Total main-axis content size: sum of main dimensions + (n-1) * spacing.
 pub open spec fn linear_content_main<T: OrderedRing>(
     child_sizes: Seq<Size<T>>,
     axis: Axis,
@@ -253,7 +253,7 @@ pub open spec fn linear_content_main<T: OrderedRing>(
     }
 }
 
-/// Lay out children along a single axis (unified column/row).
+///  Lay out children along a single axis (unified column/row).
 #[verifier::opaque]
 pub open spec fn linear_layout<T: OrderedField>(
     limits: Limits<T>,
@@ -273,7 +273,7 @@ pub open spec fn linear_layout<T: OrderedField>(
     Node { x: T::zero(), y: T::zero(), size: parent_size, children }
 }
 
-/// Bridge: column_layout == linear_layout with Axis::Vertical.
+///  Bridge: column_layout == linear_layout with Axis::Vertical.
 pub proof fn lemma_column_layout_is_linear<T: OrderedField>(
     limits: Limits<T>,
     padding: Padding<T>,
@@ -287,15 +287,15 @@ pub proof fn lemma_column_layout_is_linear<T: OrderedField>(
 {
     reveal(column_layout);
     reveal(linear_layout);
-    // Both sides reduce to the same expression when axis = Vertical:
-    // sum_main with Vertical reads .height == sum_heights
-    // child_main_position with Vertical uses padding.top == child_y_position
-    // linear_children with Vertical puts (cross, main) = (x, y) matching column_children
-    // Content: linear_content_main with Vertical == column_content_height
-    // Parent size: from_axes(Vertical, main, cross) = Size { width: cross, height: main }
-    //   = Size::new(limits.max.width, total_height) matching column_layout
+    //  Both sides reduce to the same expression when axis = Vertical:
+    //  sum_main with Vertical reads .height == sum_heights
+    //  child_main_position with Vertical uses padding.top == child_y_position
+    //  linear_children with Vertical puts (cross, main) = (x, y) matching column_children
+    //  Content: linear_content_main with Vertical == column_content_height
+    //  Parent size: from_axes(Vertical, main, cross) = Size { width: cross, height: main }
+    //    = Size::new(limits.max.width, total_height) matching column_layout
 
-    // First prove sum_main == sum_heights for all counts
+    //  First prove sum_main == sum_heights for all counts
     assert forall|count: nat| count <= child_sizes.len() implies
         sum_main::<T>(child_sizes, Axis::Vertical, count)
         == sum_heights::<T>(child_sizes, count)
@@ -303,7 +303,7 @@ pub proof fn lemma_column_layout_is_linear<T: OrderedField>(
         lemma_sum_main_eq_sum_heights(child_sizes, count);
     }
 
-    // Prove child_main_position == child_y_position for all indices
+    //  Prove child_main_position == child_y_position for all indices
     assert forall|index: nat| index <= child_sizes.len() implies
         child_main_position::<T>(padding.top, child_sizes, Axis::Vertical, spacing, index)
         == child_y_position::<T>(padding.top, child_sizes, spacing, index)
@@ -311,7 +311,7 @@ pub proof fn lemma_column_layout_is_linear<T: OrderedField>(
         lemma_child_main_position_eq_child_y_position(padding, child_sizes, spacing, index);
     }
 
-    // Prove linear_children == column_children
+    //  Prove linear_children == column_children
     assert forall|index: nat| index <= child_sizes.len() implies
         linear_children::<T>(padding, spacing, alignment, child_sizes, Axis::Vertical,
             limits.max.width.sub(padding.horizontal()), index)
@@ -325,7 +325,7 @@ pub proof fn lemma_column_layout_is_linear<T: OrderedField>(
     }
 }
 
-/// Helper: sum_main(Vertical) == sum_heights
+///  Helper: sum_main(Vertical) == sum_heights
 pub proof fn lemma_sum_main_eq_sum_heights<T: OrderedRing>(
     sizes: Seq<Size<T>>,
     count: nat,
@@ -339,7 +339,7 @@ pub proof fn lemma_sum_main_eq_sum_heights<T: OrderedRing>(
     }
 }
 
-/// Helper: child_main_position(Vertical) == child_y_position
+///  Helper: child_main_position(Vertical) == child_y_position
 proof fn lemma_child_main_position_eq_child_y_position<T: OrderedRing>(
     padding: Padding<T>,
     child_sizes: Seq<Size<T>>,
@@ -357,7 +357,7 @@ proof fn lemma_child_main_position_eq_child_y_position<T: OrderedRing>(
     }
 }
 
-/// Helper: linear_children(Vertical) == column_children
+///  Helper: linear_children(Vertical) == column_children
 proof fn lemma_linear_children_eq_column_children<T: OrderedField>(
     padding: Padding<T>,
     spacing: T,
@@ -382,7 +382,7 @@ proof fn lemma_linear_children_eq_column_children<T: OrderedField>(
     }
 }
 
-/// Bridge: row_layout == linear_layout with Axis::Horizontal.
+///  Bridge: row_layout == linear_layout with Axis::Horizontal.
 pub proof fn lemma_row_layout_is_linear<T: OrderedField>(
     limits: Limits<T>,
     padding: Padding<T>,
@@ -398,7 +398,7 @@ pub proof fn lemma_row_layout_is_linear<T: OrderedField>(
     reveal(row_layout);
     reveal(linear_layout);
 
-    // Prove sum_main(Horizontal) == sum_widths
+    //  Prove sum_main(Horizontal) == sum_widths
     assert forall|count: nat| count <= child_sizes.len() implies
         sum_main::<T>(child_sizes, Axis::Horizontal, count)
         == sum_widths::<T>(child_sizes, count)
@@ -406,7 +406,7 @@ pub proof fn lemma_row_layout_is_linear<T: OrderedField>(
         lemma_sum_main_eq_sum_widths(child_sizes, count);
     }
 
-    // Prove child_main_position == child_x_position
+    //  Prove child_main_position == child_x_position
     assert forall|index: nat| index <= child_sizes.len() implies
         child_main_position::<T>(padding.left, child_sizes, Axis::Horizontal, spacing, index)
         == child_x_position::<T>(padding.left, child_sizes, spacing, index)
@@ -414,7 +414,7 @@ pub proof fn lemma_row_layout_is_linear<T: OrderedField>(
         lemma_child_main_position_eq_child_x_position(padding, child_sizes, spacing, index);
     }
 
-    // Prove linear_children == row_children
+    //  Prove linear_children == row_children
     assert forall|index: nat| index <= child_sizes.len() implies
         linear_children::<T>(padding, spacing, alignment, child_sizes, Axis::Horizontal,
             limits.max.height.sub(padding.vertical()), index)
@@ -428,7 +428,7 @@ pub proof fn lemma_row_layout_is_linear<T: OrderedField>(
     }
 }
 
-/// Helper: sum_main(Horizontal) == sum_widths
+///  Helper: sum_main(Horizontal) == sum_widths
 pub proof fn lemma_sum_main_eq_sum_widths<T: OrderedRing>(
     sizes: Seq<Size<T>>,
     count: nat,
@@ -442,7 +442,7 @@ pub proof fn lemma_sum_main_eq_sum_widths<T: OrderedRing>(
     }
 }
 
-/// Helper: child_main_position(Horizontal) == child_x_position
+///  Helper: child_main_position(Horizontal) == child_x_position
 proof fn lemma_child_main_position_eq_child_x_position<T: OrderedRing>(
     padding: Padding<T>,
     child_sizes: Seq<Size<T>>,
@@ -460,7 +460,7 @@ proof fn lemma_child_main_position_eq_child_x_position<T: OrderedRing>(
     }
 }
 
-/// Helper: linear_children(Horizontal) == row_children
+///  Helper: linear_children(Horizontal) == row_children
 proof fn lemma_linear_children_eq_row_children<T: OrderedField>(
     padding: Padding<T>,
     spacing: T,
@@ -485,12 +485,12 @@ proof fn lemma_linear_children_eq_row_children<T: OrderedField>(
     }
 }
 
-// ── Row layout ──────────────────────────────────────────────────────
+//  ── Row layout ──────────────────────────────────────────────────────
 
-/// Compute the x-position of child at `index` in a row layout.
+///  Compute the x-position of child at `index` in a row layout.
 ///
-/// child_x(0) = padding.left
-/// child_x(i) = child_x(i-1) + child_sizes[i-1].width + spacing
+///  child_x(0) = padding.left
+///  child_x(i) = child_x(i-1) + child_sizes[i-1].width + spacing
 pub open spec fn child_x_position<T: OrderedRing>(
     padding_left: T,
     child_sizes: Seq<Size<T>>,
@@ -508,7 +508,7 @@ pub open spec fn child_x_position<T: OrderedRing>(
     }
 }
 
-/// Build the sequence of child Nodes for a row layout.
+///  Build the sequence of child Nodes for a row layout.
 pub open spec fn row_children<T: OrderedField>(
     padding: Padding<T>,
     spacing: T,
@@ -533,8 +533,8 @@ pub open spec fn row_children<T: OrderedField>(
     }
 }
 
-/// Total width consumed by children in a row layout:
-/// sum of child widths + (n-1) * spacing  (for n > 0).
+///  Total width consumed by children in a row layout:
+///  sum of child widths + (n-1) * spacing  (for n > 0).
 pub open spec fn row_content_width<T: OrderedRing>(
     child_sizes: Seq<Size<T>>,
     spacing: T,
@@ -547,13 +547,13 @@ pub open spec fn row_content_width<T: OrderedRing>(
     }
 }
 
-/// Lay out children in a horizontal row.
+///  Lay out children in a horizontal row.
 ///
-/// Algorithm:
-/// 1. Subtract padding from available space
-/// 2. Place each child horizontally, separated by spacing
-/// 3. Align children on cross-axis (vertical) per Alignment
-/// 4. Return parent Node with positioned children
+///  Algorithm:
+///  1. Subtract padding from available space
+///  2. Place each child horizontally, separated by spacing
+///  3. Align children on cross-axis (vertical) per Alignment
+///  4. Return parent Node with positioned children
 #[verifier::opaque]
 pub open spec fn row_layout<T: OrderedField>(
     limits: Limits<T>,
@@ -572,4 +572,4 @@ pub open spec fn row_layout<T: OrderedField>(
     Node { x: T::zero(), y: T::zero(), size: parent_size, children }
 }
 
-} // verus!
+} //  verus!
