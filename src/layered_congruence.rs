@@ -8,8 +8,12 @@ use crate::widget::*;
 use crate::layer::*;
 use crate::layered_draw::*;
 use crate::layered_hit_test::*;
+use crate::draw::*;
+use crate::draw_proofs::*;
+use crate::hit_test::*;
+use crate::animation::*;
 use crate::layout::congruence_proofs::*;
-use crate::diff::nodes_deeply_eqv;
+use crate::diff::*;
 
 verus! {
 
@@ -57,10 +61,7 @@ pub open spec fn layered_draws_eqv<T: OrderedRing>(
 }
 
 //  ══════════════════════════════════════════════════════════════════════
-//  LAYERED HIT-TEST CONGRUENCE
-//
-//  Equivalent widgets with eqv click coordinates produce the same
-//  hit-test result, assuming all Layer transforms are invertible.
+//  INVERTIBILITY PREDICATE
 //  ══════════════════════════════════════════════════════════════════════
 
 ///  Whether all Layer transforms in a widget tree are invertible (det ≢ 0).
@@ -85,50 +86,120 @@ pub open spec fn all_transforms_invertible<T: OrderedField>(
 }
 
 //  ══════════════════════════════════════════════════════════════════════
-//  LAYER PIPELINE THEOREM
+//  THE LAYER-AWARE FUNDAMENTAL THEOREM
 //
-//  Combines: layout congruence + layered draw congruence + hit-test
-//  for the full layer-aware pipeline.
+//  Extends the original fundamental theorem with layer-specific guarantees.
+//  All original properties hold (Layer is a layout passthrough), plus:
+//  - Layout node congruence
+//  - Full-depth draw congruence (flat pipeline)
+//  - GPU safety on both sides
+//  - Hit-test geometric correctness
+//  - Animation congruence
 //  ══════════════════════════════════════════════════════════════════════
 
-///  Layer pipeline theorem: equivalent widgets with Layer produce equivalent
-///  layered draw commands and the same layered hit-test results.
+///  The Layer-Aware Fundamental Theorem: the full GUI pipeline with Layer
+///  widgets is correct and congruent.
 ///
-///  This extends the_fundamental_theorem with layer-awareness:
-///  - All layout properties carry over (Layer is a layout passthrough)
-///  - Layered draw commands have eqv layer states (transform, clip, alpha)
-///  - Layered hit-test produces the same path for eqv inputs
-pub proof fn theorem_layer_pipeline<T: OrderedField>(
+///  Equivalent widget specs (w1 ≡ w2) under equivalent constraints produce:
+///  - Equivalent layout nodes
+///  - Equivalent flat draw commands at any depth within congruence_depth
+///  - GPU-safe draws on both sides
+///  - Equivalent animation interpolation
+///  - Geometrically valid hit-test paths
+///  - Same hit-test result for equivalent click coordinates
+pub proof fn theorem_layer_fundamental<T: OrderedField>(
+    //  Equivalent layout inputs
     lim1: Limits<T>, lim2: Limits<T>,
     w1: Widget<T>, w2: Widget<T>,
     fuel: nat,
+    //  Equivalent click coordinates
+    px1: T, px2: T, py1: T, py2: T,
+    //  Equivalent animation endpoints
+    w1b: Widget<T>, w2b: Widget<T>,
+    t: T,
+    //  Draw/hit-test depth
+    draw_fuel: nat,
 )
     requires
         limits_eqv(lim1, lim2),
         lim1.wf(),
         widget_eqv(w1, w2, fuel),
+        widget_eqv(w1b, w2b, fuel),
+        px1.eqv(px2), py1.eqv(py2),
         fuel > 0,
+        draw_fuel <= congruence_depth(w1, fuel),
     ensures ({
         let n1 = layout_widget(lim1, w1, fuel);
         let n2 = layout_widget(lim2, w2, fuel);
 
-        //  ── 1. Layout congruence (inherited from fundamental theorem) ──
+        //  ── 1. Layout congruence ──
         &&& node_eqv(n1, n2)
 
-        //  ── 2. GPU safety on both sides ──
+        //  ── 2. Full-depth flat draw congruence ──
+        &&& draws_eqv(
+                flatten_node_to_draws(n1, T::zero(), T::zero(), 0, draw_fuel),
+                flatten_node_to_draws(n2, T::zero(), T::zero(), 0, draw_fuel))
+
+        //  ── 3. GPU safety on both sides ──
         &&& crate::vulkan_bridge::all_draws_valid(
-                crate::draw::flatten_node_to_draws(n1, T::zero(), T::zero(), 0, fuel))
+                flatten_node_to_draws(n1, T::zero(), T::zero(), 0, draw_fuel))
         &&& crate::vulkan_bridge::all_draws_valid(
-                crate::draw::flatten_node_to_draws(n2, T::zero(), T::zero(), 0, fuel))
+                flatten_node_to_draws(n2, T::zero(), T::zero(), 0, draw_fuel))
+
+        //  ── 4. Animation congruence ──
+        &&& nodes_deeply_eqv(
+                lerp_node(n1, layout_widget(lim1, w1b, fuel), t, 1),
+                lerp_node(n2, layout_widget(lim2, w2b, fuel), t, 1),
+                0)
+
+        //  ── 5. Hit-test geometric correctness ──
+        &&& (hit_test(n1, px1, py1, fuel) is Some ==>
+            path_geometrically_valid(
+                n1, hit_test(n1, px1, py1, fuel).unwrap(), px1, py1))
+
+        //  ── 6. Hit-test congruence (at congruence depth) ──
+        &&& hit_test(n1, px1, py1, draw_fuel)
+            == hit_test(n2, px2, py2, draw_fuel)
     }),
 {
-    //  1. Layout congruence
+    let n1 = layout_widget(lim1, w1, fuel);
+    let n2 = layout_widget(lim2, w2, fuel);
+
+    //  1. Layout node congruence
     lemma_layout_widget_node_congruence(lim1, lim2, w1, w2, fuel);
 
-    //  2. GPU safety
-    crate::theorems::theorem_full_draw_validity(lim1, w1, fuel, fuel);
+    //  2. Full-depth draw congruence
+    lemma_layout_widget_full_depth_congruence(lim1, lim2, w1, w2, fuel);
+    let cd = congruence_depth(w1, fuel);
+    lemma_deeply_eqv_depth_monotone(n1, n2, cd, draw_fuel);
+    T::axiom_eqv_reflexive(T::zero());
+    lemma_flatten_congruence(n1, n2,
+        T::zero(), T::zero(), T::zero(), T::zero(), 0, draw_fuel);
+
+    //  3. GPU safety on both sides
+    crate::theorems::theorem_full_draw_validity(lim1, w1, fuel, draw_fuel);
     crate::theorems::lemma_limits_wf_congruence(lim1, lim2);
-    crate::theorems::theorem_full_draw_validity(lim2, w2, fuel, fuel);
+    crate::theorems::theorem_full_draw_validity(lim2, w2, fuel, draw_fuel);
+
+    //  4. Animation congruence
+    lemma_layout_widget_deep_congruence(lim1, lim2, w1, w2, fuel);
+    lemma_layout_widget_deep_congruence(lim1, lim2, w1b, w2b, fuel);
+    let n1b = layout_widget(lim1, w1b, fuel);
+    let n2b = layout_widget(lim2, w2b, fuel);
+    lemma_lerp_node_congruence_left(n1, n2, n1b, t, 1);
+    lemma_lerp_node_congruence_right(n2, n1b, n2b, t, 1);
+    lemma_deeply_eqv_transitive(
+        lerp_node(n1, n1b, t, 1), lerp_node(n2, n1b, t, 1),
+        lerp_node(n2, n2b, t, 1), 0);
+
+    //  5. Hit-test geometric correctness
+    if hit_test(n1, px1, py1, fuel) is Some {
+        lemma_hit_test_geometrically_valid(n1, px1, py1, fuel);
+    }
+
+    //  6. Hit-test congruence
+    lemma_deeply_eqv_depth_monotone(n1, n2, cd, draw_fuel);
+    lemma_hit_test_congruence(n1, n2, px1, px2, py1, py2, draw_fuel);
 }
 
 } //  verus!
