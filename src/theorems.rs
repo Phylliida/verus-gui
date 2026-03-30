@@ -413,6 +413,102 @@ pub proof fn theorem_full_draw_validity<T: OrderedField>(
 }
 
 //  ══════════════════════════════════════════════════════════════════════
+//  FULL PIPELINE CONGRUENCE
+//
+//  Strengthens the fundamental theorem with full-depth draw congruence
+//  and hit-test congruence. For any draw_fuel or hit_fuel within the
+//  congruence_depth bound, equivalent widgets produce:
+//    - Element-wise equivalent draw command sequences
+//    - Identical hit-test results
+//    - GPU-safe draws on BOTH sides
+//  ══════════════════════════════════════════════════════════════════════
+
+///  Limits well-formedness is preserved by eqv: if lim1.wf() and limits_eqv(lim1, lim2),
+///  then lim2.wf().
+proof fn lemma_limits_wf_congruence<T: OrderedField>(lim1: Limits<T>, lim2: Limits<T>)
+    requires limits_eqv(lim1, lim2), lim1.wf(),
+    ensures lim2.wf(),
+{
+    //  is_nonneg: 0.le(a) && a.eqv(b) → 0.le(b)
+    T::axiom_eqv_reflexive(T::zero());
+    T::axiom_le_congruence(T::zero(), T::zero(), lim1.min.width, lim2.min.width);
+    T::axiom_le_congruence(T::zero(), T::zero(), lim1.min.height, lim2.min.height);
+    T::axiom_le_congruence(T::zero(), T::zero(), lim1.max.width, lim2.max.width);
+    T::axiom_le_congruence(T::zero(), T::zero(), lim1.max.height, lim2.max.height);
+    //  min <= max: a.le(b) && a.eqv(a') && b.eqv(b') → a'.le(b')
+    T::axiom_le_congruence(lim1.min.width, lim2.min.width, lim1.max.width, lim2.max.width);
+    T::axiom_le_congruence(lim1.min.height, lim2.min.height, lim1.max.height, lim2.max.height);
+}
+
+///  Full pipeline congruence: equivalent widgets produce equivalent draws
+///  at arbitrary depth and identical hit-test results.
+///
+///  This subsumes the root-level draw congruence in `the_fundamental_theorem`
+///  by proving that ALL draw commands (not just the root) are element-wise
+///  equivalent when draw_fuel is within the congruence depth.
+pub proof fn theorem_full_pipeline_congruence<T: OrderedField>(
+    lim1: Limits<T>, lim2: Limits<T>,
+    w1: Widget<T>, w2: Widget<T>,
+    fuel: nat,
+    draw_fuel: nat,
+    hit_fuel: nat,
+    px1: T, px2: T, py1: T, py2: T,
+)
+    requires
+        limits_eqv(lim1, lim2),
+        lim1.wf(),
+        widget_eqv(w1, w2, fuel),
+        px1.eqv(px2), py1.eqv(py2),
+        draw_fuel <= congruence_depth(w1, fuel),
+        hit_fuel <= congruence_depth(w1, fuel),
+    ensures ({
+        let n1 = layout_widget(lim1, w1, fuel);
+        let n2 = layout_widget(lim2, w2, fuel);
+
+        //  ── 1. Full-depth draw congruence ──
+        //  All draw commands are element-wise equivalent, not just the root
+        &&& draws_eqv(
+                flatten_node_to_draws(n1, T::zero(), T::zero(), 0, draw_fuel),
+                flatten_node_to_draws(n2, T::zero(), T::zero(), 0, draw_fuel))
+
+        //  ── 2. Hit-test congruence ──
+        //  Equivalent inputs produce identical hit-test results
+        &&& hit_test(n1, px1, py1, hit_fuel) == hit_test(n2, px2, py2, hit_fuel)
+
+        //  ── 3. GPU safety on both sides ──
+        &&& all_draws_valid(
+                flatten_node_to_draws(n1, T::zero(), T::zero(), 0, draw_fuel))
+        &&& all_draws_valid(
+                flatten_node_to_draws(n2, T::zero(), T::zero(), 0, draw_fuel))
+    }),
+{
+    let n1 = layout_widget(lim1, w1, fuel);
+    let n2 = layout_widget(lim2, w2, fuel);
+
+    //  Step 1: Full-depth congruence gives nodes_deeply_eqv at congruence_depth
+    lemma_layout_widget_full_depth_congruence(lim1, lim2, w1, w2, fuel);
+    let cd = congruence_depth(w1, fuel);
+
+    //  Step 2: Monotone — deeply eqv at cd implies deeply eqv at draw_fuel and hit_fuel
+    lemma_deeply_eqv_depth_monotone(n1, n2, cd, draw_fuel);
+
+    //  Step 3: Draw congruence — deeply eqv nodes with eqv offsets → eqv draws
+    T::axiom_eqv_reflexive(T::zero());
+    lemma_flatten_congruence(n1, n2,
+        T::zero(), T::zero(), T::zero(), T::zero(), 0, draw_fuel);
+
+    //  Step 4: Hit-test congruence — deeply eqv nodes + eqv coords → same result
+    lemma_deeply_eqv_depth_monotone(n1, n2, cd, hit_fuel);
+    lemma_hit_test_congruence(n1, n2, px1, px2, py1, py2, hit_fuel);
+
+    //  Step 5: GPU safety on both sides
+    theorem_full_draw_validity(lim1, w1, fuel, draw_fuel);
+    //  For n2: lim2.wf() follows from limits_eqv + lim1.wf()
+    lemma_limits_wf_congruence(lim1, lim2);
+    theorem_full_draw_validity(lim2, w2, fuel, draw_fuel);
+}
+
+//  ══════════════════════════════════════════════════════════════════════
 //  EXEC-SPEC BRIDGE
 //  ══════════════════════════════════════════════════════════════════════
 //
