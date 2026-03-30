@@ -14,6 +14,7 @@ use crate::layout::wrap::*;
 use crate::layout::absolute::*;
 use crate::layout::listview::*;
 use crate::text_input::TextInputConfig;
+use crate::layer::LayerInfo;
 
 verus! {
 
@@ -63,6 +64,9 @@ pub enum WrapperWidget<T: OrderedRing> {
     SizedBox { inner_limits: Limits<T>, child: Box<Widget<T>> },
     AspectRatio { ratio: T, child: Box<Widget<T>> },
     ScrollView { viewport: Size<T>, scroll_x: T, scroll_y: T, child: Box<Widget<T>> },
+    ///  Visual layer: applies transform, clip, and/or opacity to a subtree.
+    ///  Does not affect layout — the child is laid out with the same constraints.
+    Layer { layer: LayerInfo<T>, child: Box<Widget<T>> },
 }
 
 ///  Container widgets: multiple children with layout strategy.
@@ -537,6 +541,22 @@ pub open spec fn layout_wrapper<T: OrderedField>(
                     }),
                 }
             },
+            WrapperWidget::Layer { layer, child } => {
+                //  Layer is a visual-only modifier: layout passes through unchanged.
+                //  Child is laid out with the same constraints.
+                let child_node = layout_widget(limits, *child, (fuel - 1) as nat);
+                Node {
+                    x: T::zero(),
+                    y: T::zero(),
+                    size: limits.resolve(child_node.size),
+                    children: Seq::empty().push(Node {
+                        x: T::zero(),
+                        y: T::zero(),
+                        size: child_node.size,
+                        children: child_node.children,
+                    }),
+                }
+            },
         }
     }
 }
@@ -657,6 +677,7 @@ pub open spec fn get_children<T: OrderedRing>(widget: Widget<T>) -> Seq<Widget<T
             WrapperWidget::SizedBox { child, .. } => Seq::empty().push(*child),
             WrapperWidget::AspectRatio { child, .. } => Seq::empty().push(*child),
             WrapperWidget::ScrollView { child, .. } => Seq::empty().push(*child),
+            WrapperWidget::Layer { child, .. } => Seq::empty().push(*child),
         },
         Widget::Container(container) => match container {
             ContainerWidget::Column { children, .. } => children,
@@ -997,6 +1018,14 @@ pub proof fn lemma_layout_widget_fuel_monotone<T: OrderedField>(
                     max: viewport,
                 };
                 lemma_layout_widget_fuel_monotone(child_limits, *child, (fuel - 1) as nat);
+            },
+            WrapperWidget::Layer { layer, child } => {
+                let gc = get_children(widget);
+                assert(gc =~= Seq::empty().push(*child));
+                assert(widget_converged(*child, (fuel - 1) as nat)) by {
+                    assert(gc[0] == *child);
+                }
+                lemma_layout_widget_fuel_monotone(limits, *child, (fuel - 1) as nat);
             },
         },
         Widget::Container(container) => match container {

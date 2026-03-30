@@ -12,6 +12,7 @@ use crate::layout::*;
 use crate::layout::flex::*;
 use crate::widget::*;
 use crate::diff::nodes_deeply_eqv;
+use crate::layer::layer_info_eqv;
 
 verus! {
 
@@ -647,6 +648,10 @@ pub open spec fn widget_eqv<T: OrderedField>(
                 (WrapperWidget::ScrollView { viewport: v1, scroll_x: sx1, scroll_y: sy1, child: c1 },
                  WrapperWidget::ScrollView { viewport: v2, scroll_x: sx2, scroll_y: sy2, child: c2 }) =>
                     size_eqv(v1, v2) && sx1.eqv(sx2) && sy1.eqv(sy2)
+                    && widget_eqv(*c1, *c2, (fuel - 1) as nat),
+                (WrapperWidget::Layer { layer: l1, child: c1 },
+                 WrapperWidget::Layer { layer: l2, child: c2 }) =>
+                    layer_info_eqv(l1, l2)
                     && widget_eqv(*c1, *c2, (fuel - 1) as nat),
                 _ => false,
             },
@@ -1771,6 +1776,14 @@ pub proof fn lemma_layout_widget_size_congruence<T: OrderedField>(
                     p2.horizontal().add(crate::layout::absolute::absolute_max_right(d2, d2.len() as nat)),
                     p2.vertical().add(crate::layout::absolute::absolute_max_bottom(d2, d2.len() as nat))));
         },
+        (Widget::Wrapper(WrapperWidget::Layer { layer: l1, child: c1 }),
+         Widget::Wrapper(WrapperWidget::Layer { layer: l2, child: c2 })) => {
+            //  Layer output = resolve(child_size); child limits are the same
+            lemma_layout_widget_size_congruence(lim1, lim2, *c1, *c2, (fuel - 1) as nat);
+            lemma_resolve_congruence(lim1, lim2,
+                layout_widget(lim1, *c1, (fuel - 1) as nat).size,
+                layout_widget(lim2, *c2, (fuel - 1) as nat).size);
+        },
         //  Cross-variant mismatches: widget_eqv returns false → vacuously true
         _ => {},
     }
@@ -2531,6 +2544,8 @@ pub open spec fn congruence_depth<T: OrderedRing>(widget: Widget<T>, fuel: nat) 
                 congruence_depth(*child, (fuel - 1) as nat) + 1,
             Widget::Wrapper(WrapperWidget::Margin { child, .. }) =>
                 congruence_depth(*child, (fuel - 1) as nat) + 1,
+            Widget::Wrapper(WrapperWidget::Layer { child, .. }) =>
+                congruence_depth(*child, (fuel - 1) as nat) + 1,
             Widget::Container(container) => {
                 if fuel <= 1 { 0 }
                 else {
@@ -2731,6 +2746,22 @@ proof fn lemma_wrapper_full_depth<T: OrderedField>(
                 //  nodes_deeply_eqv at d+1 requires: top eqv (from node_congruence) + children pairwise eqv at d.
                 //  Output has 1 child: the scroll child. And we proved it deeply eqv at rd.
                 //  So output deeply eqv at rd + 1. Z3 should see this from the definitions.
+            }
+        },
+        WrapperWidget::Layer { layer: l1, child: c1 } => {
+            if let Widget::Wrapper(WrapperWidget::Layer { layer: l2, child: c2 }) = w2 {
+                //  Child limits are the same (passthrough)
+                lemma_layout_widget_full_depth_congruence(lim1, lim2, *c1, *c2, (fuel - 1) as nat);
+                let cn1 = layout_widget(lim1, *c1, (fuel - 1) as nat);
+                let cn2 = layout_widget(lim2, *c2, (fuel - 1) as nat);
+                let rd = congruence_depth(*c1, (fuel - 1) as nat);
+                //  Layer child node at (0, 0), same size/children as cn
+                T::axiom_eqv_reflexive(T::zero());
+                lemma_wrapper_child_deep_congruence(cn1, cn2,
+                    T::zero(), T::zero(), T::zero(), T::zero(), rd);
+                //  Output node eqv at top level (from node_congruence), child eqv at rd
+                //  → output deeply eqv at rd + 1
+                lemma_layout_widget_node_congruence(lim1, lim2, w1, w2, fuel);
             }
         },
     }

@@ -1923,6 +1923,10 @@ pub proof fn lemma_layout_respects_limits<T: OrderedField>(
         Widget::Wrapper(WrapperWidget::ScrollView { viewport, scroll_x, scroll_y, child }) => {
             lemma_resolve_bounds(limits, viewport);
         },
+        Widget::Wrapper(WrapperWidget::Layer { layer, child }) => {
+            let child_node = layout_widget(limits, *child, (fuel - 1) as nat);
+            lemma_resolve_bounds(limits, child_node.size);
+        },
         Widget::Container(ContainerWidget::ListView { spacing, scroll_y, viewport, children }) => {
             reveal(layout_listview_body);
             lemma_resolve_bounds(limits, viewport);
@@ -3354,6 +3358,8 @@ pub open spec fn widget_wf<T: OrderedField>(
                 viewport.is_nonneg()
                 && T::zero().le(scroll_x)
                 && T::zero().le(scroll_y),
+            Widget::Wrapper(WrapperWidget::Layer { layer, child }) =>
+                widget_wf(limits, *child, (fuel - 1) as nat),
             //  ListView uses scroll offsets too, so children can be at negative y
             Widget::Container(ContainerWidget::ListView { spacing, scroll_y, viewport, children }) =>
                 viewport.is_nonneg()
@@ -3401,6 +3407,8 @@ pub open spec fn widget_cwb_ok<T: OrderedRing>(widget: Widget<T>, fuel: nat) -> 
             Widget::Wrapper(WrapperWidget::SizedBox { child, .. }) =>
                 widget_cwb_ok(*child, (fuel - 1) as nat),
             Widget::Wrapper(WrapperWidget::AspectRatio { child, .. }) =>
+                widget_cwb_ok(*child, (fuel - 1) as nat),
+            Widget::Wrapper(WrapperWidget::Layer { child, .. }) =>
                 widget_cwb_ok(*child, (fuel - 1) as nat),
             //  ListView positions children with scroll offset → can be negative
             Widget::Container(ContainerWidget::ListView { .. }) => false,
@@ -3553,6 +3561,45 @@ pub proof fn lemma_layout_widget_cwb<T: OrderedField>(
         },
         Widget::Wrapper(WrapperWidget::AspectRatio { ratio, child }) => {
             lemma_aspect_ratio_children_within_bounds(limits, ratio, *child, fuel);
+        },
+        Widget::Wrapper(WrapperWidget::Layer { layer, child }) => {
+            //  Layer wraps child at (0, 0) inside parent with size = resolve(child.size).
+            let child_node = layout_widget(limits, *child, (fuel - 1) as nat);
+            let node = layout_widget(limits, Widget::Wrapper(WrapperWidget::Layer { layer, child }), fuel);
+            //  node.children = [Node { x: 0, y: 0, size: child_node.size, ... }]
+            //  node.size = resolve(child_node.size)
+            //  CWB: 0 <= 0, child.size.width <= resolve(child.size).width, etc.
+            lemma_layout_respects_limits(limits, *child, (fuel - 1) as nat);
+            lemma_val_le_clamp(child_node.size.width, limits.min.width, limits.max.width);
+            lemma_val_le_clamp(child_node.size.height, limits.min.height, limits.max.height);
+            T::axiom_le_reflexive(T::zero());
+            //  Connect node structure
+            assert(node.children.len() == 1);
+            assert(node.children[0].x == T::zero());
+            assert(node.children[0].y == T::zero());
+            assert(node.children[0].size == child_node.size);
+            assert(T::zero().le(node.children[0].x));
+            assert(T::zero().le(node.children[0].y));
+            //  Need: 0 + cw <= resolve_w, i.e. node.children[0].right() <= node.size.width
+            //  We have: cw <= resolve_w (from lemma_val_le_clamp)
+            //  and cw eqv 0 + cw (so 0+cw <= resolve_w by congruence)
+            let cw = node.children[0].size.width;
+            let ch = node.children[0].size.height;
+            //  cw.eqv(zero.add(cw)): zero + cw eqv cw + zero eqv cw, flip
+            T::axiom_add_commutative(T::zero(), cw);
+            T::axiom_add_zero_right(cw);
+            T::axiom_eqv_transitive(T::zero().add(cw), cw.add(T::zero()), cw);
+            T::axiom_eqv_symmetric(T::zero().add(cw), cw);
+            //  cw.eqv(zero.add(cw)), cw.le(resolve_w) → zero.add(cw).le(resolve_w)
+            T::axiom_eqv_reflexive(node.size.width);
+            T::axiom_le_congruence(cw, T::zero().add(cw), node.size.width, node.size.width);
+            //  same for height
+            T::axiom_add_commutative(T::zero(), ch);
+            T::axiom_add_zero_right(ch);
+            T::axiom_eqv_transitive(T::zero().add(ch), ch.add(T::zero()), ch);
+            T::axiom_eqv_symmetric(T::zero().add(ch), ch);
+            T::axiom_eqv_reflexive(node.size.height);
+            T::axiom_le_congruence(ch, T::zero().add(ch), node.size.height, node.size.height);
         },
         Widget::Wrapper(WrapperWidget::ScrollView { .. }) => {
             //  Excluded by widget_cwb_ok (returns false for ScrollView)
@@ -3715,6 +3762,8 @@ pub open spec fn widget_size_monotone_ok<T: OrderedRing>(
                 widget_size_monotone_ok(*child, (fuel - 1) as nat),
             Widget::Wrapper(WrapperWidget::SizedBox { child, .. }) =>
                 widget_size_monotone_ok(*child, (fuel - 1) as nat),
+            Widget::Wrapper(WrapperWidget::Layer { child, .. }) =>
+                widget_size_monotone_ok(*child, (fuel - 1) as nat),
             Widget::Wrapper(WrapperWidget::ScrollView { .. }) => true,
             Widget::Container(ContainerWidget::ListView { .. }) => true,
             Widget::Leaf(LeafWidget::TextInput { .. }) => true,
@@ -3785,6 +3834,8 @@ pub closed spec fn widget_monotone_wf<T: OrderedField>(
                 let eff = limits.intersect(inner_limits);
                 widget_monotone_wf(eff, *child, (fuel - 1) as nat)
             },
+            Widget::Wrapper(WrapperWidget::Layer { layer, child }) =>
+                widget_monotone_wf(limits, *child, (fuel - 1) as nat),
             Widget::Leaf(LeafWidget::Leaf { .. }) => true,
             Widget::Container(ContainerWidget::Flex { .. }) => true,
             Widget::Container(ContainerWidget::Grid { .. }) => true,
@@ -4156,6 +4207,13 @@ pub proof fn lemma_layout_widget_monotone<T: OrderedField>(
             let cs2 = layout_widget(eff2, *child, (fuel - 1) as nat).size;
 
             //  Output = limits.resolve(child_size), monotone in both limits.max and input
+            lemma_resolve_monotone_input_and_max(limits1, limits2, cs1, cs2);
+        },
+        Widget::Wrapper(WrapperWidget::Layer { layer, child }) => {
+            //  Output = limits.resolve(child_size), monotone in both limits.max and child_size
+            lemma_layout_widget_monotone(limits1, limits2, *child, (fuel - 1) as nat);
+            let cs1 = layout_widget(limits1, *child, (fuel - 1) as nat).size;
+            let cs2 = layout_widget(limits2, *child, (fuel - 1) as nat).size;
             lemma_resolve_monotone_input_and_max(limits1, limits2, cs1, cs2);
         },
         Widget::Wrapper(WrapperWidget::ScrollView { viewport, scroll_x, scroll_y, child }) => {

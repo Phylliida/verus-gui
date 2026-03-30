@@ -600,6 +600,10 @@ proof fn lemma_root_size_nonneg<T: OrderedField>(
         },
         Widget::Wrapper(WrapperWidget::ScrollView { viewport, .. }) =>
             { lemma_resolve_nonneg_from_min(limits, viewport); },
+        Widget::Wrapper(WrapperWidget::Layer { layer, child }) => {
+            let cn = layout_widget(limits, *child, (fuel - 1) as nat);
+            lemma_resolve_nonneg_from_min(limits, cn.size);
+        },
         Widget::Container(container) => {
             //  Per-variant with reveals. Each gets own function for rlimit.
             lemma_container_root_nonneg_column(limits, container, fuel);
@@ -795,6 +799,10 @@ proof fn lemma_wrapper_children_nonneg<T: OrderedField>(
             lemma_layout_widget_all_sizes_nonneg(
                 Limits { min: Size::zero_size(), max: viewport },
                 *child, (fuel - 1) as nat, (check_fuel - 1) as nat);
+        },
+        WrapperWidget::Layer { layer, child } => {
+            //  Layer child is laid out with same limits; wrapped node has same size/children
+            lemma_layout_widget_all_sizes_nonneg(limits, *child, (fuel - 1) as nat, (check_fuel - 1) as nat);
         },
     }
 }

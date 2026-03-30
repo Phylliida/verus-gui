@@ -413,6 +413,10 @@ pub proof fn lemma_layout_widget_respects_limits<T: OrderedField>(
         Widget::Wrapper(WrapperWidget::ScrollView { viewport, scroll_x, scroll_y, child }) => {
             lemma_resolve_bounds(limits, viewport);
         },
+        Widget::Wrapper(WrapperWidget::Layer { layer, child }) => {
+            let child_node = layout_widget(limits, *child, (fuel - 1) as nat);
+            lemma_resolve_bounds(limits, child_node.size);
+        },
         Widget::Container(ContainerWidget::ListView { spacing, scroll_y, viewport, children }) => {
             reveal(layout_listview_body);
             lemma_resolve_bounds(limits, viewport);

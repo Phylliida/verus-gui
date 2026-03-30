@@ -425,7 +425,7 @@ pub proof fn theorem_full_draw_validity<T: OrderedField>(
 
 ///  Limits well-formedness is preserved by eqv: if lim1.wf() and limits_eqv(lim1, lim2),
 ///  then lim2.wf().
-proof fn lemma_limits_wf_congruence<T: OrderedField>(lim1: Limits<T>, lim2: Limits<T>)
+pub proof fn lemma_limits_wf_congruence<T: OrderedField>(lim1: Limits<T>, lim2: Limits<T>)
     requires limits_eqv(lim1, lim2), lim1.wf(),
     ensures lim2.wf(),
 {

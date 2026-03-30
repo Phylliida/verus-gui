@@ -154,6 +154,10 @@ pub open spec fn measure_widget<T: OrderedField>(
             Widget::Wrapper(WrapperWidget::ScrollView { viewport, scroll_x, scroll_y, child }) => {
                 limits.resolve(viewport)
             },
+            Widget::Wrapper(WrapperWidget::Layer { layer, child }) => {
+                let child_size = measure_widget(limits, *child, (fuel - 1) as nat);
+                limits.resolve(child_size)
+            },
             Widget::Container(ContainerWidget::ListView { spacing, scroll_y, viewport, children }) => {
                 limits.resolve(viewport)
             },
@@ -534,6 +538,10 @@ pub proof fn lemma_measure_is_layout_size<T: OrderedField>(
             Widget::Wrapper(WrapperWidget::ScrollView { viewport, scroll_x, scroll_y, child }) => {
                 //  measure = limits.resolve(viewport) = layout_widget(...).size
                 //  No recursion needed — child doesn't affect output size
+            },
+            Widget::Wrapper(WrapperWidget::Layer { layer, child }) => {
+                //  measure = child measure = child layout size = layer layout size
+                lemma_measure_is_layout_size(limits, *child, (fuel - 1) as nat);
             },
             Widget::Container(ContainerWidget::ListView { spacing, scroll_y, viewport, children }) => {
                 reveal(layout_listview_body);

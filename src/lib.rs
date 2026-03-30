@@ -14,6 +14,9 @@ pub mod padding;
 pub mod alignment;
 
 #[cfg(verus_keep_ghost)]
+pub mod layer;
+
+#[cfg(verus_keep_ghost)]
 pub mod layout;
 
 #[cfg(verus_keep_ghost)]
@@ -57,6 +60,15 @@ pub mod draw;
 
 #[cfg(verus_keep_ghost)]
 pub mod draw_proofs;
+
+#[cfg(verus_keep_ghost)]
+pub mod layered_draw;
+
+#[cfg(verus_keep_ghost)]
+pub mod layered_hit_test;
+
+#[cfg(verus_keep_ghost)]
+pub mod layered_congruence;
 
 #[cfg(verus_keep_ghost)]
 pub mod vulkan_bridge;
