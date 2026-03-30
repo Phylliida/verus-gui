@@ -2,6 +2,8 @@ use vstd::prelude::*;
 use verus_algebra::traits::ordered_ring::OrderedRing;
 use verus_linalg::mat3::Mat3x3;
 use verus_linalg::mat3::ops::{identity, mat_mul, mat_vec_mul, det};
+use verus_linalg::mat3::algebra;
+use verus_algebra::traits::equivalence::Equivalence;
 use verus_linalg::vec3::Vec3;
 
 verus! {
@@ -65,16 +67,6 @@ impl<T: OrderedRing> LayerInfo<T> {
 
 //  ── Equivalence predicates ──────────────────────────────────────────
 
-///  Two Vec3 are component-wise eqv.
-pub open spec fn vec3_eqv<T: OrderedRing>(a: Vec3<T>, b: Vec3<T>) -> bool {
-    a.x.eqv(b.x) && a.y.eqv(b.y) && a.z.eqv(b.z)
-}
-
-///  Two Mat3x3 are row-wise eqv.
-pub open spec fn mat3_eqv<T: OrderedRing>(a: Mat3x3<T>, b: Mat3x3<T>) -> bool {
-    vec3_eqv(a.row0, b.row0) && vec3_eqv(a.row1, b.row1) && vec3_eqv(a.row2, b.row2)
-}
-
 ///  Two clip rects are field-wise eqv.
 pub open spec fn clip_rect_eqv<T: OrderedRing>(a: ClipRect<T>, b: ClipRect<T>) -> bool {
     a.x.eqv(b.x) && a.y.eqv(b.y) && a.width.eqv(b.width) && a.height.eqv(b.height)
@@ -92,8 +84,9 @@ pub open spec fn opt_clip_eqv<T: OrderedRing>(
 }
 
 ///  Two LayerInfo are eqv: transform, clip, and alpha all eqv.
+///  Uses the Equivalence trait impl on Mat3x3 from verus-linalg.
 pub open spec fn layer_info_eqv<T: OrderedRing>(a: LayerInfo<T>, b: LayerInfo<T>) -> bool {
-    mat3_eqv(a.transform, b.transform)
+    a.transform.eqv(b.transform)
     && opt_clip_eqv(a.clip, b.clip)
     && a.alpha.eqv(b.alpha)
 }

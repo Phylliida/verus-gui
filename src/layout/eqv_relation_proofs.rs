@@ -7,29 +7,14 @@ use crate::widget::*;
 use crate::layout::congruence_proofs::*;
 use crate::layer::*;
 use verus_linalg::mat3::Mat3x3;
+use verus_linalg::mat3::algebra;
 use verus_linalg::vec3::Vec3;
+use verus_algebra::traits::equivalence::Equivalence;
 
 verus! {
 
 //  ── Layer eqv relation helpers ───────────────────────────────────────
-
-proof fn lemma_vec3_eqv_symmetric<T: OrderedRing>(a: Vec3<T>, b: Vec3<T>)
-    requires vec3_eqv(a, b),
-    ensures vec3_eqv(b, a),
-{
-    T::axiom_eqv_symmetric(a.x, b.x);
-    T::axiom_eqv_symmetric(a.y, b.y);
-    T::axiom_eqv_symmetric(a.z, b.z);
-}
-
-proof fn lemma_mat3_eqv_symmetric<T: OrderedRing>(a: Mat3x3<T>, b: Mat3x3<T>)
-    requires mat3_eqv(a, b),
-    ensures mat3_eqv(b, a),
-{
-    lemma_vec3_eqv_symmetric(a.row0, b.row0);
-    lemma_vec3_eqv_symmetric(a.row1, b.row1);
-    lemma_vec3_eqv_symmetric(a.row2, b.row2);
-}
+//  Uses the Equivalence trait impls from verus-linalg for Vec3 and Mat3x3.
 
 proof fn lemma_clip_rect_eqv_symmetric<T: OrderedRing>(a: ClipRect<T>, b: ClipRect<T>)
     requires clip_rect_eqv(a, b),
@@ -45,30 +30,12 @@ proof fn lemma_layer_info_eqv_symmetric<T: OrderedRing>(a: LayerInfo<T>, b: Laye
     requires layer_info_eqv(a, b),
     ensures layer_info_eqv(b, a),
 {
-    lemma_mat3_eqv_symmetric(a.transform, b.transform);
+    Mat3x3::<T>::axiom_eqv_symmetric(a.transform, b.transform);
     T::axiom_eqv_symmetric(a.alpha, b.alpha);
     match (a.clip, b.clip) {
         (Some(ca), Some(cb)) => { lemma_clip_rect_eqv_symmetric(ca, cb); },
         _ => {},
     }
-}
-
-proof fn lemma_vec3_eqv_transitive<T: OrderedRing>(a: Vec3<T>, b: Vec3<T>, c: Vec3<T>)
-    requires vec3_eqv(a, b), vec3_eqv(b, c),
-    ensures vec3_eqv(a, c),
-{
-    T::axiom_eqv_transitive(a.x, b.x, c.x);
-    T::axiom_eqv_transitive(a.y, b.y, c.y);
-    T::axiom_eqv_transitive(a.z, b.z, c.z);
-}
-
-proof fn lemma_mat3_eqv_transitive<T: OrderedRing>(a: Mat3x3<T>, b: Mat3x3<T>, c: Mat3x3<T>)
-    requires mat3_eqv(a, b), mat3_eqv(b, c),
-    ensures mat3_eqv(a, c),
-{
-    lemma_vec3_eqv_transitive(a.row0, b.row0, c.row0);
-    lemma_vec3_eqv_transitive(a.row1, b.row1, c.row1);
-    lemma_vec3_eqv_transitive(a.row2, b.row2, c.row2);
 }
 
 proof fn lemma_clip_rect_eqv_transitive<T: OrderedRing>(
@@ -89,7 +56,7 @@ proof fn lemma_layer_info_eqv_transitive<T: OrderedRing>(
     requires layer_info_eqv(a, b), layer_info_eqv(b, c),
     ensures layer_info_eqv(a, c),
 {
-    lemma_mat3_eqv_transitive(a.transform, b.transform, c.transform);
+    Mat3x3::<T>::axiom_eqv_transitive(a.transform, b.transform, c.transform);
     T::axiom_eqv_transitive(a.alpha, b.alpha, c.alpha);
     match (a.clip, b.clip, c.clip) {
         (Some(ca), Some(cb), Some(cc)) => {
