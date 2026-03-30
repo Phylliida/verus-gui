@@ -14,6 +14,7 @@ use crate::hit_test::*;
 use crate::animation::*;
 use crate::layout::congruence_proofs::*;
 use crate::diff::*;
+use verus_algebra::traits::equivalence::Equivalence;
 
 verus! {
 
@@ -23,7 +24,7 @@ verus! {
 
 ///  Two layer states are eqv.
 pub open spec fn layer_state_eqv<T: OrderedRing>(a: LayerState<T>, b: LayerState<T>) -> bool {
-    mat3_eqv(a.transform, b.transform)
+    a.transform.eqv(b.transform)
     && opt_clip_eqv(a.clip, b.clip)
     && a.alpha.eqv(b.alpha)
 }
