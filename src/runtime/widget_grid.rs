@@ -366,6 +366,11 @@ pub fn layout_grid_widget_exec(
                 assert(rh_ri == row_heights@[ri]@);
                 let wc_j = spec_wc[j];
                 assert(wc_j == children@[j].model());
+                //  Bridge: cn_models[j] = child_nodes@[j]@ (from Seq::new definition)
+                //  and spec_cn[j] = layout_widget(child_lim, children[j], fuel-1) (from grid_widget_child_nodes)
+                //  These are equal because child_nodes@[j]@ == layout_widget(child_lim, children[j].model(), fuel-1)
+                //  which was ensured by the layout_widget_exec call in the loop.
+                assert(cn_models[j] == child_nodes@[j].model@);
             }
         }
         assert(cn_models =~= spec_cn);
