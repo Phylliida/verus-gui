@@ -8,7 +8,8 @@ use crate::runtime::RuntimeLimits;
 use crate::runtime::RuntimePadding;
 use crate::runtime::RuntimeNode;
 use crate::runtime::grid::*;
-use crate::runtime::widget::{RuntimeWidget, layout_widget_exec, merge_layout_exec};
+use crate::runtime::RuntimeWidget;
+use crate::runtime::widget::{layout_widget_exec, merge_layout_exec};
 use crate::size::Size;
 use crate::node::Node;
 use crate::limits::Limits;
@@ -370,7 +371,9 @@ pub fn layout_grid_widget_exec(
                 //  and spec_cn[j] = layout_widget(child_lim, children[j], fuel-1) (from grid_widget_child_nodes)
                 //  These are equal because child_nodes@[j]@ == layout_widget(child_lim, children[j].model(), fuel-1)
                 //  which was ensured by the layout_widget_exec call in the loop.
-                assert(cn_models[j] == child_nodes@[j].model@);
+                //  Trigger View unfolding for generic RuntimeNode
+                assert(child_nodes@[j]@ === child_nodes@[j].model@);
+                assert(cn_models[j] == child_nodes@[j]@);
             }
         }
         assert(cn_models =~= spec_cn);

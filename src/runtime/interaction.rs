@@ -15,14 +15,19 @@ pub struct RuntimeDragConstraints<R, V: OrderedField> where R: RuntimeOrderedFie
     pub model: Ghost<DragConstraints<V>>,
 }
 
+impl<R: RuntimeOrderedFieldOps<V>, V: OrderedField> View for RuntimeDragConstraints<R, V> {
+    type V = DragConstraints<V>;
+    open spec fn view(&self) -> DragConstraints<V> { self.model@ }
+}
+
 impl<R: RuntimeOrderedFieldOps<V>, V: OrderedField> RuntimeDragConstraints<R, V> {
     pub open spec fn wf_spec(&self) -> bool {
         &&& self.min_x.wf_spec() &&& self.max_x.wf_spec()
         &&& self.min_y.wf_spec() &&& self.max_y.wf_spec()
-        &&& self.min_x.model() == self.model@.min_x
-        &&& self.max_x.model() == self.model@.max_x
-        &&& self.min_y.model() == self.model@.min_y
-        &&& self.max_y.model() == self.model@.max_y
+        &&& self.min_x@ == self@.min_x
+        &&& self.max_x@ == self@.max_x
+        &&& self.min_y@ == self@.min_y
+        &&& self.max_y@ == self@.max_y
     }
 }
 
@@ -32,12 +37,17 @@ pub struct RuntimeResizeConstraints<R, V: OrderedField> where R: RuntimeOrderedF
     pub model: Ghost<ResizeConstraints<V>>,
 }
 
+impl<R: RuntimeOrderedFieldOps<V>, V: OrderedField> View for RuntimeResizeConstraints<R, V> {
+    type V = ResizeConstraints<V>;
+    open spec fn view(&self) -> ResizeConstraints<V> { self.model@ }
+}
+
 impl<R: RuntimeOrderedFieldOps<V>, V: OrderedField> RuntimeResizeConstraints<R, V> {
     pub open spec fn wf_spec(&self) -> bool {
         &&& self.min_size.wf_spec()
         &&& self.max_size.wf_spec()
-        &&& self.min_size.model@ == self.model@.min_size
-        &&& self.max_size.model@ == self.model@.max_size
+        &&& self.min_size.model@ == self@.min_size
+        &&& self.max_size.model@ == self@.max_size
     }
 }
 
@@ -50,9 +60,9 @@ pub fn apply_drag_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
         x.wf_spec(), y.wf_spec(), dx.wf_spec(), dy.wf_spec(),
     ensures ({
         let (rx, ry) = out;
-        let (sx, sy) = apply_drag(constraints.model@, x.model(), y.model(), dx.model(), dy.model());
+        let (sx, sy) = apply_drag(constraints.model@, x@, y@, dx@, dy@);
         &&& rx.wf_spec() &&& ry.wf_spec()
-        &&& rx.model() == sx &&& ry.model() == sy
+        &&& rx@ == sx &&& ry@ == sy
     }),
 {
     let sum_x = x.add(dx);
@@ -72,7 +82,7 @@ pub fn apply_resize_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
         size.wf_spec(), dw.wf_spec(), dh.wf_spec(),
     ensures
         out.wf_spec(),
-        out.model@ == apply_resize(constraints.model@, size.model@, dw.model(), dh.model()),
+        out@ == apply_resize(constraints.model@, size.model@, dw@, dh@),
 {
     let sum_w = size.width.add(dw);
     let clamped_w = constraints.min_size.width.max(&sum_w.min(&constraints.max_size.width));

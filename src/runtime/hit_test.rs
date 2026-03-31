@@ -18,7 +18,7 @@ pub fn hit_test_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
         px.wf_spec(),
         py.wf_spec(),
     ensures
-        match (out, hit_test::<V>(node.model@, px.model(), py.model(), depth as nat)) {
+        match (out, hit_test::<V>(node.model@, px@, py@, depth as nat)) {
             (Some(exec_path), Some(spec_path)) => {
                 exec_path@.len() == spec_path.len()
                 && forall|i: int| 0 <= i < exec_path@.len() ==>
@@ -42,7 +42,7 @@ fn hit_test_inner_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
         px.wf_spec(),
         py.wf_spec(),
     ensures
-        match (out, hit_test_inner::<V>(node.model@, px.model(), py.model(), depth as nat)) {
+        match (out, hit_test_inner::<V>(node.model@, px@, py@, depth as nat)) {
             (Some(exec_path), Some(spec_path)) => {
                 exec_path@.len() == spec_path.len()
                 && forall|i: int| 0 <= i < exec_path@.len() ==>
@@ -88,7 +88,7 @@ fn hit_test_scan_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
         depth > 0,
         index <= node.children@.len(),
     ensures
-        match (out, hit_test_scan::<V>(node.model@, px.model(), py.model(), index as nat, depth as nat)) {
+        match (out, hit_test_scan::<V>(node.model@, px@, py@, index as nat, depth as nat)) {
             (Some(exec_path), Some(spec_path)) => {
                 exec_path@.len() == spec_path.len()
                 && forall|i: int| 0 <= i < exec_path@.len() ==>

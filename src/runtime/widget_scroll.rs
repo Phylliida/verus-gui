@@ -5,7 +5,7 @@ use crate::runtime::copy_rational;
 use crate::runtime::RuntimeSize;
 use crate::runtime::RuntimeLimits;
 use crate::runtime::RuntimeNode;
-use crate::runtime::widget::RuntimeWidget;
+use crate::runtime::RuntimeWidget;
 use crate::runtime::widget::layout_widget_exec;
 use crate::size::Size;
 use crate::node::Node;

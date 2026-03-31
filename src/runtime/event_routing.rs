@@ -3,7 +3,7 @@ use verus_rational::RuntimeRational;
 use crate::runtime::RationalModel;
 use crate::runtime::copy_rational;
 use crate::runtime::RuntimeNode;
-use crate::runtime::widget::{RuntimeWidget, RuntimeLeafWidget, RuntimeWrapperWidget, RuntimeContainerWidget};
+use crate::runtime::{RuntimeWidget, RuntimeLeafWidget, RuntimeWrapperWidget, RuntimeContainerWidget};
 use crate::widget::*;
 use crate::text_input::TextInputConfig;
 use crate::text_model::session::*;

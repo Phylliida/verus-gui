@@ -28,8 +28,8 @@ pub fn stack_layout_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
         forall|i: int| 0 <= i < child_sizes@.len() ==> child_sizes@[i].wf_spec(),
     ensures
         out.wf_spec(),
-        out.model@ == stack_layout::<V>(
-            limits.model@, padding.model@, *h_align, *v_align,
+        out@ == stack_layout::<V>(
+            limits@, padding@, *h_align, *v_align,
             Seq::new(child_sizes@.len() as nat, |i: int| child_sizes@[i].model@),
         ),
 {
@@ -54,8 +54,8 @@ pub fn stack_layout_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
             n == child_sizes@.len(),
             max_w.wf_spec(),
             max_h.wf_spec(),
-            max_w.model() == max_width::<V>(spec_sizes, i as nat),
-            max_h.model() == max_height::<V>(spec_sizes, i as nat),
+            max_w@ == max_width::<V>(spec_sizes, i as nat),
+            max_h@ == max_height::<V>(spec_sizes, i as nat),
             forall|j: int| 0 <= j < child_sizes@.len() ==> child_sizes@[j].wf_spec(),
             forall|j: int| 0 <= j < child_sizes@.len() ==> spec_sizes[j] == child_sizes@[j].model@,
         decreases n - i,
@@ -83,8 +83,8 @@ pub fn stack_layout_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
 
     proof {
         lemma_stack_children_len::<V>(
-            padding.model@, *h_align, *v_align, spec_sizes,
-            available_width.model(), available_height.model(), 0,
+            padding@, *h_align, *v_align, spec_sizes,
+            available_width@, available_height@, 0,
         );
     }
 
@@ -103,22 +103,22 @@ pub fn stack_layout_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
             forall|j: int| 0 <= j < child_sizes@.len() ==> child_sizes@[j].wf_spec(),
             forall|j: int| 0 <= j < child_sizes@.len() ==> spec_sizes[j] == child_sizes@[j].model@,
             stack_children::<V>(
-                padding.model@, *h_align, *v_align, spec_sizes,
-                available_width.model(), available_height.model(), 0,
+                padding@, *h_align, *v_align, spec_sizes,
+                available_width@, available_height@, 0,
             ).len() == spec_sizes.len(),
             forall|j: int| 0 <= j < k ==> {
                 &&& (#[trigger] children@[j]).wf_spec()
                 &&& children@[j].model@ == stack_children::<V>(
-                    padding.model@, *h_align, *v_align, spec_sizes,
-                    available_width.model(), available_height.model(), 0,
+                    padding@, *h_align, *v_align, spec_sizes,
+                    available_width@, available_height@, 0,
                 )[j]
             },
         decreases n - k,
     {
         proof {
             lemma_stack_children_element::<V>(
-                padding.model@, *h_align, *v_align, spec_sizes,
-                available_width.model(), available_height.model(), k as nat,
+                padding@, *h_align, *v_align, spec_sizes,
+                available_width@, available_height@, k as nat,
             );
         }
 
@@ -139,7 +139,7 @@ pub fn stack_layout_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
     let y = limits.min.width.zero_like();
 
     let ghost parent_model = stack_layout::<V>(
-        limits.model@, padding.model@, *h_align, *v_align, spec_sizes,
+        limits@, padding@, *h_align, *v_align, spec_sizes,
     );
 
     let out = RuntimeNode {
@@ -154,14 +154,14 @@ pub fn stack_layout_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
         reveal(stack_layout);
         reveal(stack_content_size);
         let sc = stack_children::<V>(
-            padding.model@, *h_align, *v_align, spec_sizes,
-            available_width.model(), available_height.model(), 0,
+            padding@, *h_align, *v_align, spec_sizes,
+            available_width@, available_height@, 0,
         );
-        assert(out.model@.children == sc);
-        assert(out.children@.len() == out.model@.children.len());
+        assert(out@.children == sc);
+        assert(out.children@.len() == out@.children.len());
         assert forall|i: int| 0 <= i < out.children@.len() implies {
             &&& (#[trigger] out.children@[i]).wf_shallow()
-            &&& out.children@[i].model@ == out.model@.children[i]
+            &&& out.children@[i].model@ == out@.children[i]
         } by {};
     }
 

@@ -25,28 +25,28 @@ impl<R: RuntimeOrderedFieldOps<V>, V: OrderedField> RuntimeSize<R, V> {
     pub open spec fn wf_spec(&self) -> bool {
         &&& self.width.wf_spec()
         &&& self.height.wf_spec()
-        &&& self.width.model() == self.model@.width
-        &&& self.height.model() == self.model@.height
+        &&& self.width@ == self@.width
+        &&& self.height@ == self@.height
     }
 
     pub fn new(width: R, height: R) -> (out: Self)
         requires width.wf_spec(), height.wf_spec(),
-        ensures out.wf_spec(), out.model@.width == width.model(), out.model@.height == height.model(),
+        ensures out.wf_spec(), out@.width == width@, out@.height == height@,
     {
-        let ghost model = Size { width: width.model(), height: height.model() };
+        let ghost model = Size { width: width@, height: height@ };
         RuntimeSize { width, height, model: Ghost(model) }
     }
 
     pub fn copy_size(&self) -> (out: Self)
         requires self.wf_spec(),
-        ensures out.wf_spec(), out.model@ == self.model@,
+        ensures out.wf_spec(), out@ == self@,
     {
         RuntimeSize::new(self.width.copy(), self.height.copy())
     }
 
     pub fn main_exec(&self, axis: &Axis) -> (out: R)
         requires self.wf_spec(),
-        ensures out.wf_spec(), out.model() == self.model@.main_dim(*axis),
+        ensures out.wf_spec(), out@ == self@.main_dim(*axis),
     {
         match axis {
             Axis::Vertical => self.height.copy(),
@@ -56,7 +56,7 @@ impl<R: RuntimeOrderedFieldOps<V>, V: OrderedField> RuntimeSize<R, V> {
 
     pub fn cross_exec(&self, axis: &Axis) -> (out: R)
         requires self.wf_spec(),
-        ensures out.wf_spec(), out.model() == self.model@.cross_dim(*axis),
+        ensures out.wf_spec(), out@ == self@.cross_dim(*axis),
     {
         match axis {
             Axis::Vertical => self.width.copy(),
@@ -66,14 +66,14 @@ impl<R: RuntimeOrderedFieldOps<V>, V: OrderedField> RuntimeSize<R, V> {
 
     pub fn eq_exec(&self, rhs: &Self) -> (out: bool)
         requires self.wf_spec(), rhs.wf_spec(),
-        ensures out ==> (self.model@.width.eqv(rhs.model@.width) && self.model@.height.eqv(rhs.model@.height)),
+        ensures out ==> (self@.width.eqv(rhs@.width) && self@.height.eqv(rhs@.height)),
     {
         self.width.eq(&rhs.width) && self.height.eq(&rhs.height)
     }
 
     pub fn from_axes_exec(axis: &Axis, main: R, cross: R) -> (out: Self)
         requires main.wf_spec(), cross.wf_spec(),
-        ensures out.wf_spec(), out.model@ == Size::<V>::from_axes(*axis, main.model(), cross.model()),
+        ensures out.wf_spec(), out@ == Size::<V>::from_axes(*axis, main@, cross@),
     {
         match axis {
             Axis::Vertical => RuntimeSize::new(cross, main),

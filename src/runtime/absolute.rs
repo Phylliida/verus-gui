@@ -1,27 +1,26 @@
 use vstd::prelude::*;
-use verus_rational::RuntimeRational;
-use crate::runtime::RationalModel;
-use crate::runtime::copy_rational;
-use crate::runtime::RuntimeSize;
-use crate::runtime::RuntimeLimits;
-use crate::runtime::RuntimePadding;
-use crate::runtime::RuntimeNode;
+use crate::runtime::size::RuntimeSize;
+use crate::runtime::limits::RuntimeLimits;
+use crate::runtime::padding::RuntimePadding;
+use crate::runtime::node::RuntimeNode;
 use crate::size::Size;
 use crate::node::Node;
 use crate::layout::absolute::*;
 use crate::layout::absolute_proofs::*;
+use verus_algebra::traits::field::OrderedField;
+use verus_algebra::traits::runtime::*;
 
 verus! {
 
 ///  Execute absolute layout: position each child at (padding.left + x, padding.top + y),
 ///  compute bounding box for content size.
-pub fn absolute_layout_exec(
-    limits: &RuntimeLimits,
-    padding: &RuntimePadding,
-    child_sizes: &Vec<RuntimeSize>,
-    offsets_x: &Vec<RuntimeRational>,
-    offsets_y: &Vec<RuntimeRational>,
-) -> (out: RuntimeNode)
+pub fn absolute_layout_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
+    limits: &RuntimeLimits<R, V>,
+    padding: &RuntimePadding<R, V>,
+    child_sizes: &Vec<RuntimeSize<R, V>>,
+    offsets_x: &Vec<R>,
+    offsets_y: &Vec<R>,
+) -> (out: RuntimeNode<R, V>)
     requires
         limits.wf_spec(),
         padding.wf_spec(),
@@ -32,22 +31,22 @@ pub fn absolute_layout_exec(
         forall|i: int| 0 <= i < offsets_y@.len() ==> offsets_y@[i].wf_spec(),
     ensures
         out.wf_spec(),
-        out@ == absolute_layout::<RationalModel>(
+        out@ == absolute_layout::<V>(
             limits@, padding@,
             Seq::new(child_sizes@.len() as nat, |i: int|
                 (offsets_x@[i]@, offsets_y@[i]@, child_sizes@[i]@)),
         ),
 {
     proof { reveal(absolute_layout); }
-    let ghost spec_data: Seq<(RationalModel, RationalModel, Size<RationalModel>)> =
+    let ghost spec_data: Seq<(V, V, Size<V>)> =
         Seq::new(child_sizes@.len() as nat, |i: int|
             (offsets_x@[i]@, offsets_y@[i]@, child_sizes@[i]@));
 
     let n = child_sizes.len();
 
     //  Compute bounding box: max of (x + width) and max of (y + height)
-    let mut max_right = RuntimeRational::from_int(0);
-    let mut max_bottom = RuntimeRational::from_int(0);
+    let mut max_right = padding.left.zero_like();
+    let mut max_bottom = padding.left.zero_like();
     let mut i: usize = 0;
 
     while i < n
@@ -58,8 +57,8 @@ pub fn absolute_layout_exec(
             n == offsets_y@.len(),
             max_right.wf_spec(),
             max_bottom.wf_spec(),
-            max_right@ == absolute_max_right::<RationalModel>(spec_data, i as nat),
-            max_bottom@ == absolute_max_bottom::<RationalModel>(spec_data, i as nat),
+            max_right@ == absolute_max_right::<V>(spec_data, i as nat),
+            max_bottom@ == absolute_max_bottom::<V>(spec_data, i as nat),
             forall|j: int| 0 <= j < n ==> (#[trigger] child_sizes@[j]).wf_spec(),
             forall|j: int| 0 <= j < n ==> (#[trigger] offsets_x@[j]).wf_spec(),
             forall|j: int| 0 <= j < n ==> (#[trigger] offsets_y@[j]).wf_spec(),
@@ -84,10 +83,10 @@ pub fn absolute_layout_exec(
 
     //  Build children nodes: each at (padding.left + x, padding.top + y)
     proof {
-        lemma_absolute_children_len::<RationalModel>(padding@, spec_data, 0);
+        lemma_absolute_children_len::<V>(padding@, spec_data, 0);
     }
 
-    let mut children: Vec<RuntimeNode> = Vec::new();
+    let mut children: Vec<RuntimeNode<R, V>> = Vec::new();
     let mut k: usize = 0;
 
     while k < n
@@ -104,16 +103,16 @@ pub fn absolute_layout_exec(
             forall|j: int| 0 <= j < n ==> (#[trigger] offsets_y@[j]).wf_spec(),
             forall|j: int| 0 <= j < n ==> spec_data[j] ==
                 (offsets_x@[j]@, offsets_y@[j]@, child_sizes@[j]@),
-            absolute_children::<RationalModel>(padding@, spec_data, 0).len() == n as nat,
+            absolute_children::<V>(padding@, spec_data, 0).len() == n as nat,
             forall|j: int| 0 <= j < k ==> {
                 &&& (#[trigger] children@[j]).wf_shallow()
-                &&& children@[j]@ == absolute_children::<RationalModel>(
+                &&& children@[j]@ == absolute_children::<V>(
                     padding@, spec_data, 0)[j]
             },
         decreases n - k,
     {
         proof {
-            lemma_absolute_children_element::<RationalModel>(
+            lemma_absolute_children_element::<V>(
                 padding@, spec_data, k as nat);
         }
 
@@ -126,10 +125,10 @@ pub fn absolute_layout_exec(
         k = k + 1;
     }
 
-    let x = RuntimeRational::from_int(0);
-    let y = RuntimeRational::from_int(0);
+    let x = padding.left.zero_like();
+    let y = padding.left.zero_like();
 
-    let ghost parent_model = absolute_layout::<RationalModel>(
+    let ghost parent_model = absolute_layout::<V>(
         limits@, padding@, spec_data);
 
     let out = RuntimeNode {
@@ -141,7 +140,7 @@ pub fn absolute_layout_exec(
     };
 
     proof {
-        let ac = absolute_children::<RationalModel>(padding@, spec_data, 0);
+        let ac = absolute_children::<V>(padding@, spec_data, 0);
         assert(out@.children == ac);
         assert(out.children@.len() == out@.children.len());
         assert forall|i: int| 0 <= i < out.children@.len() implies {

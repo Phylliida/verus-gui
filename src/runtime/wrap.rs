@@ -27,8 +27,8 @@ pub fn wrap_layout_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
         forall|i: int| 0 <= i < child_sizes@.len() ==> child_sizes@[i].wf_spec(),
     ensures
         out.wf_spec(),
-        out.model@ == wrap_layout::<V>(
-            limits.model@, padding.model@, h_spacing.model(), v_spacing.model(),
+        out@ == wrap_layout::<V>(
+            limits@, padding@, h_spacing@, v_spacing@,
             Seq::new(child_sizes@.len() as nat, |i: int| child_sizes@[i].model@),
         ),
 {
@@ -45,11 +45,11 @@ pub fn wrap_layout_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
     let mut content_width = h_spacing.zero_like();
 
     let ghost spec_children = wrap_children(
-        padding.model@, h_spacing.model(), v_spacing.model(), spec_sizes, available_width.model(), 0,
+        padding@, h_spacing@, v_spacing@, spec_sizes, available_width@, 0,
     );
     proof {
         lemma_wrap_children_len::<V>(
-            padding.model@, h_spacing.model(), v_spacing.model(), spec_sizes, available_width.model(), 0,
+            padding@, h_spacing@, v_spacing@, spec_sizes, available_width@, 0,
         );
     }
 
@@ -66,18 +66,18 @@ pub fn wrap_layout_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
             line_height.wf_spec(), content_width.wf_spec(),
             available_width.wf_spec(),
             h_spacing.wf_spec(), v_spacing.wf_spec(), padding.wf_spec(),
-            zero.wf_spec(), zero.model() == V::zero(),
+            zero.wf_spec(), zero@ == V::zero(),
             ({
-                let wc = wrap_cursor(spec_sizes, h_spacing.model(), v_spacing.model(), available_width.model(), i as nat);
-                &&& cursor_x.model() == wc.x
-                &&& cursor_y.model() == wc.y
-                &&& line_height.model() == wc.line_height
-                &&& content_width.model() == wc.content_width
+                let wc = wrap_cursor(spec_sizes, h_spacing@, v_spacing@, available_width@, i as nat);
+                &&& cursor_x@ == wc.x
+                &&& cursor_y@ == wc.y
+                &&& line_height@ == wc.line_height
+                &&& content_width@ == wc.content_width
             }),
             children@.len() == i as int,
             spec_children.len() == spec_sizes.len(),
             spec_children =~= wrap_children(
-                padding.model@, h_spacing.model(), v_spacing.model(), spec_sizes, available_width.model(), 0nat,
+                padding@, h_spacing@, v_spacing@, spec_sizes, available_width@, 0nat,
             ),
             forall|j: int| 0 <= j < child_sizes@.len() ==> child_sizes@[j].wf_spec(),
             forall|j: int| 0 <= j < child_sizes@.len() ==> spec_sizes[j] == child_sizes@[j].model@,
@@ -89,7 +89,7 @@ pub fn wrap_layout_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
     {
         proof {
             lemma_wrap_children_element::<V>(
-                padding.model@, h_spacing.model(), v_spacing.model(), spec_sizes, available_width.model(), i as nat,
+                padding@, h_spacing@, v_spacing@, spec_sizes, available_width@, i as nat,
             );
         }
 
@@ -147,7 +147,7 @@ pub fn wrap_layout_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
     let y = h_spacing.zero_like();
 
     let ghost parent_model = wrap_layout::<V>(
-        limits.model@, padding.model@, h_spacing.model(), v_spacing.model(), spec_sizes,
+        limits@, padding@, h_spacing@, v_spacing@, spec_sizes,
     );
 
     let out = RuntimeNode {
@@ -156,11 +156,11 @@ pub fn wrap_layout_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
     };
 
     proof {
-        assert(out.model@.children == spec_children);
-        assert(out.children@.len() == out.model@.children.len());
+        assert(out@.children == spec_children);
+        assert(out.children@.len() == out@.children.len());
         assert forall|i: int| 0 <= i < out.children@.len() implies {
             &&& (#[trigger] out.children@[i]).wf_shallow()
-            &&& out.children@[i].model@ == out.model@.children[i]
+            &&& out.children@[i].model@ == out@.children[i]
         } by {};
     }
 

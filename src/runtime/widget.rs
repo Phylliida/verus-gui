@@ -2,13 +2,10 @@ use vstd::prelude::*;
 use verus_rational::RuntimeRational;
 #[cfg(verus_keep_ghost)]
 use verus_rational::rational::Rational;
-use verus_algebra::traits::ring::Ring;
-use crate::runtime::RationalModel;
-use crate::runtime::copy_rational;
-use crate::runtime::RuntimeSize;
-use crate::runtime::RuntimeLimits;
-use crate::runtime::RuntimePadding;
-use crate::runtime::RuntimeNode;
+use crate::runtime::size::RuntimeSize;
+use crate::runtime::limits::RuntimeLimits;
+use crate::runtime::padding::RuntimePadding;
+use crate::runtime::node::RuntimeNode;
 use crate::runtime::linear::*;
 use crate::runtime::stack::*;
 use crate::runtime::wrap::*;
@@ -33,154 +30,174 @@ use crate::runtime::widget_scroll::layout_scroll_view_exec;
 use crate::runtime::widget_grid::layout_grid_widget_exec;
 use crate::runtime::widget_absolute::layout_absolute_widget_exec;
 use crate::runtime::text_input::RuntimeTextInputConfig;
+use verus_algebra::traits::field::OrderedField;
+use verus_algebra::traits::runtime::*;
 
 verus! {
 
 ///  Runtime flex child: weight + child widget.
-pub struct RuntimeFlexItem {
-    pub weight: RuntimeRational,
-    pub child: RuntimeWidget,
+#[verifier::reject_recursive_types(V)]
+pub struct RuntimeFlexItem<R, V: OrderedField> where R: RuntimeOrderedFieldOps<V> {
+    pub weight: R,
+    pub child: RuntimeWidget<R, V>,
 }
 
 ///  Runtime absolute child: explicit (x, y) offset + child widget.
-pub struct RuntimeAbsoluteChild {
-    pub x: RuntimeRational,
-    pub y: RuntimeRational,
-    pub child: RuntimeWidget,
+#[verifier::reject_recursive_types(V)]
+pub struct RuntimeAbsoluteChild<R, V: OrderedField> where R: RuntimeOrderedFieldOps<V> {
+    pub x: R,
+    pub y: R,
+    pub child: RuntimeWidget<R, V>,
 }
 
 ///  Runtime leaf widget: no children.
-pub enum RuntimeLeafWidget {
+#[verifier::reject_recursive_types(V)]
+pub enum RuntimeLeafWidget<R, V: OrderedField> where R: RuntimeOrderedFieldOps<V> {
     Leaf {
-        size: RuntimeSize,
-        model: Ghost<LeafWidget<RationalModel>>,
+        size: RuntimeSize<R, V>,
+        model: Ghost<LeafWidget<V>>,
     },
     TextInput {
-        preferred_size: RuntimeSize,
+        preferred_size: RuntimeSize<R, V>,
         text_input_id: usize,
         config: RuntimeTextInputConfig,
-        model: Ghost<LeafWidget<RationalModel>>,
+        model: Ghost<LeafWidget<V>>,
     },
 }
 
 ///  Runtime wrapper widget: exactly one child.
-pub enum RuntimeWrapperWidget {
+#[verifier::reject_recursive_types(V)]
+pub enum RuntimeWrapperWidget<R, V: OrderedField> where R: RuntimeOrderedFieldOps<V> {
     Margin {
-        margin: RuntimePadding,
-        child: Box<RuntimeWidget>,
-        model: Ghost<WrapperWidget<RationalModel>>,
+        margin: RuntimePadding<R, V>,
+        child: Box<RuntimeWidget<R, V>>,
+        model: Ghost<WrapperWidget<V>>,
     },
     Conditional {
         visible: bool,
-        child: Box<RuntimeWidget>,
-        model: Ghost<WrapperWidget<RationalModel>>,
+        child: Box<RuntimeWidget<R, V>>,
+        model: Ghost<WrapperWidget<V>>,
     },
     SizedBox {
-        inner_limits: RuntimeLimits,
-        child: Box<RuntimeWidget>,
-        model: Ghost<WrapperWidget<RationalModel>>,
+        inner_limits: RuntimeLimits<R, V>,
+        child: Box<RuntimeWidget<R, V>>,
+        model: Ghost<WrapperWidget<V>>,
     },
     AspectRatio {
-        ratio: RuntimeRational,
-        child: Box<RuntimeWidget>,
-        model: Ghost<WrapperWidget<RationalModel>>,
+        ratio: R,
+        child: Box<RuntimeWidget<R, V>>,
+        model: Ghost<WrapperWidget<V>>,
     },
     ScrollView {
-        viewport: RuntimeSize,
-        scroll_x: RuntimeRational,
-        scroll_y: RuntimeRational,
-        child: Box<RuntimeWidget>,
-        model: Ghost<WrapperWidget<RationalModel>>,
+        viewport: RuntimeSize<R, V>,
+        scroll_x: R,
+        scroll_y: R,
+        child: Box<RuntimeWidget<R, V>>,
+        model: Ghost<WrapperWidget<V>>,
     },
 }
 
 ///  Runtime container widget: multiple children.
 #[allow(inconsistent_fields)]
-pub enum RuntimeContainerWidget {
+#[verifier::reject_recursive_types(V)]
+pub enum RuntimeContainerWidget<R, V: OrderedField> where R: RuntimeOrderedFieldOps<V> {
     Column {
-        padding: RuntimePadding,
-        spacing: RuntimeRational,
+        padding: RuntimePadding<R, V>,
+        spacing: R,
         alignment: Alignment,
-        children: Vec<RuntimeWidget>,
-        model: Ghost<ContainerWidget<RationalModel>>,
+        children: Vec<RuntimeWidget<R, V>>,
+        model: Ghost<ContainerWidget<V>>,
     },
     Row {
-        padding: RuntimePadding,
-        spacing: RuntimeRational,
+        padding: RuntimePadding<R, V>,
+        spacing: R,
         alignment: Alignment,
-        children: Vec<RuntimeWidget>,
-        model: Ghost<ContainerWidget<RationalModel>>,
+        children: Vec<RuntimeWidget<R, V>>,
+        model: Ghost<ContainerWidget<V>>,
     },
     Stack {
-        padding: RuntimePadding,
+        padding: RuntimePadding<R, V>,
         h_align: Alignment,
         v_align: Alignment,
-        children: Vec<RuntimeWidget>,
-        model: Ghost<ContainerWidget<RationalModel>>,
+        children: Vec<RuntimeWidget<R, V>>,
+        model: Ghost<ContainerWidget<V>>,
     },
     Wrap {
-        padding: RuntimePadding,
-        h_spacing: RuntimeRational,
-        v_spacing: RuntimeRational,
-        children: Vec<RuntimeWidget>,
-        model: Ghost<ContainerWidget<RationalModel>>,
+        padding: RuntimePadding<R, V>,
+        h_spacing: R,
+        v_spacing: R,
+        children: Vec<RuntimeWidget<R, V>>,
+        model: Ghost<ContainerWidget<V>>,
     },
     Flex {
-        padding: RuntimePadding,
-        spacing: RuntimeRational,
+        padding: RuntimePadding<R, V>,
+        spacing: R,
         alignment: Alignment,
         direction: FlexDirection,
-        children: Vec<RuntimeFlexItem>,
-        model: Ghost<ContainerWidget<RationalModel>>,
+        children: Vec<RuntimeFlexItem<R, V>>,
+        model: Ghost<ContainerWidget<V>>,
     },
     Grid {
-        padding: RuntimePadding,
-        h_spacing: RuntimeRational,
-        v_spacing: RuntimeRational,
+        padding: RuntimePadding<R, V>,
+        h_spacing: R,
+        v_spacing: R,
         h_align: Alignment,
         v_align: Alignment,
-        col_widths: Vec<RuntimeSize>,
-        row_heights: Vec<RuntimeSize>,
-        children: Vec<RuntimeWidget>,
-        model: Ghost<ContainerWidget<RationalModel>>,
+        col_widths: Vec<RuntimeSize<R, V>>,
+        row_heights: Vec<RuntimeSize<R, V>>,
+        children: Vec<RuntimeWidget<R, V>>,
+        model: Ghost<ContainerWidget<V>>,
     },
     Absolute {
-        padding: RuntimePadding,
-        children: Vec<RuntimeAbsoluteChild>,
-        model: Ghost<ContainerWidget<RationalModel>>,
+        padding: RuntimePadding<R, V>,
+        children: Vec<RuntimeAbsoluteChild<R, V>>,
+        model: Ghost<ContainerWidget<V>>,
     },
     ListView {
-        spacing: RuntimeRational,
-        scroll_y: RuntimeRational,
-        viewport: RuntimeSize,
-        children: Vec<RuntimeWidget>,
-        model: Ghost<ContainerWidget<RationalModel>>,
+        spacing: R,
+        scroll_y: R,
+        viewport: RuntimeSize<R, V>,
+        children: Vec<RuntimeWidget<R, V>>,
+        model: Ghost<ContainerWidget<V>>,
     },
 }
 
 ///  Runtime Widget: stratified to mirror spec Widget hierarchy.
-pub enum RuntimeWidget {
-    Leaf(RuntimeLeafWidget),
-    Wrapper(RuntimeWrapperWidget),
-    Container(RuntimeContainerWidget),
+#[verifier::reject_recursive_types(V)]
+pub enum RuntimeWidget<R, V: OrderedField> where R: RuntimeOrderedFieldOps<V> {
+    Leaf(RuntimeLeafWidget<R, V>),
+    Wrapper(RuntimeWrapperWidget<R, V>),
+    Container(RuntimeContainerWidget<R, V>),
 }
 
-impl RuntimeFlexItem {
-    pub open spec fn model(&self) -> FlexItem<RationalModel> {
+//  Concrete type aliases for concrete-only functions in this module.
+type CWidget = RuntimeWidget<RuntimeRational, Rational>;
+type CNode = RuntimeNode<RuntimeRational, Rational>;
+type CSize = RuntimeSize<RuntimeRational, Rational>;
+type CLimits = RuntimeLimits<RuntimeRational, Rational>;
+type CPadding = RuntimePadding<RuntimeRational, Rational>;
+type CFlexItem = RuntimeFlexItem<RuntimeRational, Rational>;
+type CAbsoluteChild = RuntimeAbsoluteChild<RuntimeRational, Rational>;
+type CLeafWidget = RuntimeLeafWidget<RuntimeRational, Rational>;
+type CWrapperWidget = RuntimeWrapperWidget<RuntimeRational, Rational>;
+type CContainerWidget = RuntimeContainerWidget<RuntimeRational, Rational>;
+
+impl<R: RuntimeOrderedFieldOps<V>, V: OrderedField> RuntimeFlexItem<R, V> {
+    pub open spec fn model(&self) -> FlexItem<V> {
         FlexItem { weight: self.weight@, child: self.child.model() }
     }
 }
 
-impl RuntimeAbsoluteChild {
-    pub open spec fn model(&self) -> AbsoluteChild<RationalModel> {
+impl<R: RuntimeOrderedFieldOps<V>, V: OrderedField> RuntimeAbsoluteChild<R, V> {
+    pub open spec fn model(&self) -> AbsoluteChild<V> {
         AbsoluteChild { x: self.x@, y: self.y@, child: self.child.model() }
     }
 }
 
 //  ── Sub-enum impls ──────────────────────────────────────────────
 
-impl RuntimeLeafWidget {
-    pub open spec fn model(&self) -> LeafWidget<RationalModel> {
+impl<R: RuntimeOrderedFieldOps<V>, V: OrderedField> RuntimeLeafWidget<R, V> {
+    pub open spec fn model(&self) -> LeafWidget<V> {
         match self {
             RuntimeLeafWidget::Leaf { model, .. } => model@,
             RuntimeLeafWidget::TextInput { model, .. } => model@,
@@ -205,8 +222,8 @@ impl RuntimeLeafWidget {
     }
 }
 
-impl RuntimeWrapperWidget {
-    pub open spec fn model(&self) -> WrapperWidget<RationalModel> {
+impl<R: RuntimeOrderedFieldOps<V>, V: OrderedField> RuntimeWrapperWidget<R, V> {
+    pub open spec fn model(&self) -> WrapperWidget<V> {
         match self {
             RuntimeWrapperWidget::Margin { model, .. } => model@,
             RuntimeWrapperWidget::Conditional { model, .. } => model@,
@@ -240,7 +257,7 @@ impl RuntimeWrapperWidget {
             },
             RuntimeWrapperWidget::AspectRatio { ratio, child, model } => {
                 &&& ratio.wf_spec()
-                &&& !ratio@.eqv_spec(RationalModel::from_int_spec(0))
+                &&& !ratio@.eqv(V::zero())
                 &&& model@ == WrapperWidget::AspectRatio {
                     ratio: ratio@,
                     child: Box::new(child.model()),
@@ -262,8 +279,8 @@ impl RuntimeWrapperWidget {
 
 }
 
-impl RuntimeContainerWidget {
-    pub open spec fn model(&self) -> ContainerWidget<RationalModel> {
+impl<R: RuntimeOrderedFieldOps<V>, V: OrderedField> RuntimeContainerWidget<R, V> {
+    pub open spec fn model(&self) -> ContainerWidget<V> {
         match self {
             RuntimeContainerWidget::Column { model, .. } => model@,
             RuntimeContainerWidget::Row { model, .. } => model@,
@@ -322,10 +339,10 @@ impl RuntimeContainerWidget {
                 &&& padding.wf_spec()
                 &&& spacing.wf_spec()
                 &&& forall|i: int| 0 <= i < children@.len() ==> children@[i].weight.wf_spec()
-                &&& children@.len() > 0 ==> !sum_weights::<RationalModel>(
+                &&& children@.len() > 0 ==> !sum_weights::<V>(
                     Seq::new(children@.len() as nat, |i: int| children@[i].weight@),
                     children@.len() as nat,
-                ).eqv_spec(RationalModel::from_int_spec(0))
+                ).eqv(V::zero())
                 &&& model@ == ContainerWidget::Flex {
                     padding: padding@,
                     spacing: spacing@,
@@ -380,9 +397,9 @@ impl RuntimeContainerWidget {
 
 //  ── RuntimeWidget delegation ────────────────────────────────────
 
-impl RuntimeWidget {
+impl<R: RuntimeOrderedFieldOps<V>, V: OrderedField> RuntimeWidget<R, V> {
     ///  Extract the ghost model.
-    pub open spec fn model(&self) -> Widget<RationalModel> {
+    pub open spec fn model(&self) -> Widget<V> {
         match self {
             RuntimeWidget::Leaf(l) => Widget::Leaf(l.model()),
             RuntimeWidget::Wrapper(w) => Widget::Wrapper(w.model()),
@@ -458,7 +475,12 @@ impl RuntimeWidget {
             }
         }
     }
+}
 
+//  ── Concrete-only: normalization and deep comparison ─────────────
+//  These use Rational-specific operations (.normalized_spec(), .normalize(), etc.)
+
+impl RuntimeWidget<RuntimeRational, Rational> {
     ///  Whether all Rational fields in this widget's model are in normalized (canonical) form.
     ///  When true and wf_shallow holds, comparing rational fields via eqv implies structural equality.
     pub open spec fn model_normalized(&self, fuel: nat) -> bool
@@ -608,7 +630,7 @@ fn text_input_config_eq(a: &RuntimeTextInputConfig, b: &RuntimeTextInputConfig) 
 ///  Does NOT compare children recursively.
 ///  When true: the two widgets have the same structure and parameters,
 ///  so given identical child layout results they would produce identical output.
-pub fn widgets_shallow_equal_exec(a: &RuntimeWidget, b: &RuntimeWidget) -> (out: bool)
+pub fn widgets_shallow_equal_exec(a: &CWidget, b: &CWidget) -> (out: bool)
     requires
         a.wf_shallow(),
         b.wf_shallow(),
@@ -740,7 +762,7 @@ pub fn widgets_shallow_equal_exec(a: &RuntimeWidget, b: &RuntimeWidget) -> (out:
 //  ── Deep widget comparison ──────────────────────────────────────
 
 ///  Compare two Vec<RuntimeWidget> element-wise using deep comparison.
-fn vec_widgets_deep_equal(a: &Vec<RuntimeWidget>, b: &Vec<RuntimeWidget>, depth: usize) -> (out: bool)
+fn vec_widgets_deep_equal(a: &Vec<CWidget>, b: &Vec<CWidget>, depth: usize) -> (out: bool)
     requires
         a@.len() == b@.len(),
         depth > 0,
@@ -776,7 +798,7 @@ fn vec_widgets_deep_equal(a: &Vec<RuntimeWidget>, b: &Vec<RuntimeWidget>, depth:
 }
 
 ///  Compare two Vec<RuntimeFlexItem> element-wise: weights + child widgets.
-fn vec_flex_deep_equal(a: &Vec<RuntimeFlexItem>, b: &Vec<RuntimeFlexItem>, depth: usize) -> (out: bool)
+fn vec_flex_deep_equal(a: &Vec<CFlexItem>, b: &Vec<CFlexItem>, depth: usize) -> (out: bool)
     requires
         a@.len() == b@.len(),
         depth > 0,
@@ -836,7 +858,7 @@ fn vec_flex_deep_equal(a: &Vec<RuntimeFlexItem>, b: &Vec<RuntimeFlexItem>, depth
 }
 
 ///  Compare two Vec<RuntimeAbsoluteChild> element-wise: offsets + child widgets.
-fn vec_absolute_deep_equal(a: &Vec<RuntimeAbsoluteChild>, b: &Vec<RuntimeAbsoluteChild>, depth: usize) -> (out: bool)
+fn vec_absolute_deep_equal(a: &Vec<CAbsoluteChild>, b: &Vec<CAbsoluteChild>, depth: usize) -> (out: bool)
     requires
         a@.len() == b@.len(),
         depth > 0,
@@ -910,7 +932,7 @@ fn vec_absolute_deep_equal(a: &Vec<RuntimeAbsoluteChild>, b: &Vec<RuntimeAbsolut
 ///  recursively equal children. Returns false conservatively when depth
 ///  is insufficient (non-leaf widgets need depth >= 2).
 ///  When true and both sides are model_normalized, the models are structurally equal.
-pub fn widgets_deep_equal_exec(a: &RuntimeWidget, b: &RuntimeWidget, depth: usize) -> (out: bool)
+pub fn widgets_deep_equal_exec(a: &CWidget, b: &CWidget, depth: usize) -> (out: bool)
     requires
         depth > 0,
         a.wf_spec(depth as nat),
@@ -1425,18 +1447,18 @@ pub fn widgets_deep_equal_exec(a: &RuntimeWidget, b: &RuntimeWidget, depth: usiz
 
 ///  Layout a conditional widget: visible child or zero-sized leaf.
 fn layout_conditional_exec(
-    limits: &RuntimeLimits,
+    limits: &CLimits,
     visible: bool,
-    child: &Box<RuntimeWidget>,
+    child: &Box<CWidget>,
     fuel: usize,
-) -> (out: RuntimeNode)
+) -> (out: CNode)
     requires
         limits.wf_spec(),
         fuel > 0,
         child.wf_spec((fuel - 1) as nat),
     ensures
         out.wf_spec(),
-        out@ == layout_widget::<RationalModel>(
+        out@ == layout_widget::<Rational>(
             limits@,
             Widget::Wrapper(WrapperWidget::Conditional { visible, child: Box::new(child.model()) }),
             fuel as nat,
@@ -1448,7 +1470,7 @@ fn layout_conditional_exec(
         let resolved = limits.resolve_exec(child_node.size.copy_size());
         let x = RuntimeRational::from_int(0);
         let y = RuntimeRational::from_int(0);
-        let ghost parent_model = layout_widget::<RationalModel>(
+        let ghost parent_model = layout_widget::<Rational>(
             limits@,
             Widget::Wrapper(WrapperWidget::Conditional { visible: true, child: Box::new(child.model()) }),
             fuel as nat,
@@ -1461,7 +1483,7 @@ fn layout_conditional_exec(
             model: Ghost(parent_model),
         }
     } else {
-        let resolved = limits.resolve_exec(RuntimeSize::zero_exec());
+        let resolved = limits.resolve_exec(CSize::zero_exec());
         let x = RuntimeRational::from_int(0);
         let y = RuntimeRational::from_int(0);
         RuntimeNode::leaf_exec(x, y, resolved)
@@ -1472,14 +1494,14 @@ fn layout_conditional_exec(
 
 ///  Layout a flex widget: each child gets per-weight limits.
 fn layout_flex_widget_exec(
-    limits: &RuntimeLimits,
-    padding: &RuntimePadding,
+    limits: &CLimits,
+    padding: &CPadding,
     spacing: &RuntimeRational,
     alignment: &Alignment,
     direction: &FlexDirection,
-    children: &Vec<RuntimeFlexItem>,
+    children: &Vec<CFlexItem>,
     fuel: usize,
-) -> (out: RuntimeNode)
+) -> (out: CNode)
     requires
         limits.wf_spec(),
         padding.wf_spec(),
@@ -1489,10 +1511,10 @@ fn layout_flex_widget_exec(
             children@[i].weight.wf_spec(),
         forall|i: int| 0 <= i < children@.len() ==>
             (#[trigger] children@[i]).child.wf_spec((fuel - 1) as nat),
-        children@.len() > 0 ==> !sum_weights::<RationalModel>(
+        children@.len() > 0 ==> !sum_weights::<Rational>(
             Seq::new(children@.len() as nat, |i: int| children@[i].weight@),
             children@.len() as nat,
-        ).eqv_spec(RationalModel::from_int_spec(0)),
+        ).eqv_spec(Rational::from_int_spec(0)),
     ensures
         out.wf_spec(),
         out@ == ({
@@ -1501,13 +1523,13 @@ fn layout_flex_widget_exec(
                 padding: padding@, spacing: spacing@, alignment: *alignment,
                 direction: *direction, children: spec_fi,
             });
-            layout_widget::<RationalModel>(limits@, spec_w, fuel as nat)
+            layout_widget::<Rational>(limits@, spec_w, fuel as nat)
         }),
     decreases fuel, 0nat,
 {
-    let ghost spec_fi: Seq<FlexItem<RationalModel>> =
+    let ghost spec_fi: Seq<FlexItem<Rational>> =
         Seq::new(children@.len() as nat, |i: int| children@[i].model());
-    let ghost spec_weights: Seq<RationalModel> =
+    let ghost spec_weights: Seq<Rational> =
         Seq::new(children@.len() as nat, |i: int| children@[i].weight@);
 
     let pad_h = padding.horizontal_exec();
@@ -1524,7 +1546,7 @@ fn layout_flex_widget_exec(
             0 <= i <= n, n == children@.len(),
             weights@.len() == i as int,
             total_weight.wf_spec(),
-            total_weight@ == sum_weights::<RationalModel>(spec_weights, i as nat),
+            total_weight@ == sum_weights::<Rational>(spec_weights, i as nat),
             forall|j: int| 0 <= j < i ==> {
                 &&& (#[trigger] weights@[j]).wf_spec()
                 &&& weights@[j]@ == children@[j].weight@
@@ -1533,7 +1555,7 @@ fn layout_flex_widget_exec(
             forall|j: int| 0 <= j < children@.len() ==> spec_weights[j] == children@[j].weight@,
         decreases n - i,
     {
-        let w = copy_rational(&children[i].weight);
+        let w = crate::runtime::copy_rational(&children[i].weight);
         total_weight = total_weight.add(&children[i].weight);
         weights.push(w);
         i = i + 1;
@@ -1548,7 +1570,7 @@ fn layout_flex_widget_exec(
             invariant
                 0 <= j <= sp_count,
                 sp.wf_spec(), spacing.wf_spec(),
-                sp@ == repeated_add::<RationalModel>(spacing@, j as nat),
+                sp@ == repeated_add::<Rational>(spacing@, j as nat),
             decreases sp_count - j,
         {
             sp = sp.add(spacing);
@@ -1560,11 +1582,11 @@ fn layout_flex_widget_exec(
     };
 
     //  Recursively layout each child with per-weight limits, collecting child nodes + cross sizes
-    let mut child_nodes: Vec<RuntimeNode> = Vec::new();
+    let mut child_nodes: Vec<CNode> = Vec::new();
     let mut cross_sizes: Vec<RuntimeRational> = Vec::new();
     let mut k: usize = 0;
 
-    let ghost avail_spec: RationalModel;
+    let ghost avail_spec: Rational;
     match direction {
         FlexDirection::Column => {
             let available = inner.max.height.sub(&total_spacing);
@@ -1575,8 +1597,8 @@ fn layout_flex_widget_exec(
                     inner.wf_spec(),
                     inner@ == limits@.shrink(pad_h@, pad_v@),
                     total_weight.wf_spec(),
-                    total_weight@ == sum_weights::<RationalModel>(spec_weights, n as nat),
-                    n > 0 ==> !total_weight@.eqv_spec(RationalModel::from_int_spec(0)),
+                    total_weight@ == sum_weights::<Rational>(spec_weights, n as nat),
+                    n > 0 ==> !total_weight@.eqv_spec(Rational::from_int_spec(0)),
                     available.wf_spec(),
                     available@ == avail_spec,
                     child_nodes@.len() == k as int,
@@ -1589,9 +1611,9 @@ fn layout_flex_widget_exec(
                         (#[trigger] children@[j]).child.wf_spec((fuel - 1) as nat),
                     forall|j: int| 0 <= j < k ==> {
                         &&& (#[trigger] child_nodes@[j]).wf_spec()
-                        &&& child_nodes@[j]@ == layout_widget::<RationalModel>(
+                        &&& child_nodes@[j]@ == layout_widget::<Rational>(
                             Limits { min: inner@.min, max: Size::new(inner@.max.width,
-                                flex_child_main_size::<RationalModel>(spec_weights[j], total_weight@, avail_spec)) },
+                                flex_child_main_size::<Rational>(spec_weights[j], total_weight@, avail_spec)) },
                             children@[j].child.model(), (fuel - 1) as nat)
                     },
                     forall|j: int| 0 <= j < k ==> {
@@ -1604,10 +1626,10 @@ fn layout_flex_widget_exec(
                 let main_alloc = wd.mul(&available);
                 let child_lim = RuntimeLimits::new(
                     inner.min.copy_size(),
-                    RuntimeSize::new(copy_rational(&inner.max.width), main_alloc),
+                    RuntimeSize::new(crate::runtime::copy_rational(&inner.max.width), main_alloc),
                 );
                 let cn = layout_widget_exec(&child_lim, &children[k].child, fuel - 1);
-                let cw = copy_rational(&cn.size.width);
+                let cw = crate::runtime::copy_rational(&cn.size.width);
                 cross_sizes.push(cw);
                 child_nodes.push(cn);
                 k = k + 1;
@@ -1625,7 +1647,7 @@ fn layout_flex_widget_exec(
                 limits, padding, spacing, alignment, &weights, &cross_sizes);
 
             //  Merge — layout_result.children@.len() == n from flex_column_layout_exec postcondition
-            let ghost cn_models: Seq<Node<RationalModel>> =
+            let ghost cn_models: Seq<Node<Rational>> =
                 Seq::new(n as nat, |j: int| child_nodes@[j]@);
             let merged = merge_layout_exec(layout_result, child_nodes, Ghost(cn_models));
 
@@ -1648,21 +1670,19 @@ fn layout_flex_widget_exec(
                 assert(cn_models =~= spec_cn);
 
                 //  2. Cross sizes view matches what layout_flex_column_body computes
-                let cross_view: Seq<RationalModel> =
+                let cross_view: Seq<Rational> =
                     Seq::new(cross_sizes@.len() as nat, |i: int| cross_sizes@[i]@);
-                let spec_cross: Seq<RationalModel> =
+                let spec_cross: Seq<Rational> =
                     Seq::new(spec_cn.len(), |i: int| spec_cn[i].size.width);
                 assert(cross_view =~= spec_cross) by {
                     assert(cross_view.len() == spec_cross.len());
                     assert forall|j: int| 0 <= j < cross_view.len() as int implies
                         cross_view[j] == spec_cross[j]
-                    by {
-                        //  cross_sizes@[j]@ == child_nodes@[j]@.size.width == cn_models[j].size.width == spec_cn[j].size.width
-                    }
+                    by {}
                 }
 
                 //  3. Weights from spec_fi match spec_weights
-                let spec_weights_fi: Seq<RationalModel> =
+                let spec_weights_fi: Seq<Rational> =
                     Seq::new(spec_fi.len(), |i: int| spec_fi[i].weight);
                 assert(spec_weights_fi =~= spec_weights) by {
                     assert forall|i: int| 0 <= i < spec_weights_fi.len() as int implies
@@ -1679,7 +1699,7 @@ fn layout_flex_widget_exec(
                     avail_spec, Axis::Vertical, (fuel - 1) as nat));
 
                 //  5. merged@ == layout_flex_column_body(...)
-                assert(merged@ == layout_flex_column_body::<RationalModel>(
+                assert(merged@ == layout_flex_column_body::<Rational>(
                     limits@, padding@, spacing@, *alignment, spec_weights_fi, spec_cn));
             }
 
@@ -1694,8 +1714,8 @@ fn layout_flex_widget_exec(
                     inner.wf_spec(),
                     inner@ == limits@.shrink(pad_h@, pad_v@),
                     total_weight.wf_spec(),
-                    total_weight@ == sum_weights::<RationalModel>(spec_weights, n as nat),
-                    n > 0 ==> !total_weight@.eqv_spec(RationalModel::from_int_spec(0)),
+                    total_weight@ == sum_weights::<Rational>(spec_weights, n as nat),
+                    n > 0 ==> !total_weight@.eqv_spec(Rational::from_int_spec(0)),
                     available.wf_spec(),
                     available@ == avail_spec,
                     child_nodes@.len() == k as int,
@@ -1708,9 +1728,9 @@ fn layout_flex_widget_exec(
                         (#[trigger] children@[j]).child.wf_spec((fuel - 1) as nat),
                     forall|j: int| 0 <= j < k ==> {
                         &&& (#[trigger] child_nodes@[j]).wf_spec()
-                        &&& child_nodes@[j]@ == layout_widget::<RationalModel>(
+                        &&& child_nodes@[j]@ == layout_widget::<Rational>(
                             Limits { min: inner@.min, max: Size::new(
-                                flex_child_main_size::<RationalModel>(spec_weights[j], total_weight@, avail_spec),
+                                flex_child_main_size::<Rational>(spec_weights[j], total_weight@, avail_spec),
                                 inner@.max.height) },
                             children@[j].child.model(), (fuel - 1) as nat)
                     },
@@ -1724,10 +1744,10 @@ fn layout_flex_widget_exec(
                 let main_alloc = wd.mul(&available);
                 let child_lim = RuntimeLimits::new(
                     inner.min.copy_size(),
-                    RuntimeSize::new(main_alloc, copy_rational(&inner.max.height)),
+                    RuntimeSize::new(main_alloc, crate::runtime::copy_rational(&inner.max.height)),
                 );
                 let cn = layout_widget_exec(&child_lim, &children[k].child, fuel - 1);
-                let ch = copy_rational(&cn.size.height);
+                let ch = crate::runtime::copy_rational(&cn.size.height);
                 cross_sizes.push(ch);
                 child_nodes.push(cn);
                 k = k + 1;
@@ -1744,7 +1764,7 @@ fn layout_flex_widget_exec(
                 limits, padding, spacing, alignment, &weights, &cross_sizes);
 
             //  Merge — layout_result.children@.len() == n from flex_row_layout_exec postcondition
-            let ghost cn_models: Seq<Node<RationalModel>> =
+            let ghost cn_models: Seq<Node<Rational>> =
                 Seq::new(n as nat, |j: int| child_nodes@[j]@);
             let merged = merge_layout_exec(layout_result, child_nodes, Ghost(cn_models));
 
@@ -1766,9 +1786,9 @@ fn layout_flex_widget_exec(
                 assert(cn_models =~= spec_cn);
 
                 //  2. Cross sizes view matches
-                let cross_view: Seq<RationalModel> =
+                let cross_view: Seq<Rational> =
                     Seq::new(cross_sizes@.len() as nat, |i: int| cross_sizes@[i]@);
-                let spec_cross: Seq<RationalModel> =
+                let spec_cross: Seq<Rational> =
                     Seq::new(spec_cn.len(), |i: int| spec_cn[i].size.height);
                 assert(cross_view =~= spec_cross) by {
                     assert(cross_view.len() == spec_cross.len());
@@ -1778,7 +1798,7 @@ fn layout_flex_widget_exec(
                 }
 
                 //  3. Weights from spec_fi match
-                let spec_weights_fi: Seq<RationalModel> =
+                let spec_weights_fi: Seq<Rational> =
                     Seq::new(spec_fi.len(), |i: int| spec_fi[i].weight);
                 assert(spec_weights_fi =~= spec_weights) by {
                     assert forall|i: int| 0 <= i < spec_weights_fi.len() as int implies
@@ -1795,7 +1815,7 @@ fn layout_flex_widget_exec(
                     avail_spec, Axis::Horizontal, (fuel - 1) as nat));
 
                 //  5. merged@ == layout_flex_row_body(...)
-                assert(merged@ == layout_flex_row_body::<RationalModel>(
+                assert(merged@ == layout_flex_row_body::<Rational>(
                     limits@, padding@, spacing@, *alignment, spec_weights_fi, spec_cn));
             }
 
@@ -1808,23 +1828,23 @@ fn layout_flex_widget_exec(
 
 ///  Recursively lay out a RuntimeWidget tree.
 pub fn layout_widget_exec(
-    limits: &RuntimeLimits,
-    widget: &RuntimeWidget,
+    limits: &CLimits,
+    widget: &CWidget,
     fuel: usize,
-) -> (out: RuntimeNode)
+) -> (out: CNode)
     requires
         limits.wf_spec(),
         widget.wf_spec(fuel as nat),
     ensures
         out.wf_spec(),
-        out@ == layout_widget::<RationalModel>(limits@, widget.model(), fuel as nat),
+        out@ == layout_widget::<Rational>(limits@, widget.model(), fuel as nat),
     decreases fuel, 1nat,
 {
     if fuel == 0 {
         //  Unreachable: wf_spec(0) is false
         let z1 = RuntimeRational::from_int(0);
         let z2 = RuntimeRational::from_int(0);
-        RuntimeNode::leaf_exec(z1, z2, RuntimeSize::zero_exec())
+        RuntimeNode::leaf_exec(z1, z2, CSize::zero_exec())
     } else {
         //  Fuel bridge: one proof for all variants
         proof { assert((fuel as nat - 1) as nat == (fuel - 1) as nat); }
@@ -1913,25 +1933,25 @@ pub fn layout_widget_exec(
 ///  Wraps `layout_widget_exec` and calls `lemma_layout_widget_cwb` in a proof block
 ///  to establish that all children are positioned within the parent's bounds.
 pub fn layout_widget_checked(
-    limits: &RuntimeLimits,
-    widget: &RuntimeWidget,
+    limits: &CLimits,
+    widget: &CWidget,
     fuel: usize,
-) -> (out: RuntimeNode)
+) -> (out: CNode)
     requires
         limits.wf_spec(),
         limits@.wf(),
         widget.wf_spec(fuel as nat),
         fuel > 0,
-        widget_wf::<RationalModel>(limits@, widget.model(), fuel as nat),
-        widget_cwb_ok::<RationalModel>(widget.model(), fuel as nat),
+        widget_wf::<Rational>(limits@, widget.model(), fuel as nat),
+        widget_cwb_ok::<Rational>(widget.model(), fuel as nat),
     ensures
         out.wf_spec(),
-        out@ == layout_widget::<RationalModel>(limits@, widget.model(), fuel as nat),
+        out@ == layout_widget::<Rational>(limits@, widget.model(), fuel as nat),
         out@.children_within_bounds(),
 {
     let out = layout_widget_exec(limits, widget, fuel);
     proof {
-        lemma_layout_widget_cwb::<RationalModel>(limits@, widget.model(), fuel as nat);
+        lemma_layout_widget_cwb::<Rational>(limits@, widget.model(), fuel as nat);
     }
     out
 }
@@ -1945,16 +1965,16 @@ pub enum ContainerKind {
 
 ///  Shared container layout: recursively compute children, call layout exec, merge.
 fn layout_container_exec(
-    limits: &RuntimeLimits,
-    padding: &RuntimePadding,
+    limits: &CLimits,
+    padding: &CPadding,
     spacing1: &RuntimeRational,  //  spacing (col/row), h_spacing (wrap), unused (stack)
     align1: &Alignment,          //  alignment (row), h_align (stack), unused (col/wrap)
     align2: &Alignment,          //  alignment (col), v_align (stack), unused (row/wrap)
     spacing2: &RuntimeRational,  //  v_spacing (wrap), unused (col/row/stack)
-    children: &Vec<RuntimeWidget>,
+    children: &Vec<CWidget>,
     fuel: usize,
     kind: ContainerKind,
-) -> (out: RuntimeNode)
+) -> (out: CNode)
     requires
         limits.wf_spec(),
         padding.wf_spec(),
@@ -1987,12 +2007,12 @@ fn layout_container_exec(
     let n = children.len();
 
     //  Ghost: spec-level children sequence
-    let ghost spec_wc: Seq<Widget<RationalModel>> =
+    let ghost spec_wc: Seq<Widget<Rational>> =
         Seq::new(children@.len() as nat, |j: int| children@[j].model());
 
     //  1. Recursively compute child nodes
-    let mut child_nodes: Vec<RuntimeNode> = Vec::new();
-    let mut child_sizes: Vec<RuntimeSize> = Vec::new();
+    let mut child_nodes: Vec<CNode> = Vec::new();
+    let mut child_sizes: Vec<CSize> = Vec::new();
     let mut i: usize = 0;
 
     while i < n
@@ -2012,7 +2032,7 @@ fn layout_container_exec(
                 (#[trigger] children@[j]).wf_spec((fuel - 1) as nat),
             forall|j: int| 0 <= j < i ==> {
                 &&& (#[trigger] child_nodes@[j]).wf_spec()
-                &&& child_nodes@[j]@ == layout_widget::<RationalModel>(
+                &&& child_nodes@[j]@ == layout_widget::<Rational>(
                         inner@, spec_wc[j], (fuel - 1) as nat)
             },
             forall|j: int| 0 <= j < i ==> {
@@ -2051,72 +2071,45 @@ fn layout_container_exec(
 
     //  Prove layout_result has n children (needed for merge precondition)
     proof {
-        let child_sizes_seq: Seq<Size<RationalModel>> =
+        let child_sizes_seq: Seq<Size<Rational>> =
             Seq::new(child_sizes@.len() as nat, |j: int| child_sizes@[j]@);
         match kind {
             ContainerKind::Linear(axis) => {
                 reveal(linear_layout);
                 let avail_cross = limits@.max.cross_dim(axis).sub(padding@.cross_padding(axis));
-                lemma_linear_children_len::<RationalModel>(
+                lemma_linear_children_len::<Rational>(
                     padding@, spacing1@, *align1, child_sizes_seq, axis, avail_cross, 0nat);
             },
             ContainerKind::Stack => {
                 reveal(crate::layout::stack::stack_layout);
                 let avail_w = limits@.max.width.sub(padding@.horizontal());
                 let avail_h = limits@.max.height.sub(padding@.vertical());
-                lemma_stack_children_len::<RationalModel>(
+                lemma_stack_children_len::<Rational>(
                     padding@, *align1, *align2, child_sizes_seq, avail_w, avail_h, 0nat);
             },
             ContainerKind::Wrap => {
                 reveal(wrap_layout);
                 let avail_w = limits@.max.width.sub(padding@.horizontal());
-                lemma_wrap_children_len::<RationalModel>(
+                lemma_wrap_children_len::<Rational>(
                     padding@, spacing1@, spacing2@, child_sizes_seq, avail_w, 0nat);
             },
         }
-        //  Bridge @ ↔ model@ (View impl)
-        assert(layout_result@ == layout_result.model@);
-        assert(layout_result.children@.len() == layout_result.model@.children.len());
-        //  Per-branch: connect model@ to the spec layout, which has n children
+        //  The generic layout ensures use out@ (via generic View = model@).
+        //  Bridge child_sizes view sequences for all branches.
+        assert forall|j: int| 0 <= j < child_sizes@.len() implies
+            child_sizes@[j]@ == (#[trigger] child_sizes@[j]).model@
+        by {};
+        assert(child_sizes_seq =~= Seq::new(child_sizes@.len() as nat, |i: int| child_sizes@[i].model@));
         match kind {
-            ContainerKind::Linear(axis) => {
-                reveal(linear_layout);
-                //  Bridge: generic ensures uses model@, caller uses @
-                assert(limits@ == limits.model@);
-                assert(padding@ == padding.model@);
-                //  Bridge child_sizes: generic uses model@, caller uses @
-                assert forall|j: int| 0 <= j < child_sizes@.len() implies
-                    child_sizes@[j]@ == (#[trigger] child_sizes@[j]).model@
-                by {};
-                assert(child_sizes_seq =~= Seq::new(child_sizes@.len() as nat, |i: int| child_sizes@[i].model@));
-                assert(layout_result.model@.children.len() == n as nat);
-            },
-            ContainerKind::Stack => {
-                reveal(crate::layout::stack::stack_layout);
-                assert(limits@ == limits.model@);
-                assert(padding@ == padding.model@);
-                assert forall|j: int| 0 <= j < child_sizes@.len() implies
-                    child_sizes@[j]@ == (#[trigger] child_sizes@[j]).model@
-                by {};
-                assert(child_sizes_seq =~= Seq::new(child_sizes@.len() as nat, |i: int| child_sizes@[i].model@));
-                assert(layout_result.model@.children.len() == n as nat);
-            },
-            ContainerKind::Wrap => {
-                reveal(wrap_layout);
-                assert(limits@ == limits.model@);
-                assert(padding@ == padding.model@);
-                assert forall|j: int| 0 <= j < child_sizes@.len() implies
-                    child_sizes@[j]@ == (#[trigger] child_sizes@[j]).model@
-                by {};
-                assert(child_sizes_seq =~= Seq::new(child_sizes@.len() as nat, |i: int| child_sizes@[i].model@));
-                assert(layout_result.model@.children.len() == n as nat);
-            },
+            ContainerKind::Linear(axis) => { reveal(linear_layout); },
+            ContainerKind::Stack => { reveal(crate::layout::stack::stack_layout); },
+            ContainerKind::Wrap => { reveal(wrap_layout); },
         }
         assert(layout_result.children@.len() == child_nodes@.len());
     }
 
     //  3. Merge positions from layout_result with child_nodes
-    let ghost cn_models: Seq<Node<RationalModel>> =
+    let ghost cn_models: Seq<Node<Rational>> =
         Seq::new(n as nat, |j: int| child_nodes@[j]@);
 
     let merged = merge_layout_exec(layout_result, child_nodes, Ghost(cn_models));
@@ -2152,10 +2145,10 @@ fn layout_container_exec(
 
 ///  Merge positions from a layout result with recursively computed child nodes.
 pub fn merge_layout_exec(
-    layout_result: RuntimeNode,
-    mut child_nodes: Vec<RuntimeNode>,
-    ghost_child_models: Ghost<Seq<Node<RationalModel>>>,
-) -> (out: RuntimeNode)
+    layout_result: CNode,
+    mut child_nodes: Vec<CNode>,
+    ghost_child_models: Ghost<Seq<Node<Rational>>>,
+) -> (out: CNode)
     requires
         layout_result.wf_spec(),
         layout_result.children@.len() == child_nodes@.len(),
@@ -2166,13 +2159,13 @@ pub fn merge_layout_exec(
         },
     ensures
         out.wf_spec(),
-        out@ == merge_layout::<RationalModel>(layout_result@, ghost_child_models@),
+        out@ == merge_layout::<Rational>(layout_result@, ghost_child_models@),
 {
     let ghost spec_cn = ghost_child_models@;
-    let ghost merged_model = merge_layout::<RationalModel>(layout_result@, spec_cn);
+    let ghost merged_model = merge_layout::<Rational>(layout_result@, spec_cn);
 
     let n = child_nodes.len();
-    let mut merged_children: Vec<RuntimeNode> = Vec::new();
+    let mut merged_children: Vec<CNode> = Vec::new();
     let mut i: usize = 0;
 
     while i < n
@@ -2187,7 +2180,7 @@ pub fn merge_layout_exec(
             layout_result@.children.len() == n as nat,
             //  Pointwise merge_layout unfolding (ghost let not available in loop)
             forall|j: int| 0 <= j < n ==>
-                (#[trigger] merged_model.children[j]) == (Node::<RationalModel> {
+                (#[trigger] merged_model.children[j]) == (Node::<Rational> {
                     x: layout_result@.children[j].x,
                     y: layout_result@.children[j].y,
                     size: spec_cn[j].size,
@@ -2205,8 +2198,8 @@ pub fn merge_layout_exec(
             },
         decreases n - i,
     {
-        let x = copy_rational(&layout_result.children[i].x);
-        let y = copy_rational(&layout_result.children[i].y);
+        let x = crate::runtime::copy_rational(&layout_result.children[i].x);
+        let y = crate::runtime::copy_rational(&layout_result.children[i].y);
 
         //  Capture facts about child_nodes[i] before the swap
         proof {
@@ -2218,13 +2211,13 @@ pub fn merge_layout_exec(
         let mut swap_val = RuntimeNode::leaf_exec(
             RuntimeRational::from_int(0),
             RuntimeRational::from_int(0),
-            RuntimeSize::zero_exec(),
+            CSize::zero_exec(),
         );
         child_nodes.set_and_swap(i, &mut swap_val);
         let cn = swap_val;
 
         //  Construct ghost model directly from components
-        let ghost child_model = Node::<RationalModel> {
+        let ghost child_model = Node::<Rational> {
             x: layout_result@.children[i as int].x,
             y: layout_result@.children[i as int].y,
             size: spec_cn[i as int].size,
@@ -2265,7 +2258,7 @@ pub fn merge_layout_exec(
 //  ── Widget normalization ─────────────────────────────────────────
 
 ///  Normalize a Vec<RuntimeFlexItem> using set_and_swap.
-fn normalize_flex_vec_exec(mut items: Vec<RuntimeFlexItem>, fuel: usize) -> (out: Vec<RuntimeFlexItem>)
+fn normalize_flex_vec_exec(mut items: Vec<CFlexItem>, fuel: usize) -> (out: Vec<CFlexItem>)
     requires
         items@.len() > 0 ==> fuel > 0,
         forall|i: int| 0 <= i < items@.len() ==> (#[trigger] items@[i]).weight.wf_spec(),
@@ -2283,7 +2276,7 @@ fn normalize_flex_vec_exec(mut items: Vec<RuntimeFlexItem>, fuel: usize) -> (out
 {
     let ghost orig = items@;
     let n = items.len();
-    let mut result: Vec<RuntimeFlexItem> = Vec::new();
+    let mut result: Vec<CFlexItem> = Vec::new();
     let dw = RuntimeRational::from_int(0);
     let mut dummy = RuntimeFlexItem {
         weight: dw,
@@ -2323,7 +2316,7 @@ fn normalize_flex_vec_exec(mut items: Vec<RuntimeFlexItem>, fuel: usize) -> (out
 }
 
 ///  Normalize a Vec<RuntimeAbsoluteChild> using set_and_swap.
-fn normalize_absolute_vec_exec(mut items: Vec<RuntimeAbsoluteChild>, fuel: usize) -> (out: Vec<RuntimeAbsoluteChild>)
+fn normalize_absolute_vec_exec(mut items: Vec<CAbsoluteChild>, fuel: usize) -> (out: Vec<CAbsoluteChild>)
     requires
         items@.len() > 0 ==> fuel > 0,
         forall|i: int| 0 <= i < items@.len() ==> (#[trigger] items@[i]).x.wf_spec(),
@@ -2340,7 +2333,7 @@ fn normalize_absolute_vec_exec(mut items: Vec<RuntimeAbsoluteChild>, fuel: usize
     decreases fuel, 2nat,
 {
     let n = items.len();
-    let mut result: Vec<RuntimeAbsoluteChild> = Vec::new();
+    let mut result: Vec<CAbsoluteChild> = Vec::new();
     let mut dummy = RuntimeAbsoluteChild {
         x: RuntimeRational::from_int(0),
         y: RuntimeRational::from_int(0),
@@ -2377,7 +2370,7 @@ fn normalize_absolute_vec_exec(mut items: Vec<RuntimeAbsoluteChild>, fuel: usize
 }
 
 ///  Normalize a Vec<RuntimeSize> (for Grid col_widths/row_heights).
-fn normalize_size_vec_exec(mut sizes: Vec<RuntimeSize>) -> (out: Vec<RuntimeSize>)
+fn normalize_size_vec_exec(mut sizes: Vec<CSize>) -> (out: Vec<CSize>)
     requires
         forall|i: int| 0 <= i < sizes@.len() ==> (#[trigger] sizes@[i]).wf_spec(),
     ensures
@@ -2389,8 +2382,8 @@ fn normalize_size_vec_exec(mut sizes: Vec<RuntimeSize>) -> (out: Vec<RuntimeSize
         },
 {
     let n = sizes.len();
-    let mut result: Vec<RuntimeSize> = Vec::new();
-    let mut dummy = RuntimeSize::zero_exec();
+    let mut result: Vec<CSize> = Vec::new();
+    let mut dummy = CSize::zero_exec();
     let mut i: usize = 0;
     while i < n
         invariant
@@ -2407,16 +2400,16 @@ fn normalize_size_vec_exec(mut sizes: Vec<RuntimeSize>) -> (out: Vec<RuntimeSize
         sizes.set_and_swap(i, &mut dummy);
         let sn = dummy.normalize_exec();
         result.push(sn);
-        dummy = RuntimeSize::zero_exec();
+        dummy = CSize::zero_exec();
         i = i + 1;
     }
     result
 }
 
 ///  Create a dummy RuntimeWidget for set_and_swap operations.
-fn make_dummy_widget() -> (out: RuntimeWidget)
+fn make_dummy_widget() -> (out: CWidget)
 {
-    let s = RuntimeSize::zero_exec();
+    let s = CSize::zero_exec();
     RuntimeWidget::Leaf(RuntimeLeafWidget::Leaf {
         size: s,
         model: Ghost(LeafWidget::Leaf { size: Size::zero_size() }),
@@ -2424,7 +2417,7 @@ fn make_dummy_widget() -> (out: RuntimeWidget)
 }
 
 ///  Normalize all RuntimeRational fields in a Vec of widgets using set_and_swap.
-fn normalize_widget_vec_exec(mut widgets: Vec<RuntimeWidget>, fuel: usize) -> (out: Vec<RuntimeWidget>)
+fn normalize_widget_vec_exec(mut widgets: Vec<CWidget>, fuel: usize) -> (out: Vec<CWidget>)
     requires
         widgets@.len() > 0 ==> fuel > 0,
         forall|i: int| 0 <= i < widgets@.len() ==>
@@ -2439,7 +2432,7 @@ fn normalize_widget_vec_exec(mut widgets: Vec<RuntimeWidget>, fuel: usize) -> (o
 {
     let ghost orig = widgets@;
     let n = widgets.len();
-    let mut result: Vec<RuntimeWidget> = Vec::new();
+    let mut result: Vec<CWidget> = Vec::new();
     let mut dummy = make_dummy_widget();
     let mut i: usize = 0;
 
@@ -2470,7 +2463,7 @@ fn normalize_widget_vec_exec(mut widgets: Vec<RuntimeWidget>, fuel: usize) -> (o
 ///  Normalize all RuntimeRational fields in a widget tree.
 ///  Produces a widget with `model_normalized(fuel)` — all rational Ghost models
 ///  are in canonical (normalized) form.
-pub fn normalize_widget_exec(widget: RuntimeWidget, fuel: usize) -> (out: RuntimeWidget)
+pub fn normalize_widget_exec(widget: CWidget, fuel: usize) -> (out: CWidget)
     requires
         fuel > 0,
         widget.wf_spec(fuel as nat),
@@ -2487,7 +2480,7 @@ pub fn normalize_widget_exec(widget: RuntimeWidget, fuel: usize) -> (out: Runtim
 }
 
 ///  Normalize a leaf widget's rational fields.
-fn normalize_leaf_exec(leaf: RuntimeLeafWidget, fuel: Ghost<nat>) -> (out: RuntimeWidget)
+fn normalize_leaf_exec(leaf: CLeafWidget, fuel: Ghost<nat>) -> (out: CWidget)
     requires leaf.wf_shallow(), fuel@ > 0,
     ensures out.wf_spec(fuel@), out.model_normalized(fuel@),
 {
@@ -2516,7 +2509,7 @@ fn normalize_leaf_exec(leaf: RuntimeLeafWidget, fuel: Ghost<nat>) -> (out: Runti
 }
 
 ///  Normalize a wrapper widget's rational fields.
-fn normalize_wrapper_exec(wrapper: RuntimeWrapperWidget, fuel: usize) -> (out: RuntimeWidget)
+fn normalize_wrapper_exec(wrapper: CWrapperWidget, fuel: usize) -> (out: CWidget)
     requires fuel > 0, RuntimeWidget::Wrapper(wrapper).wf_spec(fuel as nat),
     ensures out.wf_spec(fuel as nat), out.model_normalized(fuel as nat),
     decreases fuel, 0nat,
@@ -2596,7 +2589,7 @@ fn normalize_wrapper_exec(wrapper: RuntimeWrapperWidget, fuel: usize) -> (out: R
 }
 
 ///  Normalize a container widget's rational fields.
-fn normalize_container_exec(container: RuntimeContainerWidget, fuel: usize) -> (out: RuntimeWidget)
+fn normalize_container_exec(container: CContainerWidget, fuel: usize) -> (out: CWidget)
     requires fuel > 0, RuntimeWidget::Container(container).wf_spec(fuel as nat),
     ensures out.wf_spec(fuel as nat), out.model_normalized(fuel as nat),
     decreases fuel, 0nat,
@@ -2692,9 +2685,9 @@ fn normalize_container_exec(container: RuntimeContainerWidget, fuel: usize) -> (
                         //  sum_weights is congruent → new sum eqv to old sum
                         //  So new sum is also not eqv to 0.
                         //  Z3 needs help: assert the nonzero sum for normalized weights
-                        assert(!sum_weights::<RationalModel>(
+                        assert(!sum_weights::<Rational>(
                             orig_weights, orig_weights.len() as nat,
-                        ).eqv_spec(RationalModel::from_int_spec(0)));
+                        ).eqv_spec(Rational::from_int_spec(0)));
                         //  The normalized weights are eqv to original (from normalize ensures)
                         //  sum_weights congruence: proved in congruence_proofs
                         //  For now, help Z3 with the conclusion:
@@ -2704,16 +2697,16 @@ fn normalize_container_exec(container: RuntimeContainerWidget, fuel: usize) -> (
                             new_weights, orig_weights, new_weights.len() as nat);
                         //  new_sum eqv orig_sum. orig_sum not eqv 0.
                         //  If new_sum eqv 0, then orig_sum eqv new_sum eqv 0 → contradiction.
-                        RationalModel::lemma_eqv_symmetric(
-                            sum_weights::<RationalModel>(new_weights, new_weights.len() as nat),
-                            sum_weights::<RationalModel>(orig_weights, orig_weights.len() as nat));
-                        if sum_weights::<RationalModel>(new_weights, new_weights.len() as nat)
-                            .eqv_spec(RationalModel::from_int_spec(0))
+                        Rational::lemma_eqv_symmetric(
+                            sum_weights::<Rational>(new_weights, new_weights.len() as nat),
+                            sum_weights::<Rational>(orig_weights, orig_weights.len() as nat));
+                        if sum_weights::<Rational>(new_weights, new_weights.len() as nat)
+                            .eqv_spec(Rational::from_int_spec(0))
                         {
-                            RationalModel::lemma_eqv_transitive(
-                                sum_weights::<RationalModel>(orig_weights, orig_weights.len() as nat),
-                                sum_weights::<RationalModel>(new_weights, new_weights.len() as nat),
-                                RationalModel::from_int_spec(0));
+                            Rational::lemma_eqv_transitive(
+                                sum_weights::<Rational>(orig_weights, orig_weights.len() as nat),
+                                sum_weights::<Rational>(new_weights, new_weights.len() as nat),
+                                Rational::from_int_spec(0));
                             assert(false);
                         }
                     }

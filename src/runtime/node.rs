@@ -18,9 +18,9 @@ pub struct RuntimeNode<R, V: OrderedField> where R: RuntimeOrderedFieldOps<V> {
     pub model: Ghost<Node<V>>,
 }
 
-impl View for RuntimeNode<RuntimeRational, Rational> {
-    type V = Node<Rational>;
-    open spec fn view(&self) -> Node<Rational> { self.model@ }
+impl<R: RuntimeOrderedFieldOps<V>, V: OrderedField> View for RuntimeNode<R, V> {
+    type V = Node<V>;
+    open spec fn view(&self) -> Node<V> { self.model@ }
 }
 
 impl<R: RuntimeOrderedFieldOps<V>, V: OrderedField> RuntimeNode<R, V> {
@@ -30,13 +30,13 @@ impl<R: RuntimeOrderedFieldOps<V>, V: OrderedField> RuntimeNode<R, V> {
         &&& self.x.wf_spec()
         &&& self.y.wf_spec()
         &&& self.size.wf_spec()
-        &&& self.x.model() == self.model@.x
-        &&& self.y.model() == self.model@.y
-        &&& self.size.model@ == self.model@.size
-        &&& self.children@.len() == self.model@.children.len()
+        &&& self.x@ == self@.x
+        &&& self.y@ == self@.y
+        &&& self.size.model@ == self@.size
+        &&& self.children@.len() == self@.children.len()
         &&& forall|i: int| 0 <= i < self.children@.len() ==> {
             &&& (#[trigger] self.children@[i]).wf_shallow()
-            &&& self.children@[i].model@ == self.model@.children[i]
+            &&& self.children@[i].model@ == self@.children[i]
         }
     }
 
@@ -44,10 +44,10 @@ impl<R: RuntimeOrderedFieldOps<V>, V: OrderedField> RuntimeNode<R, V> {
         decreases depth,
     {
         &&& self.wf_shallow()
-        &&& self.children@.len() == self.model@.children.len()
+        &&& self.children@.len() == self@.children.len()
         &&& (depth > 0 ==> forall|i: int| 0 <= i < self.children@.len() ==> {
             &&& (#[trigger] self.children@[i]).wf_deep((depth - 1) as nat)
-            &&& self.children@[i].model@ == self.model@.children[i]
+            &&& self.children@[i].model@ == self@.children[i]
         })
     }
 
@@ -55,16 +55,16 @@ impl<R: RuntimeOrderedFieldOps<V>, V: OrderedField> RuntimeNode<R, V> {
         &&& self.x.wf_spec()
         &&& self.y.wf_spec()
         &&& self.size.wf_spec()
-        &&& self.x.model() == self.model@.x
-        &&& self.y.model() == self.model@.y
-        &&& self.size.model@ == self.model@.size
+        &&& self.x@ == self@.x
+        &&& self.y@ == self@.y
+        &&& self.size.model@ == self@.size
     }
 
     pub fn leaf_exec(x: R, y: R, size: RuntimeSize<R, V>) -> (out: Self)
         requires x.wf_spec(), y.wf_spec(), size.wf_spec(),
-        ensures out.wf_spec(), out.model@ == Node::leaf(x.model(), y.model(), size.model@),
+        ensures out.wf_spec(), out@ == Node::leaf(x@, y@, size.model@),
     {
-        let ghost model = Node::leaf(x.model(), y.model(), size.model@);
+        let ghost model = Node::leaf(x@, y@, size.model@);
         RuntimeNode { x, y, size, children: Vec::new(), model: Ghost(model) }
     }
 }

@@ -12,7 +12,7 @@ pub fn scalar_lerp_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
     a: &R, b: &R, t: &R,
 ) -> (out: R)
     requires a.wf_spec(), b.wf_spec(), t.wf_spec(),
-    ensures out.wf_spec(), out.model() == scalar_lerp::<V>(a.model(), b.model(), t.model()),
+    ensures out.wf_spec(), out@ == scalar_lerp::<V>(a@, b@, t@),
 {
     let one = t.one_like();
     let one_minus_t = one.sub(t);
@@ -25,7 +25,7 @@ pub fn lerp_size_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
     a: &RuntimeSize<R, V>, b: &RuntimeSize<R, V>, t: &R,
 ) -> (out: RuntimeSize<R, V>)
     requires a.wf_spec(), b.wf_spec(), t.wf_spec(),
-    ensures out.wf_spec(), out.model@ == lerp_size::<V>(a.model@, b.model@, t.model()),
+    ensures out.wf_spec(), out@ == lerp_size::<V>(a.model@, b.model@, t@),
 {
     let t1 = t.copy();
     let w = scalar_lerp_exec(&a.width, &b.width, &t1);
@@ -37,7 +37,7 @@ pub fn copy_node_deep_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
     a: &RuntimeNode<R, V>, fuel: u64,
 ) -> (out: RuntimeNode<R, V>)
     requires a.wf_deep(fuel as nat), fuel > 0,
-    ensures out.wf_deep((fuel - 1) as nat), out.model@ == a.model@,
+    ensures out.wf_deep((fuel - 1) as nat), out@ == a.model@,
     decreases fuel,
 {
     let x = a.x.copy();
@@ -91,7 +91,7 @@ pub fn lerp_node_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
         fuel > 0,
     ensures
         out.wf_deep((fuel - 1) as nat),
-        out.model@ == lerp_node::<V>(a.model@, b.model@, t.model(), fuel as nat),
+        out@ == lerp_node::<V>(a.model@, b.model@, t@, fuel as nat),
     decreases fuel,
 {
     if a.children.len() != b.children.len() {
@@ -104,7 +104,7 @@ pub fn lerp_node_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
         let y = scalar_lerp_exec(&a.y, &b.y, &t2);
         let size = lerp_size_exec(&a.size, &b.size, &t3);
 
-        let ghost result_spec = lerp_node::<V>(a.model@, b.model@, t.model(), fuel as nat);
+        let ghost result_spec = lerp_node::<V>(a.model@, b.model@, t@, fuel as nat);
 
         let mut children: Vec<RuntimeNode<R, V>> = Vec::new();
         let mut idx: usize = 0;
@@ -118,7 +118,7 @@ pub fn lerp_node_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
                 a.model@.children.len() == b.model@.children.len(),
                 0 <= idx <= a.children.len(),
                 children@.len() == idx,
-                result_spec == lerp_node::<V>(a.model@, b.model@, t.model(), fuel as nat),
+                result_spec == lerp_node::<V>(a.model@, b.model@, t@, fuel as nat),
                 forall|j: int| 0 <= j < idx ==> {
                     &&& (#[trigger] children@[j]).model@ == result_spec.children[j]
                     &&& (fuel > 1 ==> children@[j].wf_deep((fuel - 2) as nat))
@@ -129,7 +129,7 @@ pub fn lerp_node_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
             assert(result_spec.children[idx as int] ==
                 lerp_node::<V>(
                     a.model@.children[idx as int], b.model@.children[idx as int],
-                    t.model(), (fuel - 1) as nat,
+                    t@, (fuel - 1) as nat,
                 ));
 
             let tc = t.copy();

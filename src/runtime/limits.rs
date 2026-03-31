@@ -16,22 +16,22 @@ pub struct RuntimeLimits<R, V: OrderedField> where R: RuntimeOrderedFieldOps<V> 
     pub model: Ghost<Limits<V>>,
 }
 
-impl View for RuntimeLimits<RuntimeRational, Rational> {
-    type V = Limits<Rational>;
-    open spec fn view(&self) -> Limits<Rational> { self.model@ }
+impl<R: RuntimeOrderedFieldOps<V>, V: OrderedField> View for RuntimeLimits<R, V> {
+    type V = Limits<V>;
+    open spec fn view(&self) -> Limits<V> { self.model@ }
 }
 
 impl<R: RuntimeOrderedFieldOps<V>, V: OrderedField> RuntimeLimits<R, V> {
     pub open spec fn wf_spec(&self) -> bool {
         &&& self.min.wf_spec()
         &&& self.max.wf_spec()
-        &&& self.min.model@ == self.model@.min
-        &&& self.max.model@ == self.model@.max
+        &&& self.min.model@ == self@.min
+        &&& self.max.model@ == self@.max
     }
 
     pub fn new(min: RuntimeSize<R, V>, max: RuntimeSize<R, V>) -> (out: Self)
         requires min.wf_spec(), max.wf_spec(),
-        ensures out.wf_spec(), out.model@.min == min.model@, out.model@.max == max.model@,
+        ensures out.wf_spec(), out@.min == min.model@, out@.max == max.model@,
     {
         let ghost model = Limits { min: min.model@, max: max.model@ };
         RuntimeLimits { min, max, model: Ghost(model) }
@@ -40,10 +40,10 @@ impl<R: RuntimeOrderedFieldOps<V>, V: OrderedField> RuntimeLimits<R, V> {
     pub fn eq_exec(&self, rhs: &Self) -> (out: bool)
         requires self.wf_spec(), rhs.wf_spec(),
         ensures out ==> (
-            self.model@.min.width.eqv(rhs.model@.min.width) &&
-            self.model@.min.height.eqv(rhs.model@.min.height) &&
-            self.model@.max.width.eqv(rhs.model@.max.width) &&
-            self.model@.max.height.eqv(rhs.model@.max.height)
+            self@.min.width.eqv(rhs@.min.width) &&
+            self@.min.height.eqv(rhs@.min.height) &&
+            self@.max.width.eqv(rhs@.max.width) &&
+            self@.max.height.eqv(rhs@.max.height)
         ),
     {
         self.min.eq_exec(&rhs.min) && self.max.eq_exec(&rhs.max)
@@ -51,7 +51,7 @@ impl<R: RuntimeOrderedFieldOps<V>, V: OrderedField> RuntimeLimits<R, V> {
 
     pub fn resolve_exec(&self, size: RuntimeSize<R, V>) -> (out: RuntimeSize<R, V>)
         requires self.wf_spec(), size.wf_spec(),
-        ensures out.wf_spec(), out.model@ == self.model@.resolve(size.model@),
+        ensures out.wf_spec(), out@ == self@.resolve(size.model@),
     {
         let w = self.min.width.max(&size.width.min(&self.max.width));
         let h = self.min.height.max(&size.height.min(&self.max.height));
@@ -60,7 +60,7 @@ impl<R: RuntimeOrderedFieldOps<V>, V: OrderedField> RuntimeLimits<R, V> {
 
     pub fn intersect_exec(&self, other: &Self) -> (out: Self)
         requires self.wf_spec(), other.wf_spec(),
-        ensures out.wf_spec(), out.model@ == self.model@.intersect(other.model@),
+        ensures out.wf_spec(), out@ == self@.intersect(other.model@),
     {
         let new_min_w = self.min.width.max(&other.min.width);
         let new_min_h = self.min.height.max(&other.min.height);
@@ -74,7 +74,7 @@ impl<R: RuntimeOrderedFieldOps<V>, V: OrderedField> RuntimeLimits<R, V> {
 
     pub fn shrink_exec(&self, pad_w: &R, pad_h: &R) -> (out: Self)
         requires self.wf_spec(), pad_w.wf_spec(), pad_h.wf_spec(),
-        ensures out.wf_spec(), out.model@ == self.model@.shrink(pad_w.model(), pad_h.model()),
+        ensures out.wf_spec(), out@ == self@.shrink(pad_w@, pad_h@),
     {
         let new_max_w = self.min.width.max(&self.max.width.sub(pad_w));
         let new_max_h = self.min.height.max(&self.max.height.sub(pad_h));

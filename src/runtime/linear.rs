@@ -22,7 +22,7 @@ pub fn align_offset_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
     used: &R,
 ) -> (out: R)
     requires available.wf_spec(), used.wf_spec(),
-    ensures out.wf_spec(), out.model() == align_offset::<V>(*alignment, available.model(), used.model()),
+    ensures out.wf_spec(), out@ == align_offset::<V>(*alignment, available@, used@),
 {
     proof { reveal(align_offset); }
     match alignment {
@@ -66,8 +66,8 @@ pub fn linear_layout_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
         forall|i: int| 0 <= i < child_sizes@.len() ==> child_sizes@[i].wf_spec(),
     ensures
         out.wf_spec(),
-        out.model@ == linear_layout::<V>(
-            limits.model@, padding.model@, spacing.model(), *alignment,
+        out@ == linear_layout::<V>(
+            limits@, padding@, spacing@, *alignment,
             Seq::new(child_sizes@.len() as nat, |i: int| child_sizes@[i].model@),
             *axis,
         ),
@@ -90,7 +90,7 @@ pub fn linear_layout_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
             0 <= i <= n,
             n == child_sizes@.len(),
             content_main.wf_spec(),
-            content_main.model() == sum_main::<V>(spec_sizes, *axis, i as nat),
+            content_main@ == sum_main::<V>(spec_sizes, *axis, i as nat),
             forall|j: int| 0 <= j < child_sizes@.len() ==> child_sizes@[j].wf_spec(),
             forall|j: int| 0 <= j < child_sizes@.len() ==> spec_sizes[j] == child_sizes@[j].model@,
         decreases n - i,
@@ -112,7 +112,7 @@ pub fn linear_layout_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
                 n > 0,
                 sp_total.wf_spec(),
                 spacing.wf_spec(),
-                sp_total.model() == repeated_add::<V>(spacing.model(), j as nat),
+                sp_total@ == repeated_add::<V>(spacing@, j as nat),
             decreases n_minus_1 - j,
         {
             sp_total = sp_total.add(spacing);
@@ -134,7 +134,7 @@ pub fn linear_layout_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
     //  Establish children sequence length
     proof {
         lemma_linear_children_len::<V>(
-            padding.model@, spacing.model(), *alignment, spec_sizes, *axis, available_cross.model(), 0,
+            padding@, spacing@, *alignment, spec_sizes, *axis, available_cross@, 0,
         );
     }
 
@@ -149,8 +149,8 @@ pub fn linear_layout_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
             n == child_sizes@.len(),
             spec_sizes.len() == n as nat,
             main_pos.wf_spec(),
-            k < n ==> main_pos.model() == child_main_position::<V>(
-                padding.model@.main_start(*axis), spec_sizes, *axis, spacing.model(), k as nat),
+            k < n ==> main_pos@ == child_main_position::<V>(
+                padding@.main_start(*axis), spec_sizes, *axis, spacing@, k as nat),
             available_cross.wf_spec(),
             spacing.wf_spec(),
             padding.wf_spec(),
@@ -158,12 +158,12 @@ pub fn linear_layout_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
             forall|j: int| 0 <= j < child_sizes@.len() ==> child_sizes@[j].wf_spec(),
             forall|j: int| 0 <= j < child_sizes@.len() ==> spec_sizes[j] == child_sizes@[j].model@,
             linear_children::<V>(
-                padding.model@, spacing.model(), *alignment, spec_sizes, *axis, available_cross.model(), 0,
+                padding@, spacing@, *alignment, spec_sizes, *axis, available_cross@, 0,
             ).len() == spec_sizes.len(),
             forall|j: int| 0 <= j < k ==> {
                 &&& (#[trigger] children@[j]).wf_spec()
                 &&& children@[j].model@ == linear_children::<V>(
-                    padding.model@, spacing.model(), *alignment, spec_sizes, *axis, available_cross.model(), 0,
+                    padding@, spacing@, *alignment, spec_sizes, *axis, available_cross@, 0,
                 )[j]
             },
         decreases n - k,
@@ -171,7 +171,7 @@ pub fn linear_layout_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
         //  Tell Z3 what linear_children[k] should be
         proof {
             lemma_linear_children_element::<V>(
-                padding.model@, spacing.model(), *alignment, spec_sizes, *axis, available_cross.model(), k as nat,
+                padding@, spacing@, *alignment, spec_sizes, *axis, available_cross@, k as nat,
             );
         }
 
@@ -201,7 +201,7 @@ pub fn linear_layout_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
     let y = spacing.zero_like();
 
     let ghost parent_model = linear_layout::<V>(
-        limits.model@, padding.model@, spacing.model(), *alignment, spec_sizes, *axis,
+        limits@, padding@, spacing@, *alignment, spec_sizes, *axis,
     );
 
     let out = RuntimeNode {
@@ -215,13 +215,13 @@ pub fn linear_layout_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
     proof {
         //  Help Z3: children match model
         let lc = linear_children::<V>(
-            padding.model@, spacing.model(), *alignment, spec_sizes, *axis, available_cross.model(), 0,
+            padding@, spacing@, *alignment, spec_sizes, *axis, available_cross@, 0,
         );
-        assert(out.model@.children == lc);
-        assert(out.children@.len() == out.model@.children.len());
+        assert(out@.children == lc);
+        assert(out.children@.len() == out@.children.len());
         assert forall|i: int| 0 <= i < out.children@.len() implies {
             &&& (#[trigger] out.children@[i]).wf_shallow()
-            &&& out.children@[i].model@ == out.model@.children[i]
+            &&& out.children@[i].model@ == out@.children[i]
         } by {};
     }
 

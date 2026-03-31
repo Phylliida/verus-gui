@@ -15,6 +15,12 @@ pub type RuntimeSize = size::RuntimeSize<RuntimeRational, Rational>;
 pub type RuntimeLimits = limits::RuntimeLimits<RuntimeRational, Rational>;
 pub type RuntimePadding = padding::RuntimePadding<RuntimeRational, Rational>;
 pub type RuntimeNode = node::RuntimeNode<RuntimeRational, Rational>;
+pub type RuntimeWidget = widget::RuntimeWidget<RuntimeRational, Rational>;
+pub type RuntimeFlexItem = widget::RuntimeFlexItem<RuntimeRational, Rational>;
+pub type RuntimeAbsoluteChild = widget::RuntimeAbsoluteChild<RuntimeRational, Rational>;
+pub type RuntimeLeafWidget = widget::RuntimeLeafWidget<RuntimeRational, Rational>;
+pub type RuntimeWrapperWidget = widget::RuntimeWrapperWidget<RuntimeRational, Rational>;
+pub type RuntimeContainerWidget = widget::RuntimeContainerWidget<RuntimeRational, Rational>;
 
 pub mod size;
 pub mod limits;

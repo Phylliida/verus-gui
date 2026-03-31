@@ -1,11 +1,8 @@
 use vstd::prelude::*;
-use verus_rational::RuntimeRational;
-use crate::runtime::RationalModel;
-use crate::runtime::copy_rational;
-use crate::runtime::RuntimeSize;
-use crate::runtime::RuntimeLimits;
-use crate::runtime::RuntimePadding;
-use crate::runtime::RuntimeNode;
+use crate::runtime::size::RuntimeSize;
+use crate::runtime::limits::RuntimeLimits;
+use crate::runtime::padding::RuntimePadding;
+use crate::runtime::node::RuntimeNode;
 use crate::runtime::linear::align_offset_exec;
 use crate::size::Size;
 use crate::node::Node;
@@ -14,38 +11,40 @@ use crate::alignment::align_offset;
 use crate::layout::*;
 use crate::layout::grid::*;
 use crate::layout::grid_proofs::*;
+use verus_algebra::traits::field::OrderedField;
+use verus_algebra::traits::runtime::*;
 
 verus! {
 
 ///  Compute grid content width at runtime: sum_widths + (ncols-1) * h_spacing.
-pub fn grid_content_width_exec(
-    col_widths: &Vec<RuntimeSize>,
-    h_spacing: &RuntimeRational,
-) -> (out: RuntimeRational)
+pub fn grid_content_width_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
+    col_widths: &Vec<RuntimeSize<R, V>>,
+    h_spacing: &R,
+) -> (out: R)
     requires
         h_spacing.wf_spec(),
         forall|i: int| 0 <= i < col_widths@.len() ==> col_widths@[i].wf_spec(),
     ensures
         out.wf_spec(),
-        out@ == grid_content_width::<RationalModel>(
+        out@ == grid_content_width::<V>(
             Seq::new(col_widths@.len() as nat, |i: int| col_widths@[i]@),
             h_spacing@,
         ),
 {
-    let ghost spec_cw: Seq<Size<RationalModel>> =
+    let ghost spec_cw: Seq<Size<V>> =
         Seq::new(col_widths@.len() as nat, |i: int| col_widths@[i]@);
     let n = col_widths.len();
 
     if n == 0 {
-        RuntimeRational::from_int(0)
+        h_spacing.zero_like()
     } else {
-        let mut sum_w = RuntimeRational::from_int(0);
+        let mut sum_w = h_spacing.zero_like();
         let mut i: usize = 0;
         while i < n
             invariant
                 0 <= i <= n, n == col_widths@.len(),
                 sum_w.wf_spec(),
-                sum_w@ == sum_widths::<RationalModel>(spec_cw, i as nat),
+                sum_w@ == sum_widths::<V>(spec_cw, i as nat),
                 forall|j: int| 0 <= j < col_widths@.len() ==> col_widths@[j].wf_spec(),
                 forall|j: int| 0 <= j < col_widths@.len() ==> spec_cw[j] == col_widths@[j]@,
             decreases n - i,
@@ -54,14 +53,14 @@ pub fn grid_content_width_exec(
             i = i + 1;
         }
 
-        let mut sp = RuntimeRational::from_int(0);
+        let mut sp = h_spacing.zero_like();
         let mut j: usize = 0;
         let sp_count = n - 1;
         while j < sp_count
             invariant
                 0 <= j <= sp_count, sp_count == n - 1, n > 0,
                 sp.wf_spec(), h_spacing.wf_spec(),
-                sp@ == repeated_add::<RationalModel>(h_spacing@, j as nat),
+                sp@ == repeated_add::<V>(h_spacing@, j as nat),
             decreases sp_count - j,
         {
             sp = sp.add(h_spacing);
@@ -73,34 +72,34 @@ pub fn grid_content_width_exec(
 }
 
 ///  Compute grid content height at runtime: sum_heights + (nrows-1) * v_spacing.
-pub fn grid_content_height_exec(
-    row_heights: &Vec<RuntimeSize>,
-    v_spacing: &RuntimeRational,
-) -> (out: RuntimeRational)
+pub fn grid_content_height_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
+    row_heights: &Vec<RuntimeSize<R, V>>,
+    v_spacing: &R,
+) -> (out: R)
     requires
         v_spacing.wf_spec(),
         forall|i: int| 0 <= i < row_heights@.len() ==> row_heights@[i].wf_spec(),
     ensures
         out.wf_spec(),
-        out@ == grid_content_height::<RationalModel>(
+        out@ == grid_content_height::<V>(
             Seq::new(row_heights@.len() as nat, |i: int| row_heights@[i]@),
             v_spacing@,
         ),
 {
-    let ghost spec_rh: Seq<Size<RationalModel>> =
+    let ghost spec_rh: Seq<Size<V>> =
         Seq::new(row_heights@.len() as nat, |i: int| row_heights@[i]@);
     let n = row_heights.len();
 
     if n == 0 {
-        RuntimeRational::from_int(0)
+        v_spacing.zero_like()
     } else {
-        let mut sum_h = RuntimeRational::from_int(0);
+        let mut sum_h = v_spacing.zero_like();
         let mut i: usize = 0;
         while i < n
             invariant
                 0 <= i <= n, n == row_heights@.len(),
                 sum_h.wf_spec(),
-                sum_h@ == sum_heights::<RationalModel>(spec_rh, i as nat),
+                sum_h@ == sum_heights::<V>(spec_rh, i as nat),
                 forall|j: int| 0 <= j < row_heights@.len() ==> row_heights@[j].wf_spec(),
                 forall|j: int| 0 <= j < row_heights@.len() ==> spec_rh[j] == row_heights@[j]@,
             decreases n - i,
@@ -109,14 +108,14 @@ pub fn grid_content_height_exec(
             i = i + 1;
         }
 
-        let mut sp = RuntimeRational::from_int(0);
+        let mut sp = v_spacing.zero_like();
         let mut j: usize = 0;
         let sp_count = n - 1;
         while j < sp_count
             invariant
                 0 <= j <= sp_count, sp_count == n - 1, n > 0,
                 sp.wf_spec(), v_spacing.wf_spec(),
-                sp@ == repeated_add::<RationalModel>(v_spacing@, j as nat),
+                sp@ == repeated_add::<V>(v_spacing@, j as nat),
             decreases sp_count - j,
         {
             sp = sp.add(v_spacing);
@@ -128,17 +127,17 @@ pub fn grid_content_height_exec(
 }
 
 ///  Execute grid layout: place children in a fixed-width/height grid.
-pub fn grid_layout_exec(
-    limits: &RuntimeLimits,
-    padding: &RuntimePadding,
-    h_spacing: &RuntimeRational,
-    v_spacing: &RuntimeRational,
+pub fn grid_layout_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
+    limits: &RuntimeLimits<R, V>,
+    padding: &RuntimePadding<R, V>,
+    h_spacing: &R,
+    v_spacing: &R,
     h_align: &Alignment,
     v_align: &Alignment,
-    col_widths: &Vec<RuntimeSize>,
-    row_heights: &Vec<RuntimeSize>,
-    child_sizes: &Vec<Vec<RuntimeSize>>,
-) -> (out: RuntimeNode)
+    col_widths: &Vec<RuntimeSize<R, V>>,
+    row_heights: &Vec<RuntimeSize<R, V>>,
+    child_sizes: &Vec<Vec<RuntimeSize<R, V>>>,
+) -> (out: RuntimeNode<R, V>)
     requires
         limits.wf_spec(),
         padding.wf_spec(),
@@ -154,7 +153,7 @@ pub fn grid_layout_exec(
         },
     ensures
         out.wf_spec(),
-        out@ == grid_layout::<RationalModel>(
+        out@ == grid_layout::<V>(
             limits@, padding@, h_spacing@, v_spacing@, *h_align, *v_align,
             Seq::new(col_widths@.len() as nat, |i: int| col_widths@[i]@),
             Seq::new(row_heights@.len() as nat, |i: int| row_heights@[i]@),
@@ -165,11 +164,11 @@ pub fn grid_layout_exec(
         out.children@.len() == row_heights@.len() * col_widths@.len(),
 {
     proof { reveal(grid_layout); }
-    let ghost spec_cw: Seq<Size<RationalModel>> =
+    let ghost spec_cw: Seq<Size<V>> =
         Seq::new(col_widths@.len() as nat, |i: int| col_widths@[i]@);
-    let ghost spec_rh: Seq<Size<RationalModel>> =
+    let ghost spec_rh: Seq<Size<V>> =
         Seq::new(row_heights@.len() as nat, |i: int| row_heights@[i]@);
-    let ghost spec_cs: Seq<Seq<Size<RationalModel>>> =
+    let ghost spec_cs: Seq<Seq<Size<V>>> =
         Seq::new(child_sizes@.len() as nat, |i: int|
             Seq::new(child_sizes@[i]@.len() as nat, |j: int| child_sizes@[i]@[j]@)
         );
@@ -195,16 +194,16 @@ pub fn grid_layout_exec(
         *h_align, *v_align, spec_cs, 0,
     );
     proof {
-        lemma_grid_all_children_len::<RationalModel>(
+        lemma_grid_all_children_len::<V>(
             padding@, spec_cw, spec_rh, h_spacing@, v_spacing@,
             *h_align, *v_align, spec_cs, 0, num_cols as nat,
         );
     }
 
     //  ── Build children via nested loops ──
-    let mut children: Vec<RuntimeNode> = Vec::new();
-    let mut sh = RuntimeRational::from_int(0);
-    let mut ra_v = RuntimeRational::from_int(0);
+    let mut children: Vec<RuntimeNode<R, V>> = Vec::new();
+    let mut sh = h_spacing.zero_like();
+    let mut ra_v = h_spacing.zero_like();
     let mut r: usize = 0;
 
     while r < num_rows
@@ -218,8 +217,8 @@ pub fn grid_layout_exec(
             spec_cs.len() >= spec_rh.len(),
             sh.wf_spec(), ra_v.wf_spec(),
             h_spacing.wf_spec(), v_spacing.wf_spec(), padding.wf_spec(),
-            sh@ == sum_heights::<RationalModel>(spec_rh, r as nat),
-            ra_v@ == repeated_add::<RationalModel>(v_spacing@, r as nat),
+            sh@ == sum_heights::<V>(spec_rh, r as nat),
+            ra_v@ == repeated_add::<V>(v_spacing@, r as nat),
             children@.len() == (r as nat) * spec_cw.len(),
             spec_children.len() == spec_rh.len() * spec_cw.len(),
             spec_children =~= grid_all_children(
@@ -247,8 +246,8 @@ pub fn grid_layout_exec(
             },
         decreases num_rows - r,
     {
-        let mut sw = RuntimeRational::from_int(0);
-        let mut ra_h = RuntimeRational::from_int(0);
+        let mut sw = h_spacing.zero_like();
+        let mut ra_h = h_spacing.zero_like();
         let mut c: usize = 0;
 
         while c < num_cols
@@ -263,10 +262,10 @@ pub fn grid_layout_exec(
                 spec_cs.len() >= spec_rh.len(),
                 sw.wf_spec(), ra_h.wf_spec(), sh.wf_spec(), ra_v.wf_spec(),
                 h_spacing.wf_spec(), v_spacing.wf_spec(), padding.wf_spec(),
-                sw@ == sum_widths::<RationalModel>(spec_cw, c as nat),
-                ra_h@ == repeated_add::<RationalModel>(h_spacing@, c as nat),
-                sh@ == sum_heights::<RationalModel>(spec_rh, r as nat),
-                ra_v@ == repeated_add::<RationalModel>(v_spacing@, r as nat),
+                sw@ == sum_widths::<V>(spec_cw, c as nat),
+                ra_h@ == repeated_add::<V>(h_spacing@, c as nat),
+                sh@ == sum_heights::<V>(spec_rh, r as nat),
+                ra_v@ == repeated_add::<V>(v_spacing@, r as nat),
                 children@.len() == (r as nat) * spec_cw.len() + (c as nat),
                 spec_children.len() == spec_rh.len() * spec_cw.len(),
                 spec_children =~= grid_all_children(
@@ -296,10 +295,10 @@ pub fn grid_layout_exec(
         {
             let cell_x = padding.left.add(&sw).add(&ra_h);
             let cell_y = padding.top.add(&sh).add(&ra_v);
-            let cell_w = copy_rational(&col_widths[c].width);
-            let cell_h = copy_rational(&row_heights[r].height);
-            let cs_w = copy_rational(&child_sizes[r][c].width);
-            let cs_h = copy_rational(&child_sizes[r][c].height);
+            let cell_w = col_widths[c].width.copy();
+            let cell_h = row_heights[r].height.copy();
+            let cs_w = child_sizes[r][c].width.copy();
+            let cs_h = child_sizes[r][c].height.copy();
             let x_off = align_offset_exec(h_align, &cell_w, &cs_w);
             let y_off = align_offset_exec(v_align, &cell_h, &cs_h);
             let child_x = cell_x.add(&x_off);
@@ -309,7 +308,7 @@ pub fn grid_layout_exec(
 
             proof {
                 //  Call the element lemma
-                lemma_grid_all_children_element::<RationalModel>(
+                lemma_grid_all_children_element::<V>(
                     padding@, spec_cw, spec_rh, h_spacing@, v_spacing@,
                     *h_align, *v_align, spec_cs, r as nat, c as nat,
                 );
@@ -319,7 +318,7 @@ pub fn grid_layout_exec(
                 let flat_idx_int: int = flat_idx as int;
 
                 //  Lemma postcondition → spec_children connection
-                let expected = grid_child::<RationalModel>(
+                let expected = grid_child::<V>(
                     padding@, spec_cw, spec_rh, h_spacing@, v_spacing@,
                     *h_align, *v_align, r as nat, c as nat,
                     spec_cs[(r as nat) as int][(c as nat) as int],
@@ -338,11 +337,11 @@ pub fn grid_layout_exec(
                 assert(cs_h@ == cs_rt@.height);
 
                 //  Cell dimensions and positions
-                assert(cell_w@ == grid_col_width::<RationalModel>(spec_cw, c as nat));
-                assert(cell_h@ == grid_row_height::<RationalModel>(spec_rh, r as nat));
-                assert(cell_x@ == grid_cell_x::<RationalModel>(
+                assert(cell_w@ == grid_col_width::<V>(spec_cw, c as nat));
+                assert(cell_h@ == grid_row_height::<V>(spec_rh, r as nat));
+                assert(cell_x@ == grid_cell_x::<V>(
                     padding@.left, spec_cw, h_spacing@, c as nat));
-                assert(cell_y@ == grid_cell_y::<RationalModel>(
+                assert(cell_y@ == grid_cell_y::<V>(
                     padding@.top, spec_rh, v_spacing@, r as nat));
 
                 //  Connect child_node to expected
@@ -369,10 +368,10 @@ pub fn grid_layout_exec(
     }
 
     //  ── Construct output ──
-    let x = RuntimeRational::from_int(0);
-    let y = RuntimeRational::from_int(0);
+    let x = h_spacing.zero_like();
+    let y = h_spacing.zero_like();
 
-    let ghost parent_model = grid_layout::<RationalModel>(
+    let ghost parent_model = grid_layout::<V>(
         limits@, padding@, h_spacing@, v_spacing@, *h_align, *v_align,
         spec_cw, spec_rh, spec_cs,
     );
