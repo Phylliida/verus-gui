@@ -1446,19 +1446,19 @@ pub fn widgets_deep_equal_exec(a: &CWidget, b: &CWidget, depth: usize) -> (out: 
 //  ── Conditional widget helper ────────────────────────────────────
 
 ///  Layout a conditional widget: visible child or zero-sized leaf.
-fn layout_conditional_exec(
-    limits: &CLimits,
+fn layout_conditional_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
+    limits: &RuntimeLimits<R, V>,
     visible: bool,
-    child: &Box<CWidget>,
+    child: &Box<RuntimeWidget<R, V>>,
     fuel: usize,
-) -> (out: CNode)
+) -> (out: RuntimeNode<R, V>)
     requires
         limits.wf_spec(),
         fuel > 0,
         child.wf_spec((fuel - 1) as nat),
     ensures
         out.wf_spec(),
-        out@ == layout_widget::<Rational>(
+        out@ == layout_widget::<V>(
             limits@,
             Widget::Wrapper(WrapperWidget::Conditional { visible, child: Box::new(child.model()) }),
             fuel as nat,
@@ -1468,9 +1468,9 @@ fn layout_conditional_exec(
     if visible {
         let child_node = layout_widget_exec(limits, child, fuel - 1);
         let resolved = limits.resolve_exec(child_node.size.copy_size());
-        let x = RuntimeRational::from_int(0);
-        let y = RuntimeRational::from_int(0);
-        let ghost parent_model = layout_widget::<Rational>(
+        let x = limits.min.width.zero_like();
+        let y = limits.min.width.zero_like();
+        let ghost parent_model = layout_widget::<V>(
             limits@,
             Widget::Wrapper(WrapperWidget::Conditional { visible: true, child: Box::new(child.model()) }),
             fuel as nat,
@@ -1483,9 +1483,9 @@ fn layout_conditional_exec(
             model: Ghost(parent_model),
         }
     } else {
-        let resolved = limits.resolve_exec(CSize::zero_exec());
-        let x = RuntimeRational::from_int(0);
-        let y = RuntimeRational::from_int(0);
+        let resolved = limits.resolve_exec(RuntimeSize::new(limits.min.width.zero_like(), limits.min.width.zero_like()));
+        let x = limits.min.width.zero_like();
+        let y = limits.min.width.zero_like();
         RuntimeNode::leaf_exec(x, y, resolved)
     }
 }
@@ -1493,15 +1493,15 @@ fn layout_conditional_exec(
 //  ── Flex widget helper ──────────────────────────────────────────
 
 ///  Layout a flex widget: each child gets per-weight limits.
-fn layout_flex_widget_exec(
-    limits: &CLimits,
-    padding: &CPadding,
-    spacing: &RuntimeRational,
+fn layout_flex_widget_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
+    limits: &RuntimeLimits<R, V>,
+    padding: &RuntimePadding<R, V>,
+    spacing: &R,
     alignment: &Alignment,
     direction: &FlexDirection,
-    children: &Vec<CFlexItem>,
+    children: &Vec<RuntimeFlexItem<R, V>>,
     fuel: usize,
-) -> (out: CNode)
+) -> (out: RuntimeNode<R, V>)
     requires
         limits.wf_spec(),
         padding.wf_spec(),
@@ -1511,10 +1511,10 @@ fn layout_flex_widget_exec(
             children@[i].weight.wf_spec(),
         forall|i: int| 0 <= i < children@.len() ==>
             (#[trigger] children@[i]).child.wf_spec((fuel - 1) as nat),
-        children@.len() > 0 ==> !sum_weights::<Rational>(
+        children@.len() > 0 ==> !sum_weights::<V>(
             Seq::new(children@.len() as nat, |i: int| children@[i].weight@),
             children@.len() as nat,
-        ).eqv_spec(Rational::from_int_spec(0)),
+        ).eqv(V::zero()),
     ensures
         out.wf_spec(),
         out@ == ({
@@ -1523,13 +1523,13 @@ fn layout_flex_widget_exec(
                 padding: padding@, spacing: spacing@, alignment: *alignment,
                 direction: *direction, children: spec_fi,
             });
-            layout_widget::<Rational>(limits@, spec_w, fuel as nat)
+            layout_widget::<V>(limits@, spec_w, fuel as nat)
         }),
     decreases fuel, 0nat,
 {
-    let ghost spec_fi: Seq<FlexItem<Rational>> =
+    let ghost spec_fi: Seq<FlexItem<V>> =
         Seq::new(children@.len() as nat, |i: int| children@[i].model());
-    let ghost spec_weights: Seq<Rational> =
+    let ghost spec_weights: Seq<V> =
         Seq::new(children@.len() as nat, |i: int| children@[i].weight@);
 
     let pad_h = padding.horizontal_exec();
@@ -1538,15 +1538,15 @@ fn layout_flex_widget_exec(
     let n = children.len();
 
     //  Compute weights and total_weight
-    let mut weights: Vec<RuntimeRational> = Vec::new();
-    let mut total_weight = RuntimeRational::from_int(0);
+    let mut weights: Vec<R> = Vec::new();
+    let mut total_weight = spacing.zero_like();
     let mut i: usize = 0;
     while i < n
         invariant
             0 <= i <= n, n == children@.len(),
             weights@.len() == i as int,
             total_weight.wf_spec(),
-            total_weight@ == sum_weights::<Rational>(spec_weights, i as nat),
+            total_weight@ == sum_weights::<V>(spec_weights, i as nat),
             forall|j: int| 0 <= j < i ==> {
                 &&& (#[trigger] weights@[j]).wf_spec()
                 &&& weights@[j]@ == children@[j].weight@
@@ -1555,7 +1555,7 @@ fn layout_flex_widget_exec(
             forall|j: int| 0 <= j < children@.len() ==> spec_weights[j] == children@[j].weight@,
         decreases n - i,
     {
-        let w = crate::runtime::copy_rational(&children[i].weight);
+        let w = children[i].weight.copy();
         total_weight = total_weight.add(&children[i].weight);
         weights.push(w);
         i = i + 1;
@@ -1564,13 +1564,13 @@ fn layout_flex_widget_exec(
     //  Compute total_spacing
     let total_spacing = if n > 0 {
         let sp_count = n - 1;
-        let mut sp = RuntimeRational::from_int(0);
+        let mut sp = spacing.zero_like();
         let mut j: usize = 0;
         while j < sp_count
             invariant
                 0 <= j <= sp_count,
                 sp.wf_spec(), spacing.wf_spec(),
-                sp@ == repeated_add::<Rational>(spacing@, j as nat),
+                sp@ == repeated_add::<V>(spacing@, j as nat),
             decreases sp_count - j,
         {
             sp = sp.add(spacing);
@@ -1578,15 +1578,15 @@ fn layout_flex_widget_exec(
         }
         sp
     } else {
-        RuntimeRational::from_int(0)
+        spacing.zero_like()
     };
 
     //  Recursively layout each child with per-weight limits, collecting child nodes + cross sizes
-    let mut child_nodes: Vec<CNode> = Vec::new();
-    let mut cross_sizes: Vec<RuntimeRational> = Vec::new();
+    let mut child_nodes: Vec<RuntimeNode<R, V>> = Vec::new();
+    let mut cross_sizes: Vec<R> = Vec::new();
     let mut k: usize = 0;
 
-    let ghost avail_spec: Rational;
+    let ghost avail_spec: V;
     match direction {
         FlexDirection::Column => {
             let available = inner.max.height.sub(&total_spacing);
@@ -1597,8 +1597,8 @@ fn layout_flex_widget_exec(
                     inner.wf_spec(),
                     inner@ == limits@.shrink(pad_h@, pad_v@),
                     total_weight.wf_spec(),
-                    total_weight@ == sum_weights::<Rational>(spec_weights, n as nat),
-                    n > 0 ==> !total_weight@.eqv_spec(Rational::from_int_spec(0)),
+                    total_weight@ == sum_weights::<V>(spec_weights, n as nat),
+                    n > 0 ==> !total_weight@.eqv(V::zero()),
                     available.wf_spec(),
                     available@ == avail_spec,
                     child_nodes@.len() == k as int,
@@ -1611,9 +1611,9 @@ fn layout_flex_widget_exec(
                         (#[trigger] children@[j]).child.wf_spec((fuel - 1) as nat),
                     forall|j: int| 0 <= j < k ==> {
                         &&& (#[trigger] child_nodes@[j]).wf_spec()
-                        &&& child_nodes@[j]@ == layout_widget::<Rational>(
+                        &&& child_nodes@[j]@ == layout_widget::<V>(
                             Limits { min: inner@.min, max: Size::new(inner@.max.width,
-                                flex_child_main_size::<Rational>(spec_weights[j], total_weight@, avail_spec)) },
+                                flex_child_main_size::<V>(spec_weights[j], total_weight@, avail_spec)) },
                             children@[j].child.model(), (fuel - 1) as nat)
                     },
                     forall|j: int| 0 <= j < k ==> {
@@ -1626,10 +1626,10 @@ fn layout_flex_widget_exec(
                 let main_alloc = wd.mul(&available);
                 let child_lim = RuntimeLimits::new(
                     inner.min.copy_size(),
-                    RuntimeSize::new(crate::runtime::copy_rational(&inner.max.width), main_alloc),
+                    RuntimeSize::new(inner.max.width.copy(), main_alloc),
                 );
                 let cn = layout_widget_exec(&child_lim, &children[k].child, fuel - 1);
-                let cw = crate::runtime::copy_rational(&cn.size.width);
+                let cw = cn.size.width.copy();
                 cross_sizes.push(cw);
                 child_nodes.push(cn);
                 k = k + 1;
@@ -1647,7 +1647,7 @@ fn layout_flex_widget_exec(
                 limits, padding, spacing, alignment, &weights, &cross_sizes);
 
             //  Merge — layout_result.children@.len() == n from flex_column_layout_exec postcondition
-            let ghost cn_models: Seq<Node<Rational>> =
+            let ghost cn_models: Seq<Node<V>> =
                 Seq::new(n as nat, |j: int| child_nodes@[j]@);
             let merged = merge_layout_exec(layout_result, child_nodes, Ghost(cn_models));
 
@@ -1670,9 +1670,9 @@ fn layout_flex_widget_exec(
                 assert(cn_models =~= spec_cn);
 
                 //  2. Cross sizes view matches what layout_flex_column_body computes
-                let cross_view: Seq<Rational> =
+                let cross_view: Seq<V> =
                     Seq::new(cross_sizes@.len() as nat, |i: int| cross_sizes@[i]@);
-                let spec_cross: Seq<Rational> =
+                let spec_cross: Seq<V> =
                     Seq::new(spec_cn.len(), |i: int| spec_cn[i].size.width);
                 assert(cross_view =~= spec_cross) by {
                     assert(cross_view.len() == spec_cross.len());
@@ -1682,7 +1682,7 @@ fn layout_flex_widget_exec(
                 }
 
                 //  3. Weights from spec_fi match spec_weights
-                let spec_weights_fi: Seq<Rational> =
+                let spec_weights_fi: Seq<V> =
                     Seq::new(spec_fi.len(), |i: int| spec_fi[i].weight);
                 assert(spec_weights_fi =~= spec_weights) by {
                     assert forall|i: int| 0 <= i < spec_weights_fi.len() as int implies
@@ -1699,7 +1699,7 @@ fn layout_flex_widget_exec(
                     avail_spec, Axis::Vertical, (fuel - 1) as nat));
 
                 //  5. merged@ == layout_flex_column_body(...)
-                assert(merged@ == layout_flex_column_body::<Rational>(
+                assert(merged@ == layout_flex_column_body::<V>(
                     limits@, padding@, spacing@, *alignment, spec_weights_fi, spec_cn));
             }
 
@@ -1714,8 +1714,8 @@ fn layout_flex_widget_exec(
                     inner.wf_spec(),
                     inner@ == limits@.shrink(pad_h@, pad_v@),
                     total_weight.wf_spec(),
-                    total_weight@ == sum_weights::<Rational>(spec_weights, n as nat),
-                    n > 0 ==> !total_weight@.eqv_spec(Rational::from_int_spec(0)),
+                    total_weight@ == sum_weights::<V>(spec_weights, n as nat),
+                    n > 0 ==> !total_weight@.eqv(V::zero()),
                     available.wf_spec(),
                     available@ == avail_spec,
                     child_nodes@.len() == k as int,
@@ -1728,9 +1728,9 @@ fn layout_flex_widget_exec(
                         (#[trigger] children@[j]).child.wf_spec((fuel - 1) as nat),
                     forall|j: int| 0 <= j < k ==> {
                         &&& (#[trigger] child_nodes@[j]).wf_spec()
-                        &&& child_nodes@[j]@ == layout_widget::<Rational>(
+                        &&& child_nodes@[j]@ == layout_widget::<V>(
                             Limits { min: inner@.min, max: Size::new(
-                                flex_child_main_size::<Rational>(spec_weights[j], total_weight@, avail_spec),
+                                flex_child_main_size::<V>(spec_weights[j], total_weight@, avail_spec),
                                 inner@.max.height) },
                             children@[j].child.model(), (fuel - 1) as nat)
                     },
@@ -1744,10 +1744,10 @@ fn layout_flex_widget_exec(
                 let main_alloc = wd.mul(&available);
                 let child_lim = RuntimeLimits::new(
                     inner.min.copy_size(),
-                    RuntimeSize::new(main_alloc, crate::runtime::copy_rational(&inner.max.height)),
+                    RuntimeSize::new(main_alloc, inner.max.height.copy()),
                 );
                 let cn = layout_widget_exec(&child_lim, &children[k].child, fuel - 1);
-                let ch = crate::runtime::copy_rational(&cn.size.height);
+                let ch = cn.size.height.copy();
                 cross_sizes.push(ch);
                 child_nodes.push(cn);
                 k = k + 1;
@@ -1764,7 +1764,7 @@ fn layout_flex_widget_exec(
                 limits, padding, spacing, alignment, &weights, &cross_sizes);
 
             //  Merge — layout_result.children@.len() == n from flex_row_layout_exec postcondition
-            let ghost cn_models: Seq<Node<Rational>> =
+            let ghost cn_models: Seq<Node<V>> =
                 Seq::new(n as nat, |j: int| child_nodes@[j]@);
             let merged = merge_layout_exec(layout_result, child_nodes, Ghost(cn_models));
 
@@ -1786,9 +1786,9 @@ fn layout_flex_widget_exec(
                 assert(cn_models =~= spec_cn);
 
                 //  2. Cross sizes view matches
-                let cross_view: Seq<Rational> =
+                let cross_view: Seq<V> =
                     Seq::new(cross_sizes@.len() as nat, |i: int| cross_sizes@[i]@);
-                let spec_cross: Seq<Rational> =
+                let spec_cross: Seq<V> =
                     Seq::new(spec_cn.len(), |i: int| spec_cn[i].size.height);
                 assert(cross_view =~= spec_cross) by {
                     assert(cross_view.len() == spec_cross.len());
@@ -1798,7 +1798,7 @@ fn layout_flex_widget_exec(
                 }
 
                 //  3. Weights from spec_fi match
-                let spec_weights_fi: Seq<Rational> =
+                let spec_weights_fi: Seq<V> =
                     Seq::new(spec_fi.len(), |i: int| spec_fi[i].weight);
                 assert(spec_weights_fi =~= spec_weights) by {
                     assert forall|i: int| 0 <= i < spec_weights_fi.len() as int implies
@@ -1815,7 +1815,7 @@ fn layout_flex_widget_exec(
                     avail_spec, Axis::Horizontal, (fuel - 1) as nat));
 
                 //  5. merged@ == layout_flex_row_body(...)
-                assert(merged@ == layout_flex_row_body::<Rational>(
+                assert(merged@ == layout_flex_row_body::<V>(
                     limits@, padding@, spacing@, *alignment, spec_weights_fi, spec_cn));
             }
 
@@ -1827,24 +1827,24 @@ fn layout_flex_widget_exec(
 //  ── Layout widget exec ───────────────────────────────────────────
 
 ///  Recursively lay out a RuntimeWidget tree.
-pub fn layout_widget_exec(
-    limits: &CLimits,
-    widget: &CWidget,
+pub fn layout_widget_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
+    limits: &RuntimeLimits<R, V>,
+    widget: &RuntimeWidget<R, V>,
     fuel: usize,
-) -> (out: CNode)
+) -> (out: RuntimeNode<R, V>)
     requires
         limits.wf_spec(),
         widget.wf_spec(fuel as nat),
     ensures
         out.wf_spec(),
-        out@ == layout_widget::<Rational>(limits@, widget.model(), fuel as nat),
+        out@ == layout_widget::<V>(limits@, widget.model(), fuel as nat),
     decreases fuel, 1nat,
 {
     if fuel == 0 {
         //  Unreachable: wf_spec(0) is false
-        let z1 = RuntimeRational::from_int(0);
-        let z2 = RuntimeRational::from_int(0);
-        RuntimeNode::leaf_exec(z1, z2, CSize::zero_exec())
+        let z1 = limits.min.width.zero_like();
+        let z2 = limits.min.width.zero_like();
+        RuntimeNode::leaf_exec(z1, z2, RuntimeSize::new(limits.min.width.zero_like(), limits.min.width.zero_like()))
     } else {
         //  Fuel bridge: one proof for all variants
         proof { assert((fuel as nat - 1) as nat == (fuel - 1) as nat); }
@@ -1854,14 +1854,14 @@ pub fn layout_widget_exec(
                 match leaf {
                     RuntimeLeafWidget::Leaf { size, model } => {
                         let resolved = limits.resolve_exec(size.copy_size());
-                        let x = RuntimeRational::from_int(0);
-                        let y = RuntimeRational::from_int(0);
+                        let x = limits.min.width.zero_like();
+                        let y = limits.min.width.zero_like();
                         RuntimeNode::leaf_exec(x, y, resolved)
                     },
                     RuntimeLeafWidget::TextInput { preferred_size, text_input_id, config, model } => {
                         let resolved = limits.resolve_exec(preferred_size.copy_size());
-                        let x = RuntimeRational::from_int(0);
-                        let y = RuntimeRational::from_int(0);
+                        let x = limits.min.width.zero_like();
+                        let y = limits.min.width.zero_like();
                         RuntimeNode::leaf_exec(x, y, resolved)
                     },
                 }
@@ -1889,17 +1889,17 @@ pub fn layout_widget_exec(
                 match container {
                     RuntimeContainerWidget::Column { padding, spacing, alignment, children, model } => {
                         layout_container_exec(limits, padding, spacing, alignment,
-                            &Alignment::Start, &RuntimeRational::from_int(0), children, fuel,
+                            &Alignment::Start, &limits.min.width.zero_like(), children, fuel,
                             ContainerKind::Linear(Axis::Vertical))
                     },
                     RuntimeContainerWidget::Row { padding, spacing, alignment, children, model } => {
                         layout_container_exec(limits, padding, spacing, alignment,
-                            &Alignment::Start, &RuntimeRational::from_int(0), children, fuel,
+                            &Alignment::Start, &limits.min.width.zero_like(), children, fuel,
                             ContainerKind::Linear(Axis::Horizontal))
                     },
                     RuntimeContainerWidget::Stack { padding, h_align, v_align, children, model } => {
-                        let zero_sp = RuntimeRational::from_int(0);
-                        let dummy_sp = RuntimeRational::from_int(0);
+                        let zero_sp = limits.min.width.zero_like();
+                        let dummy_sp = limits.min.width.zero_like();
                         layout_container_exec(limits, padding, &zero_sp, h_align,
                             v_align, &dummy_sp, children, fuel, ContainerKind::Stack)
                     },
@@ -1932,26 +1932,26 @@ pub fn layout_widget_exec(
 ///  Layout with verified children-within-bounds guarantee.
 ///  Wraps `layout_widget_exec` and calls `lemma_layout_widget_cwb` in a proof block
 ///  to establish that all children are positioned within the parent's bounds.
-pub fn layout_widget_checked(
-    limits: &CLimits,
-    widget: &CWidget,
+pub fn layout_widget_checked<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
+    limits: &RuntimeLimits<R, V>,
+    widget: &RuntimeWidget<R, V>,
     fuel: usize,
-) -> (out: CNode)
+) -> (out: RuntimeNode<R, V>)
     requires
         limits.wf_spec(),
         limits@.wf(),
         widget.wf_spec(fuel as nat),
         fuel > 0,
-        widget_wf::<Rational>(limits@, widget.model(), fuel as nat),
-        widget_cwb_ok::<Rational>(widget.model(), fuel as nat),
+        widget_wf::<V>(limits@, widget.model(), fuel as nat),
+        widget_cwb_ok::<V>(widget.model(), fuel as nat),
     ensures
         out.wf_spec(),
-        out@ == layout_widget::<Rational>(limits@, widget.model(), fuel as nat),
+        out@ == layout_widget::<V>(limits@, widget.model(), fuel as nat),
         out@.children_within_bounds(),
 {
     let out = layout_widget_exec(limits, widget, fuel);
     proof {
-        lemma_layout_widget_cwb::<Rational>(limits@, widget.model(), fuel as nat);
+        lemma_layout_widget_cwb::<V>(limits@, widget.model(), fuel as nat);
     }
     out
 }
@@ -1964,17 +1964,17 @@ pub enum ContainerKind {
 }
 
 ///  Shared container layout: recursively compute children, call layout exec, merge.
-fn layout_container_exec(
-    limits: &CLimits,
-    padding: &CPadding,
-    spacing1: &RuntimeRational,  //  spacing (col/row), h_spacing (wrap), unused (stack)
+fn layout_container_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
+    limits: &RuntimeLimits<R, V>,
+    padding: &RuntimePadding<R, V>,
+    spacing1: &R,  //  spacing (col/row), h_spacing (wrap), unused (stack)
     align1: &Alignment,          //  alignment (row), h_align (stack), unused (col/wrap)
     align2: &Alignment,          //  alignment (col), v_align (stack), unused (row/wrap)
-    spacing2: &RuntimeRational,  //  v_spacing (wrap), unused (col/row/stack)
-    children: &Vec<CWidget>,
+    spacing2: &R,  //  v_spacing (wrap), unused (col/row/stack)
+    children: &Vec<RuntimeWidget<R, V>>,
     fuel: usize,
     kind: ContainerKind,
-) -> (out: CNode)
+) -> (out: RuntimeNode<R, V>)
     requires
         limits.wf_spec(),
         padding.wf_spec(),
@@ -2007,12 +2007,12 @@ fn layout_container_exec(
     let n = children.len();
 
     //  Ghost: spec-level children sequence
-    let ghost spec_wc: Seq<Widget<Rational>> =
+    let ghost spec_wc: Seq<Widget<V>> =
         Seq::new(children@.len() as nat, |j: int| children@[j].model());
 
     //  1. Recursively compute child nodes
-    let mut child_nodes: Vec<CNode> = Vec::new();
-    let mut child_sizes: Vec<CSize> = Vec::new();
+    let mut child_nodes: Vec<RuntimeNode<R, V>> = Vec::new();
+    let mut child_sizes: Vec<RuntimeSize<R, V>> = Vec::new();
     let mut i: usize = 0;
 
     while i < n
@@ -2032,7 +2032,7 @@ fn layout_container_exec(
                 (#[trigger] children@[j]).wf_spec((fuel - 1) as nat),
             forall|j: int| 0 <= j < i ==> {
                 &&& (#[trigger] child_nodes@[j]).wf_spec()
-                &&& child_nodes@[j]@ == layout_widget::<Rational>(
+                &&& child_nodes@[j]@ == layout_widget::<V>(
                         inner@, spec_wc[j], (fuel - 1) as nat)
             },
             forall|j: int| 0 <= j < i ==> {
@@ -2071,26 +2071,26 @@ fn layout_container_exec(
 
     //  Prove layout_result has n children (needed for merge precondition)
     proof {
-        let child_sizes_seq: Seq<Size<Rational>> =
+        let child_sizes_seq: Seq<Size<V>> =
             Seq::new(child_sizes@.len() as nat, |j: int| child_sizes@[j]@);
         match kind {
             ContainerKind::Linear(axis) => {
                 reveal(linear_layout);
                 let avail_cross = limits@.max.cross_dim(axis).sub(padding@.cross_padding(axis));
-                lemma_linear_children_len::<Rational>(
+                lemma_linear_children_len::<V>(
                     padding@, spacing1@, *align1, child_sizes_seq, axis, avail_cross, 0nat);
             },
             ContainerKind::Stack => {
                 reveal(crate::layout::stack::stack_layout);
                 let avail_w = limits@.max.width.sub(padding@.horizontal());
                 let avail_h = limits@.max.height.sub(padding@.vertical());
-                lemma_stack_children_len::<Rational>(
+                lemma_stack_children_len::<V>(
                     padding@, *align1, *align2, child_sizes_seq, avail_w, avail_h, 0nat);
             },
             ContainerKind::Wrap => {
                 reveal(wrap_layout);
                 let avail_w = limits@.max.width.sub(padding@.horizontal());
-                lemma_wrap_children_len::<Rational>(
+                lemma_wrap_children_len::<V>(
                     padding@, spacing1@, spacing2@, child_sizes_seq, avail_w, 0nat);
             },
         }
@@ -2109,7 +2109,7 @@ fn layout_container_exec(
     }
 
     //  3. Merge positions from layout_result with child_nodes
-    let ghost cn_models: Seq<Node<Rational>> =
+    let ghost cn_models: Seq<Node<V>> =
         Seq::new(n as nat, |j: int| child_nodes@[j]@);
 
     let merged = merge_layout_exec(layout_result, child_nodes, Ghost(cn_models));
@@ -2144,11 +2144,11 @@ fn layout_container_exec(
 //  ── Merge layout exec ────────────────────────────────────────────
 
 ///  Merge positions from a layout result with recursively computed child nodes.
-pub fn merge_layout_exec(
-    layout_result: CNode,
-    mut child_nodes: Vec<CNode>,
-    ghost_child_models: Ghost<Seq<Node<Rational>>>,
-) -> (out: CNode)
+pub fn merge_layout_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
+    layout_result: RuntimeNode<R, V>,
+    mut child_nodes: Vec<RuntimeNode<R, V>>,
+    ghost_child_models: Ghost<Seq<Node<V>>>,
+) -> (out: RuntimeNode<R, V>)
     requires
         layout_result.wf_spec(),
         layout_result.children@.len() == child_nodes@.len(),
@@ -2159,13 +2159,13 @@ pub fn merge_layout_exec(
         },
     ensures
         out.wf_spec(),
-        out@ == merge_layout::<Rational>(layout_result@, ghost_child_models@),
+        out@ == merge_layout::<V>(layout_result@, ghost_child_models@),
 {
     let ghost spec_cn = ghost_child_models@;
-    let ghost merged_model = merge_layout::<Rational>(layout_result@, spec_cn);
+    let ghost merged_model = merge_layout::<V>(layout_result@, spec_cn);
 
     let n = child_nodes.len();
-    let mut merged_children: Vec<CNode> = Vec::new();
+    let mut merged_children: Vec<RuntimeNode<R, V>> = Vec::new();
     let mut i: usize = 0;
 
     while i < n
@@ -2180,7 +2180,7 @@ pub fn merge_layout_exec(
             layout_result@.children.len() == n as nat,
             //  Pointwise merge_layout unfolding (ghost let not available in loop)
             forall|j: int| 0 <= j < n ==>
-                (#[trigger] merged_model.children[j]) == (Node::<Rational> {
+                (#[trigger] merged_model.children[j]) == (Node::<V> {
                     x: layout_result@.children[j].x,
                     y: layout_result@.children[j].y,
                     size: spec_cn[j].size,
@@ -2198,8 +2198,8 @@ pub fn merge_layout_exec(
             },
         decreases n - i,
     {
-        let x = crate::runtime::copy_rational(&layout_result.children[i].x);
-        let y = crate::runtime::copy_rational(&layout_result.children[i].y);
+        let x = layout_result.children[i].x.copy();
+        let y = layout_result.children[i].y.copy();
 
         //  Capture facts about child_nodes[i] before the swap
         proof {
@@ -2209,15 +2209,15 @@ pub fn merge_layout_exec(
 
         //  Swap child_nodes[i] with a dummy to take ownership
         let mut swap_val = RuntimeNode::leaf_exec(
-            RuntimeRational::from_int(0),
-            RuntimeRational::from_int(0),
-            CSize::zero_exec(),
+            layout_result.x.zero_like(),
+            layout_result.x.zero_like(),
+            RuntimeSize::new(layout_result.x.zero_like(), layout_result.x.zero_like()),
         );
         child_nodes.set_and_swap(i, &mut swap_val);
         let cn = swap_val;
 
         //  Construct ghost model directly from components
-        let ghost child_model = Node::<Rational> {
+        let ghost child_model = Node::<V> {
             x: layout_result@.children[i as int].x,
             y: layout_result@.children[i as int].y,
             size: spec_cn[i as int].size,

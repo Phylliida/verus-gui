@@ -1,27 +1,27 @@
 use vstd::prelude::*;
-use verus_rational::RuntimeRational;
-use crate::runtime::RationalModel;
-use crate::runtime::copy_rational;
-use crate::runtime::RuntimeSize;
+use crate::runtime::size::RuntimeSize;
 use crate::size::Size;
 use crate::layout::child_y_position;
 use crate::scroll::child_visible;
 
+use verus_algebra::traits::field::OrderedField;
+use verus_algebra::traits::runtime::*;
+
 verus! {
 
 ///  Whether child i is visible, using add_spec/lt_spec directly (avoids trait method resolution).
-pub open spec fn runtime_child_visible_at(
-    padding_top: RationalModel,
-    spec_sizes: Seq<Size<RationalModel>>,
-    spacing: RationalModel,
+pub open spec fn runtime_child_visible_at<V: OrderedField>(
+    padding_top: V,
+    spec_sizes: Seq<Size<V>>,
+    spacing: V,
     i: nat,
-    scroll_y: RationalModel,
-    viewport_h: RationalModel,
+    scroll_y: V,
+    viewport_h: V,
 ) -> bool {
     let y_pos = child_y_position(padding_top, spec_sizes, spacing, i);
-    let bottom = y_pos.add_spec(spec_sizes[i as int].height);
-    let scroll_bottom = scroll_y.add_spec(viewport_h);
-    scroll_y.lt_spec(bottom) && y_pos.lt_spec(scroll_bottom)
+    let bottom = y_pos.add(spec_sizes[i as int].height);
+    let scroll_bottom = scroll_y.add(viewport_h);
+    scroll_y.lt(bottom) && y_pos.lt(scroll_bottom)
 }
 
 ///  Compute the visible range [first, end) for a column's children
@@ -29,12 +29,12 @@ pub open spec fn runtime_child_visible_at(
 ///
 ///  Two-phase scan: first pass finds the first visible child,
 ///  second pass extends until non-visible (contiguous range).
-pub fn visible_range_exec(
-    padding_top: &RuntimeRational,
-    child_sizes: &Vec<RuntimeSize>,
-    spacing: &RuntimeRational,
-    scroll_y: &RuntimeRational,
-    viewport_h: &RuntimeRational,
+pub fn visible_range_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
+    padding_top: &R,
+    child_sizes: &Vec<RuntimeSize<R, V>>,
+    spacing: &R,
+    scroll_y: &R,
+    viewport_h: &R,
 ) -> (out: (usize, usize))
     requires
         padding_top.wf_spec(),
@@ -59,13 +59,13 @@ pub fn visible_range_exec(
         return (0, 0);
     }
 
-    let ghost spec_sizes: Seq<Size<RationalModel>> =
+    let ghost spec_sizes: Seq<Size<V>> =
         Seq::new(n as nat, |j: int| child_sizes@[j]@);
 
     let scroll_bottom = scroll_y.add(viewport_h);
 
     //  Phase 1: find the first visible child
-    let mut y_pos = copy_rational(padding_top);
+    let mut y_pos = padding_top.copy();
     let mut first: usize = 0;
 
     while first < n
@@ -77,7 +77,7 @@ pub fn visible_range_exec(
             scroll_y.wf_spec(),
             viewport_h.wf_spec(),
             scroll_bottom.wf_spec(),
-            scroll_bottom@ == scroll_y@.add_spec(viewport_h@),
+            scroll_bottom@ == scroll_y@.add(viewport_h@),
             y_pos.wf_spec(),
             y_pos@ == child_y_position(padding_top@, spec_sizes, spacing@, first as nat),
             forall|i: int| 0 <= i < child_sizes@.len() ==>
@@ -88,7 +88,7 @@ pub fn visible_range_exec(
         decreases n - first,
     {
         assert(child_sizes@[first as int].wf_spec());
-        let child_h = copy_rational(&child_sizes[first].height);
+        let child_h = child_sizes[first].height.copy();
         let bottom = y_pos.add(&child_h);
 
         if scroll_y.lt(&bottom) && y_pos.lt(&scroll_bottom) {
@@ -117,7 +117,7 @@ pub fn visible_range_exec(
                     scroll_y.wf_spec(),
                     viewport_h.wf_spec(),
                     scroll_bottom.wf_spec(),
-                    scroll_bottom@ == scroll_y@.add_spec(viewport_h@),
+                    scroll_bottom@ == scroll_y@.add(viewport_h@),
                     y_pos2.wf_spec(),
                     y_pos2@ == child_y_position(padding_top@, spec_sizes, spacing@, end as nat),
                     forall|i: int| 0 <= i < child_sizes@.len() ==>
@@ -131,7 +131,7 @@ pub fn visible_range_exec(
                 decreases n - end,
             {
                 assert(child_sizes@[end as int].wf_spec());
-                let child_h2 = copy_rational(&child_sizes[end].height);
+                let child_h2 = child_sizes[end].height.copy();
                 let bottom2 = y_pos2.add(&child_h2);
 
                 if !(scroll_y.lt(&bottom2) && y_pos2.lt(&scroll_bottom)) {

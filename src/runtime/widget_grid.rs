@@ -1,14 +1,11 @@
 use vstd::prelude::*;
 use vstd::arithmetic::div_mod::lemma_fundamental_div_mod;
-use verus_rational::RuntimeRational;
-use crate::runtime::RationalModel;
-use crate::runtime::copy_rational;
-use crate::runtime::RuntimeSize;
-use crate::runtime::RuntimeLimits;
-use crate::runtime::RuntimePadding;
-use crate::runtime::RuntimeNode;
+use crate::runtime::size::RuntimeSize;
+use crate::runtime::limits::RuntimeLimits;
+use crate::runtime::padding::RuntimePadding;
+use crate::runtime::node::RuntimeNode;
 use crate::runtime::grid::*;
-use crate::runtime::RuntimeWidget;
+use crate::runtime::widget::RuntimeWidget;
 use crate::runtime::widget::{layout_widget_exec, merge_layout_exec};
 use crate::size::Size;
 use crate::node::Node;
@@ -18,22 +15,24 @@ use crate::widget::*;
 use crate::layout::*;
 use crate::layout::grid::*;
 use crate::layout::grid_proofs::*;
+use verus_algebra::traits::field::OrderedField;
+use verus_algebra::traits::runtime::*;
 
 verus! {
 
 ///  Layout a grid widget: each child gets cell-sized limits.
-pub fn layout_grid_widget_exec(
-    limits: &RuntimeLimits,
-    padding: &RuntimePadding,
-    h_spacing: &RuntimeRational,
-    v_spacing: &RuntimeRational,
+pub fn layout_grid_widget_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
+    limits: &RuntimeLimits<R, V>,
+    padding: &RuntimePadding<R, V>,
+    h_spacing: &R,
+    v_spacing: &R,
     h_align: &Alignment,
     v_align: &Alignment,
-    col_widths: &Vec<RuntimeSize>,
-    row_heights: &Vec<RuntimeSize>,
-    children: &Vec<RuntimeWidget>,
+    col_widths: &Vec<RuntimeSize<R, V>>,
+    row_heights: &Vec<RuntimeSize<R, V>>,
+    children: &Vec<RuntimeWidget<R, V>>,
     fuel: usize,
-) -> (out: RuntimeNode)
+) -> (out: RuntimeNode<R, V>)
     requires
         limits.wf_spec(),
         padding.wf_spec(),
@@ -56,15 +55,15 @@ pub fn layout_grid_widget_exec(
                 h_align: *h_align, v_align: *v_align,
                 col_widths: spec_cw, row_heights: spec_rh, children: spec_wc,
             });
-            layout_widget::<RationalModel>(limits@, spec_w, fuel as nat)
+            layout_widget::<V>(limits@, spec_w, fuel as nat)
         }),
     decreases fuel, 0nat,
 {
-    let ghost spec_cw: Seq<Size<RationalModel>> =
+    let ghost spec_cw: Seq<Size<V>> =
         Seq::new(col_widths@.len() as nat, |i: int| col_widths@[i]@);
-    let ghost spec_rh: Seq<Size<RationalModel>> =
+    let ghost spec_rh: Seq<Size<V>> =
         Seq::new(row_heights@.len() as nat, |i: int| row_heights@[i]@);
-    let ghost spec_wc: Seq<Widget<RationalModel>> =
+    let ghost spec_wc: Seq<Widget<V>> =
         Seq::new(children@.len() as nat, |i: int| children@[i].model());
 
     let pad_h = padding.horizontal_exec();
@@ -77,8 +76,8 @@ pub fn layout_grid_widget_exec(
     let ghost inner_spec = limits@.shrink(pad_h@, pad_v@);
 
     //  Recursively layout each child with cell-sized limits (flat iteration)
-    let mut child_nodes: Vec<RuntimeNode> = Vec::new();
-    let mut child_sizes_2d: Vec<Vec<RuntimeSize>> = Vec::new();
+    let mut child_nodes: Vec<RuntimeNode<R, V>> = Vec::new();
+    let mut child_sizes_2d: Vec<Vec<RuntimeSize<R, V>>> = Vec::new();
     let mut flat_idx: usize = 0;
     let mut r: usize = 0;
 
@@ -104,7 +103,7 @@ pub fn layout_grid_widget_exec(
                 (#[trigger] child_nodes@[j]).wf_spec(),
             //  Each child node was laid out with cell-sized limits (using row/col indices)
             forall|ri: int, ci: int| 0 <= ri < r as int && 0 <= ci < num_cols as int ==> {
-                child_nodes@[ri * num_cols as int + ci]@ == layout_widget::<RationalModel>(
+                child_nodes@[ri * num_cols as int + ci]@ == layout_widget::<V>(
                     Limits { min: inner_spec.min, max: Size::new(
                         col_widths@[ci]@.width, row_heights@[ri]@.height) },
                     children@[ri * num_cols as int + ci].model(),
@@ -120,10 +119,10 @@ pub fn layout_grid_widget_exec(
             },
         decreases num_rows - r,
     {
-        let mut row_sizes: Vec<RuntimeSize> = Vec::new();
+        let mut row_sizes: Vec<RuntimeSize<R, V>> = Vec::new();
         let mut c: usize = 0;
         let ghost row_base: int = flat_idx as int;
-        let ghost pre_inner_cn: Seq<RuntimeNode> = child_nodes@;
+        let ghost pre_inner_cn: Seq<RuntimeNode<R, V>> = child_nodes@;
         while c < num_cols
             invariant
                 0 <= c <= num_cols,
@@ -153,7 +152,7 @@ pub fn layout_grid_widget_exec(
                     (#[trigger] child_nodes@[j]).wf_spec(),
                 //  Completed rows' layout facts (via snapshot, invariant through inner loop)
                 forall|ri: int, ci: int| 0 <= ri < r as int && 0 <= ci < num_cols as int ==> {
-                    pre_inner_cn[ri * num_cols as int + ci]@ == layout_widget::<RationalModel>(
+                    pre_inner_cn[ri * num_cols as int + ci]@ == layout_widget::<V>(
                         Limits { min: inner_spec.min, max: Size::new(
                             col_widths@[ci]@.width, row_heights@[ri]@.height) },
                         children@[ri * num_cols as int + ci].model(),
@@ -170,7 +169,7 @@ pub fn layout_grid_widget_exec(
                 //  New child nodes in this row
                 forall|ci: int| 0 <= ci < c ==> {
                     &&& (#[trigger] child_nodes@[row_base + ci]).wf_spec()
-                    &&& child_nodes@[row_base + ci]@ == layout_widget::<RationalModel>(
+                    &&& child_nodes@[row_base + ci]@ == layout_widget::<V>(
                         Limits { min: inner_spec.min, max: Size::new(
                             col_widths@[ci]@.width, row_heights@[r as int]@.height) },
                         children@[row_base + ci].model(),
@@ -196,8 +195,8 @@ pub fn layout_grid_widget_exec(
             let child_lim = RuntimeLimits::new(
                 inner.min.copy_size(),
                 RuntimeSize::new(
-                    copy_rational(&col_widths[c].width),
-                    copy_rational(&row_heights[r].height)),
+                    col_widths[c].width.copy(),
+                    row_heights[r].height.copy()),
             );
             let cn = layout_widget_exec(&child_lim, &children[flat_idx], fuel - 1);
             row_sizes.push(cn.size.copy_size());
@@ -207,7 +206,7 @@ pub fn layout_grid_widget_exec(
         }
         //  Capture row_sizes facts before push moves it
         let ghost row_sizes_len = row_sizes@.len();
-        let ghost row_sizes_view: Seq<RuntimeSize> = row_sizes@;
+        let ghost row_sizes_view: Seq<RuntimeSize<R, V>> = row_sizes@;
 
         child_sizes_2d.push(row_sizes);
 
@@ -247,7 +246,7 @@ pub fn layout_grid_widget_exec(
             //  Reconstruct completed rows' layout_widget facts from snapshot
             assert forall|ri: int, ci: int|
                 0 <= ri < (r + 1) as int && 0 <= ci < num_cols as int implies
-                child_nodes@[ri * num_cols as int + ci]@ == layout_widget::<RationalModel>(
+                child_nodes@[ri * num_cols as int + ci]@ == layout_widget::<V>(
                     Limits { min: inner_spec.min, max: Size::new(
                         col_widths@[ci]@.width, row_heights@[ri]@.height) },
                     children@[ri * num_cols as int + ci].model(),
@@ -301,7 +300,7 @@ pub fn layout_grid_widget_exec(
         col_widths, row_heights, &child_sizes_2d);
 
     //  Merge
-    let ghost cn_models: Seq<Node<RationalModel>> =
+    let ghost cn_models: Seq<Node<V>> =
         Seq::new(n as nat, |j: int| child_nodes@[j]@);
     proof {
         //  After outer loop: r == num_rows, flat_idx == num_rows * num_cols
@@ -331,7 +330,7 @@ pub fn layout_grid_widget_exec(
 
     //  Connect to spec layout_widget
     proof {
-        let spec_cn: Seq<Node<RationalModel>> = grid_widget_child_nodes(
+        let spec_cn: Seq<Node<V>> = grid_widget_child_nodes(
             inner_spec, spec_cw, spec_rh, spec_wc,
             num_cols as nat, (fuel - 1) as nat);
 
@@ -379,10 +378,10 @@ pub fn layout_grid_widget_exec(
         assert(cn_models =~= spec_cn);
 
         //  child_sizes_2d view matches layout_grid_body's computed child_sizes
-        let spec_cs_view: Seq<Seq<Size<RationalModel>>> =
+        let spec_cs_view: Seq<Seq<Size<V>>> =
             Seq::new(child_sizes_2d@.len() as nat, |i: int|
                 Seq::new(child_sizes_2d@[i]@.len() as nat, |j: int| child_sizes_2d@[i]@[j]@));
-        let body_cs: Seq<Seq<Size<RationalModel>>> = Seq::new(num_rows as nat, |r: int|
+        let body_cs: Seq<Seq<Size<V>>> = Seq::new(num_rows as nat, |r: int|
             Seq::new(num_cols as nat, |c: int| spec_cn[(r * num_cols as int + c)].size));
         assert(spec_cs_view =~= body_cs) by {
             assert(spec_cs_view.len() == body_cs.len());

@@ -1,28 +1,27 @@
 use vstd::prelude::*;
-use verus_rational::RuntimeRational;
-use crate::runtime::RationalModel;
-use crate::runtime::copy_rational;
-use crate::runtime::RuntimeSize;
-use crate::runtime::RuntimeLimits;
-use crate::runtime::RuntimeNode;
-use crate::runtime::RuntimeWidget;
+use crate::runtime::size::RuntimeSize;
+use crate::runtime::limits::RuntimeLimits;
+use crate::runtime::node::RuntimeNode;
+use crate::runtime::widget::RuntimeWidget;
 use crate::runtime::widget::layout_widget_exec;
 use crate::size::Size;
 use crate::node::Node;
 use crate::limits::Limits;
 use crate::widget::*;
+use verus_algebra::traits::field::OrderedField;
+use verus_algebra::traits::runtime::*;
 
 verus! {
 
 ///  Layout a scroll view widget: child at (-scroll_x, -scroll_y) with viewport limits.
-pub fn layout_scroll_view_exec(
-    limits: &RuntimeLimits,
-    viewport: &RuntimeSize,
-    scroll_x: &RuntimeRational,
-    scroll_y: &RuntimeRational,
-    child: &Box<RuntimeWidget>,
+pub fn layout_scroll_view_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
+    limits: &RuntimeLimits<R, V>,
+    viewport: &RuntimeSize<R, V>,
+    scroll_x: &R,
+    scroll_y: &R,
+    child: &Box<RuntimeWidget<R, V>>,
     fuel: usize,
-) -> (out: RuntimeNode)
+) -> (out: RuntimeNode<R, V>)
     requires
         limits.wf_spec(),
         viewport.wf_spec(),
@@ -39,29 +38,29 @@ pub fn layout_scroll_view_exec(
                 scroll_y: scroll_y@,
                 child: Box::new(child.model()),
             });
-            layout_widget::<RationalModel>(limits@, spec_w, fuel as nat)
+            layout_widget::<V>(limits@, spec_w, fuel as nat)
         }),
     decreases fuel, 0nat,
 {
     //  Child gets limits (zero_min, viewport)
-    let child_min = RuntimeSize::zero_exec();
+    let child_min = RuntimeSize::new(scroll_x.zero_like(), scroll_x.zero_like());
     let child_max = viewport.copy_size();
     let child_limits = RuntimeLimits::new(child_min, child_max);
     let child_node = layout_widget_exec(&child_limits, child, fuel - 1);
 
     let resolved = limits.resolve_exec(viewport.copy_size());
-    let x = RuntimeRational::from_int(0);
-    let y = RuntimeRational::from_int(0);
+    let x = limits.min.width.zero_like();
+    let y = limits.min.width.zero_like();
     let neg_sx = scroll_x.neg();
     let neg_sy = scroll_y.neg();
     let child_size = child_node.size.copy_size();
 
     let ghost child_spec = {
-        let cl = Limits::<RationalModel> {
+        let cl = Limits::<V> {
             min: Size::zero_size(),
             max: viewport@,
         };
-        layout_widget::<RationalModel>(cl, child.model(), (fuel - 1) as nat)
+        layout_widget::<V>(cl, child.model(), (fuel - 1) as nat)
     };
 
     let positioned_child = RuntimeNode {
@@ -69,15 +68,15 @@ pub fn layout_scroll_view_exec(
         y: neg_sy,
         size: child_size,
         children: child_node.children,
-        model: Ghost(Node::<RationalModel> {
-            x: scroll_x@.neg_spec(),
-            y: scroll_y@.neg_spec(),
+        model: Ghost(Node::<V> {
+            x: scroll_x@.neg(),
+            y: scroll_y@.neg(),
             size: child_spec.size,
             children: child_spec.children,
         }),
     };
 
-    let ghost parent_model = layout_widget::<RationalModel>(
+    let ghost parent_model = layout_widget::<V>(
         limits@,
         Widget::Wrapper(WrapperWidget::ScrollView {
             viewport: viewport@,
@@ -88,7 +87,7 @@ pub fn layout_scroll_view_exec(
         fuel as nat,
     );
 
-    let mut result_children: Vec<RuntimeNode> = Vec::new();
+    let mut result_children: Vec<RuntimeNode<R, V>> = Vec::new();
     result_children.push(positioned_child);
 
     let out = RuntimeNode {

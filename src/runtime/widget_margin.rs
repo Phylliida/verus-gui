@@ -1,27 +1,26 @@
 use vstd::prelude::*;
-use verus_rational::RuntimeRational;
-use crate::runtime::RationalModel;
-use crate::runtime::copy_rational;
-use crate::runtime::RuntimeSize;
-use crate::runtime::RuntimeLimits;
-use crate::runtime::RuntimePadding;
-use crate::runtime::RuntimeNode;
-use crate::runtime::RuntimeWidget;
+use crate::runtime::size::RuntimeSize;
+use crate::runtime::limits::RuntimeLimits;
+use crate::runtime::padding::RuntimePadding;
+use crate::runtime::node::RuntimeNode;
+use crate::runtime::widget::RuntimeWidget;
 use crate::runtime::widget::layout_widget_exec;
 use crate::size::Size;
 use crate::node::Node;
 use crate::limits::Limits;
 use crate::widget::*;
+use verus_algebra::traits::field::OrderedField;
+use verus_algebra::traits::runtime::*;
 
 verus! {
 
 ///  Layout a margin widget: shrink limits, layout child, wrap with offsets.
-pub fn layout_margin_widget_exec(
-    limits: &RuntimeLimits,
-    margin: &RuntimePadding,
-    child: &Box<RuntimeWidget>,
+pub fn layout_margin_widget_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
+    limits: &RuntimeLimits<R, V>,
+    margin: &RuntimePadding<R, V>,
+    child: &Box<RuntimeWidget<R, V>>,
     fuel: usize,
-) -> (out: RuntimeNode)
+) -> (out: RuntimeNode<R, V>)
     requires
         limits.wf_spec(),
         margin.wf_spec(),
@@ -34,7 +33,7 @@ pub fn layout_margin_widget_exec(
                 margin: margin@,
                 child: Box::new(child.model()),
             });
-            layout_widget::<RationalModel>(limits@, spec_w, fuel as nat)
+            layout_widget::<V>(limits@, spec_w, fuel as nat)
         }),
     decreases fuel, 0nat,
 {
@@ -52,11 +51,11 @@ pub fn layout_margin_widget_exec(
     let parent_size = limits.resolve_exec(RuntimeSize::new(total_w, total_h));
 
     //  Build the single child with margin offsets
-    let child_x = copy_rational(&margin.left);
-    let child_y = copy_rational(&margin.top);
+    let child_x = margin.left.copy();
+    let child_y = margin.top.copy();
     let child_size = child_node.size.copy_size();
 
-    let ghost child_spec = layout_widget::<RationalModel>(
+    let ghost child_spec = layout_widget::<V>(
         inner@, child.model(), (fuel - 1) as nat);
 
     let positioned_child = RuntimeNode {
@@ -64,7 +63,7 @@ pub fn layout_margin_widget_exec(
         y: child_y,
         size: child_size,
         children: child_node.children,
-        model: Ghost(Node::<RationalModel> {
+        model: Ghost(Node::<V> {
             x: margin@.left,
             y: margin@.top,
             size: child_spec.size,
@@ -74,7 +73,7 @@ pub fn layout_margin_widget_exec(
 
     proof {
         assert(positioned_child.wf_shallow());
-        assert(positioned_child@ == Node::<RationalModel> {
+        assert(positioned_child@ == Node::<V> {
             x: margin@.left,
             y: margin@.top,
             size: child_spec.size,
@@ -82,16 +81,16 @@ pub fn layout_margin_widget_exec(
         });
     }
 
-    let x = RuntimeRational::from_int(0);
-    let y = RuntimeRational::from_int(0);
+    let x = limits.min.width.zero_like();
+    let y = limits.min.width.zero_like();
 
-    let ghost parent_model = layout_widget::<RationalModel>(
+    let ghost parent_model = layout_widget::<V>(
         limits@,
         Widget::Wrapper(WrapperWidget::Margin { margin: margin@, child: Box::new(child.model()) }),
         fuel as nat,
     );
 
-    let mut result_children: Vec<RuntimeNode> = Vec::new();
+    let mut result_children: Vec<RuntimeNode<R, V>> = Vec::new();
     result_children.push(positioned_child);
 
     let out = RuntimeNode {

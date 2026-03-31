@@ -1,13 +1,10 @@
 use vstd::prelude::*;
-use verus_rational::RuntimeRational;
 use verus_algebra::traits::ordered_ring::OrderedRing;
 use verus_algebra::traits::partial_order::PartialOrder;
-use crate::runtime::RationalModel;
-use crate::runtime::copy_rational;
-use crate::runtime::RuntimeSize;
-use crate::runtime::RuntimeLimits;
-use crate::runtime::RuntimeNode;
-use crate::runtime::RuntimeWidget;
+use crate::runtime::size::RuntimeSize;
+use crate::runtime::limits::RuntimeLimits;
+use crate::runtime::node::RuntimeNode;
+use crate::runtime::widget::RuntimeWidget;
 use crate::runtime::widget::layout_widget_exec;
 use crate::runtime::measure::measure_widget_exec;
 use crate::size::Size;
@@ -18,16 +15,19 @@ use crate::layout::*;
 use crate::layout::listview::*;
 use crate::measure::measure_children;
 
+use verus_algebra::traits::field::OrderedField;
+use verus_algebra::traits::runtime::*;
+
 verus! {
 
 ///  Measure all children at runtime, producing sizes matching measure_children spec.
-fn listview_measure_children_exec(
-    child_limits: &RuntimeLimits,
-    children: &Vec<RuntimeWidget>,
+fn listview_measure_children_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
+    child_limits: &RuntimeLimits<R, V>,
+    children: &Vec<RuntimeWidget<R, V>>,
     fuel: usize,
-    Ghost(spec_wc): Ghost<Seq<Widget<RationalModel>>>,
-    Ghost(spec_child_limits): Ghost<Limits<RationalModel>>,
-) -> (result: Vec<RuntimeSize>)
+    Ghost(spec_wc): Ghost<Seq<Widget<V>>>,
+    Ghost(spec_child_limits): Ghost<Limits<V>>,
+) -> (result: Vec<RuntimeSize<R, V>>)
     requires
         child_limits.wf_spec(),
         child_limits@ == spec_child_limits,
@@ -40,12 +40,12 @@ fn listview_measure_children_exec(
         result@.len() == children@.len(),
         forall|j: int| 0 <= j < result@.len() ==> {
             &&& (#[trigger] result@[j]).wf_spec()
-            &&& result@[j]@ == crate::measure::measure_widget::<RationalModel>(
+            &&& result@[j]@ == crate::measure::measure_widget::<V>(
                     spec_child_limits, spec_wc[j], (fuel - 1) as nat)
         },
 {
     let n = children.len();
-    let mut child_sizes: Vec<RuntimeSize> = Vec::new();
+    let mut child_sizes: Vec<RuntimeSize<R, V>> = Vec::new();
     let mut mi: usize = 0;
 
     while mi < n
@@ -62,7 +62,7 @@ fn listview_measure_children_exec(
                 spec_wc[j] == (#[trigger] children@[j]).model(),
             forall|j: int| 0 <= j < mi ==> {
                 &&& (#[trigger] child_sizes@[j]).wf_spec()
-                &&& child_sizes@[j]@ == crate::measure::measure_widget::<RationalModel>(
+                &&& child_sizes@[j]@ == crate::measure::measure_widget::<V>(
                         spec_child_limits, spec_wc[j], (fuel - 1) as nat)
             },
         decreases n - mi,
@@ -76,12 +76,12 @@ fn listview_measure_children_exec(
 }
 
 ///  Find the visible range [first, end) for a ListView given child sizes and scroll state.
-fn listview_find_visible_range_exec(
-    child_sizes: &Vec<RuntimeSize>,
-    Ghost(spec_sizes): Ghost<Seq<Size<RationalModel>>>,
-    spacing: &RuntimeRational,
-    scroll_y: &RuntimeRational,
-    viewport: &RuntimeSize,
+fn listview_find_visible_range_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
+    child_sizes: &Vec<RuntimeSize<R, V>>,
+    Ghost(spec_sizes): Ghost<Seq<Size<V>>>,
+    spacing: &R,
+    scroll_y: &R,
+    viewport: &RuntimeSize<R, V>,
 ) -> (result: (usize, usize))
     requires
         spacing.wf_spec(),
@@ -91,8 +91,8 @@ fn listview_find_visible_range_exec(
         forall|j: int| 0 <= j < child_sizes@.len() ==> (#[trigger] child_sizes@[j]).wf_spec(),
         forall|j: int| 0 <= j < child_sizes@.len() ==> child_sizes@[j]@ == spec_sizes[j],
     ensures
-        result.0 as nat == listview_first_visible::<RationalModel>(spec_sizes, spacing@, scroll_y@),
-        result.1 as nat == listview_end_visible::<RationalModel>(spec_sizes, spacing@, scroll_y@, viewport@.height),
+        result.0 as nat == listview_first_visible::<V>(spec_sizes, spacing@, scroll_y@),
+        result.1 as nat == listview_end_visible::<V>(spec_sizes, spacing@, scroll_y@, viewport@.height),
         result.0 <= child_sizes@.len(),
         result.1 <= child_sizes@.len(),
 {
@@ -101,7 +101,7 @@ fn listview_find_visible_range_exec(
 
     //  Find first visible index
     let mut first: usize = 0;
-    let mut cur_y = RuntimeRational::from_int(0);
+    let mut cur_y = spacing.zero_like();
     let mut first_visible_at_cur: bool = false;
 
     while first < n && !first_visible_at_cur
@@ -113,24 +113,24 @@ fn listview_find_visible_range_exec(
             scroll_y.wf_spec(),
             viewport.wf_spec(),
             scroll_bottom.wf_spec(),
-            scroll_bottom@ == scroll_y@.add_spec(viewport@.height),
+            scroll_bottom@ == scroll_y@.add(viewport@.height),
             cur_y.wf_spec(),
-            cur_y@ == listview_child_y::<RationalModel>(spec_sizes, spacing@, first as nat),
+            cur_y@ == listview_child_y::<V>(spec_sizes, spacing@, first as nat),
             forall|j: int| 0 <= j < n ==> (#[trigger] child_sizes@[j]).wf_spec(),
             forall|j: int| 0 <= j < n ==> child_sizes@[j]@ == spec_sizes[j],
             forall|k: nat| k < first as nat ==>
-                !scroll_y@.lt(listview_child_bottom::<RationalModel>(spec_sizes, spacing@, k)),
+                !scroll_y@.lt(listview_child_bottom::<V>(spec_sizes, spacing@, k)),
             first_visible_at_cur ==> (first < n && scroll_y@.lt(
-                listview_child_bottom::<RationalModel>(spec_sizes, spacing@, first as nat))),
+                listview_child_bottom::<V>(spec_sizes, spacing@, first as nat))),
         decreases n - first, (if first_visible_at_cur { 0int } else { 1int }),
     {
-        let child_h = copy_rational(&child_sizes[first].height);
+        let child_h = child_sizes[first].height.copy();
         let bottom = cur_y.add(&child_h);
 
         proof {
             assert(child_sizes@[first as int]@ == spec_sizes[first as int]);
             assert(child_h@ == spec_sizes[first as int].height);
-            assert(bottom@ == listview_child_bottom::<RationalModel>(spec_sizes, spacing@, first as nat));
+            assert(bottom@ == listview_child_bottom::<V>(spec_sizes, spacing@, first as nat));
         }
 
         if scroll_y.lt(&bottom) {
@@ -143,14 +143,14 @@ fn listview_find_visible_range_exec(
 
     proof {
         if first_visible_at_cur {
-            assert(scroll_y@.lt(listview_child_bottom::<RationalModel>(spec_sizes, spacing@, first as nat)));
+            assert(scroll_y@.lt(listview_child_bottom::<V>(spec_sizes, spacing@, first as nat)));
         }
-        lemma_first_visible_loop_matches::<RationalModel>(spec_sizes, spacing@, scroll_y@, first as nat);
+        lemma_first_visible_loop_matches::<V>(spec_sizes, spacing@, scroll_y@, first as nat);
     }
 
     //  Find end visible index
     let mut end: usize = 0;
-    let mut end_y = RuntimeRational::from_int(0);
+    let mut end_y = spacing.zero_like();
     let mut end_past_visible: bool = false;
 
     while end < n && !end_past_visible
@@ -162,22 +162,22 @@ fn listview_find_visible_range_exec(
             scroll_y.wf_spec(),
             viewport.wf_spec(),
             scroll_bottom.wf_spec(),
-            scroll_bottom@ == scroll_y@.add_spec(viewport@.height),
+            scroll_bottom@ == scroll_y@.add(viewport@.height),
             end_y.wf_spec(),
-            end_y@ == listview_child_y::<RationalModel>(spec_sizes, spacing@, end as nat),
+            end_y@ == listview_child_y::<V>(spec_sizes, spacing@, end as nat),
             forall|j: int| 0 <= j < n ==> (#[trigger] child_sizes@[j]).wf_spec(),
             forall|j: int| 0 <= j < n ==> child_sizes@[j]@ == spec_sizes[j],
             forall|k: nat| k < end as nat ==>
-                !scroll_y@.add_spec(viewport@.height).le_spec(
-                    listview_child_y::<RationalModel>(spec_sizes, spacing@, k)),
-            end_past_visible ==> (end < n && scroll_y@.add_spec(viewport@.height).le_spec(
-                listview_child_y::<RationalModel>(spec_sizes, spacing@, end as nat))),
+                !scroll_y@.add(viewport@.height).le(
+                    listview_child_y::<V>(spec_sizes, spacing@, k)),
+            end_past_visible ==> (end < n && scroll_y@.add(viewport@.height).le(
+                listview_child_y::<V>(spec_sizes, spacing@, end as nat))),
         decreases n - end, (if end_past_visible { 0int } else { 1int }),
     {
         if scroll_bottom.le(&end_y) {
             end_past_visible = true;
         } else {
-            let child_h = copy_rational(&child_sizes[end].height);
+            let child_h = child_sizes[end].height.copy();
             end_y = end_y.add(&child_h).add(spacing);
             end = end + 1;
         }
@@ -185,28 +185,28 @@ fn listview_find_visible_range_exec(
 
     proof {
         if end_past_visible {
-            assert(scroll_y@.add_spec(viewport@.height).le_spec(
-                listview_child_y::<RationalModel>(spec_sizes, spacing@, end as nat)));
+            assert(scroll_y@.add(viewport@.height).le(
+                listview_child_y::<V>(spec_sizes, spacing@, end as nat)));
         }
-        lemma_end_visible_loop_matches::<RationalModel>(spec_sizes, spacing@, scroll_y@, viewport@.height, end as nat);
+        lemma_end_visible_loop_matches::<V>(spec_sizes, spacing@, scroll_y@, viewport@.height, end as nat);
     }
 
     (first, end)
 }
 
 ///  Position visible children: accumulate y-offsets and build positioned nodes.
-fn listview_position_children_exec(
-    visible_nodes: &Vec<RuntimeNode>,
-    child_sizes: &Vec<RuntimeSize>,
-    Ghost(spec_sizes): Ghost<Seq<Size<RationalModel>>>,
-    Ghost(spec_wc): Ghost<Seq<Widget<RationalModel>>>,
-    Ghost(spec_child_limits): Ghost<Limits<RationalModel>>,
+fn listview_position_children_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
+    visible_nodes: &Vec<RuntimeNode<R, V>>,
+    child_sizes: &Vec<RuntimeSize<R, V>>,
+    Ghost(spec_sizes): Ghost<Seq<Size<V>>>,
+    Ghost(spec_wc): Ghost<Seq<Widget<V>>>,
+    Ghost(spec_child_limits): Ghost<Limits<V>>,
     first: usize,
     end: usize,
-    spacing: &RuntimeRational,
-    scroll_y: &RuntimeRational,
+    spacing: &R,
+    scroll_y: &R,
     fuel: usize,
-) -> (result: Vec<RuntimeNode>)
+) -> (result: Vec<RuntimeNode<R, V>>)
     requires
         spacing.wf_spec(),
         scroll_y.wf_spec(),
@@ -219,17 +219,17 @@ fn listview_position_children_exec(
         forall|j: int| 0 <= j < child_sizes@.len() ==> child_sizes@[j]@ == spec_sizes[j],
         forall|j: int| 0 <= j < visible_nodes@.len() ==> {
             &&& (#[trigger] visible_nodes@[j]).wf_spec()
-            &&& visible_nodes@[j]@ == layout_widget::<RationalModel>(
+            &&& visible_nodes@[j]@ == layout_widget::<V>(
                     spec_child_limits, spec_wc[(first + j) as int], (fuel - 1) as nat)
         },
     ensures
         result@.len() == (end - first) as int,
         forall|j: int| 0 <= j < result@.len() ==> {
             &&& (#[trigger] result@[j]).wf_shallow()
-            &&& result@[j]@ == Node::<RationalModel> {
-                x: RationalModel::from_int_spec(0),
-                y: listview_child_y::<RationalModel>(spec_sizes, spacing@, (first + j) as nat)
-                    .sub_spec(scroll_y@),
+            &&& result@[j]@ == Node::<V> {
+                x: V::zero(),
+                y: listview_child_y::<V>(spec_sizes, spacing@, (first + j) as nat)
+                    .sub(scroll_y@),
                 size: visible_nodes@[j]@.size,
                 children: visible_nodes@[j]@.children,
             }
@@ -237,11 +237,11 @@ fn listview_position_children_exec(
 {
     let n = child_sizes.len();
     let count: usize = end - first;
-    let mut positioned: Vec<RuntimeNode> = Vec::new();
+    let mut positioned: Vec<RuntimeNode<R, V>> = Vec::new();
     let mut k: usize = 0;
 
     //  Compute child_y(first) by accumulation
-    let mut pos_y = RuntimeRational::from_int(0);
+    let mut pos_y = spacing.zero_like();
     {
         let mut fi: usize = 0;
         while fi < first
@@ -251,12 +251,12 @@ fn listview_position_children_exec(
                 n == child_sizes@.len(),
                 spacing.wf_spec(),
                 pos_y.wf_spec(),
-                pos_y@ == listview_child_y::<RationalModel>(spec_sizes, spacing@, fi as nat),
+                pos_y@ == listview_child_y::<V>(spec_sizes, spacing@, fi as nat),
                 forall|j: int| 0 <= j < n ==> (#[trigger] child_sizes@[j]).wf_spec(),
                 forall|j: int| 0 <= j < n ==> child_sizes@[j]@ == spec_sizes[j],
             decreases first - fi,
         {
-            let h = copy_rational(&child_sizes[fi].height);
+            let h = child_sizes[fi].height.copy();
             pos_y = pos_y.add(&h).add(spacing);
             fi = fi + 1;
         }
@@ -272,22 +272,22 @@ fn listview_position_children_exec(
             spacing.wf_spec(),
             scroll_y.wf_spec(),
             pos_y.wf_spec(),
-            pos_y@ == listview_child_y::<RationalModel>(spec_sizes, spacing@, (first + k) as nat),
+            pos_y@ == listview_child_y::<V>(spec_sizes, spacing@, (first + k) as nat),
             visible_nodes@.len() == count as int,
             positioned@.len() == k as int,
             forall|j: int| 0 <= j < n ==> (#[trigger] child_sizes@[j]).wf_spec(),
             forall|j: int| 0 <= j < n ==> child_sizes@[j]@ == spec_sizes[j],
             forall|j: int| 0 <= j < count ==> {
                 &&& (#[trigger] visible_nodes@[j]).wf_spec()
-                &&& visible_nodes@[j]@ == layout_widget::<RationalModel>(
+                &&& visible_nodes@[j]@ == layout_widget::<V>(
                         spec_child_limits, spec_wc[(first + j) as int], (fuel - 1) as nat)
             },
             forall|j: int| 0 <= j < k ==> {
                 &&& (#[trigger] positioned@[j]).wf_shallow()
-                &&& positioned@[j]@ == Node::<RationalModel> {
-                    x: RationalModel::from_int_spec(0),
-                    y: listview_child_y::<RationalModel>(spec_sizes, spacing@, (first + j) as nat)
-                        .sub_spec(scroll_y@),
+                &&& positioned@[j]@ == Node::<V> {
+                    x: V::zero(),
+                    y: listview_child_y::<V>(spec_sizes, spacing@, (first + j) as nat)
+                        .sub(scroll_y@),
                     size: visible_nodes@[j]@.size,
                     children: visible_nodes@[j]@.children,
                 }
@@ -295,10 +295,10 @@ fn listview_position_children_exec(
         decreases count - k,
     {
         let child_y_offset = pos_y.sub(scroll_y);
-        let x = RuntimeRational::from_int(0);
+        let x = spacing.zero_like();
         let child_size = visible_nodes[k].size.copy_size();
 
-        let ghost child_spec_node = layout_widget::<RationalModel>(
+        let ghost child_spec_node = layout_widget::<V>(
             spec_child_limits, spec_wc[(first + k) as int], (fuel - 1) as nat);
 
         let positioned_child = RuntimeNode {
@@ -306,10 +306,10 @@ fn listview_position_children_exec(
             y: child_y_offset,
             size: child_size,
             children: Vec::new(),
-            model: Ghost(Node::<RationalModel> {
-                x: RationalModel::from_int_spec(0),
-                y: listview_child_y::<RationalModel>(spec_sizes, spacing@, (first + k) as nat)
-                    .sub_spec(scroll_y@),
+            model: Ghost(Node::<V> {
+                x: V::zero(),
+                y: listview_child_y::<V>(spec_sizes, spacing@, (first + k) as nat)
+                    .sub(scroll_y@),
                 size: child_spec_node.size,
                 children: child_spec_node.children,
             }),
@@ -322,7 +322,7 @@ fn listview_position_children_exec(
         positioned.push(positioned_child);
 
         //  Advance pos_y
-        let h = copy_rational(&child_sizes[first + k].height);
+        let h = child_sizes[first + k].height.copy();
         pos_y = pos_y.add(&h).add(spacing);
         k = k + 1;
     }
@@ -337,14 +337,14 @@ fn listview_position_children_exec(
 ///  3. Layout only visible children
 ///  4. Position visible children at (0, child_y(i) - scroll_y)
 ///  5. Return limits.resolve(viewport)
-pub fn layout_listview_widget_exec(
-    limits: &RuntimeLimits,
-    spacing: &RuntimeRational,
-    scroll_y: &RuntimeRational,
-    viewport: &RuntimeSize,
-    children: &Vec<RuntimeWidget>,
+pub fn layout_listview_widget_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
+    limits: &RuntimeLimits<R, V>,
+    spacing: &R,
+    scroll_y: &R,
+    viewport: &RuntimeSize<R, V>,
+    children: &Vec<RuntimeWidget<R, V>>,
     fuel: usize,
-) -> (out: RuntimeNode)
+) -> (out: RuntimeNode<R, V>)
     requires
         limits.wf_spec(),
         spacing.wf_spec(),
@@ -363,25 +363,25 @@ pub fn layout_listview_widget_exec(
                 viewport: viewport@,
                 children: spec_wc,
             });
-            layout_widget::<RationalModel>(limits@, spec_w, fuel as nat)
+            layout_widget::<V>(limits@, spec_w, fuel as nat)
         }),
     decreases fuel, 0nat,
 {
     proof { reveal(layout_listview_body); }
     let n = children.len();
 
-    let ghost spec_wc: Seq<Widget<RationalModel>> =
+    let ghost spec_wc: Seq<Widget<V>> =
         Seq::new(children@.len() as nat, |j: int| children@[j].model());
 
     //  Child limits: (zero, Size(viewport.width, viewport.height))
-    let child_min = RuntimeSize::zero_exec();
+    let child_min = RuntimeSize::new(viewport.width.zero_like(), viewport.width.zero_like());
     let child_max = RuntimeSize::new(
-        copy_rational(&viewport.width),
-        copy_rational(&viewport.height),
+        viewport.width.copy(),
+        viewport.height.copy(),
     );
     let child_limits = RuntimeLimits::new(child_min, child_max);
 
-    let ghost spec_child_limits = Limits::<RationalModel> {
+    let ghost spec_child_limits = Limits::<V> {
         min: Size::zero_size(),
         max: Size::new(viewport@.width, viewport@.height),
     };
@@ -391,8 +391,8 @@ pub fn layout_listview_widget_exec(
         &child_limits, children, fuel, Ghost(spec_wc), Ghost(spec_child_limits),
     );
 
-    let ghost spec_sizes: Seq<Size<RationalModel>> =
-        measure_children::<RationalModel>(spec_child_limits, spec_wc, (fuel - 1) as nat);
+    let ghost spec_sizes: Seq<Size<V>> =
+        measure_children::<V>(spec_child_limits, spec_wc, (fuel - 1) as nat);
 
     proof {
         let computed_sizes = Seq::new(child_sizes@.len() as nat, |j: int| child_sizes@[j]@);
@@ -413,7 +413,7 @@ pub fn layout_listview_widget_exec(
         let count: usize = end - first;
 
         //  Step 4: Layout visible children
-        let mut visible_nodes: Vec<RuntimeNode> = Vec::new();
+        let mut visible_nodes: Vec<RuntimeNode<R, V>> = Vec::new();
         let mut vi: usize = 0;
 
         while vi < count
@@ -434,7 +434,7 @@ pub fn layout_listview_widget_exec(
                     spec_wc[j] == (#[trigger] children@[j]).model(),
                 forall|j: int| 0 <= j < vi ==> {
                     &&& (#[trigger] visible_nodes@[j]).wf_spec()
-                    &&& visible_nodes@[j]@ == layout_widget::<RationalModel>(
+                    &&& visible_nodes@[j]@ == layout_widget::<V>(
                             spec_child_limits, spec_wc[(first + j) as int], (fuel - 1) as nat)
                 },
             decreases count - vi,
@@ -458,15 +458,15 @@ pub fn layout_listview_widget_exec(
 
     //  Build the parent node
     let resolved = limits.resolve_exec(viewport.copy_size());
-    let px = RuntimeRational::from_int(0);
-    let py = RuntimeRational::from_int(0);
+    let px = limits.min.width.zero_like();
+    let py = limits.min.width.zero_like();
 
-    let ghost spec_first = listview_first_visible::<RationalModel>(spec_sizes, spacing@, scroll_y@);
-    let ghost spec_end = listview_end_visible::<RationalModel>(spec_sizes, spacing@, scroll_y@, viewport@.height);
-    let ghost spec_cn = listview_widget_child_nodes::<RationalModel>(
+    let ghost spec_first = listview_first_visible::<V>(spec_sizes, spacing@, scroll_y@);
+    let ghost spec_end = listview_end_visible::<V>(spec_sizes, spacing@, scroll_y@, viewport@.height);
+    let ghost spec_cn = listview_widget_child_nodes::<V>(
         spec_child_limits, spec_wc, spec_first, spec_end, (fuel - 1) as nat);
 
-    let ghost parent_model = layout_widget::<RationalModel>(
+    let ghost parent_model = layout_widget::<V>(
         limits@,
         Widget::Container(ContainerWidget::ListView {
             spacing: spacing@,
