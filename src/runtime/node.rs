@@ -1,88 +1,71 @@
 use vstd::prelude::*;
 use verus_rational::RuntimeRational;
-use crate::runtime::RationalModel;
 use crate::runtime::size::RuntimeSize;
 use crate::node::Node;
+use verus_algebra::traits::field::OrderedField;
+use verus_algebra::traits::runtime::*;
+
+#[cfg(verus_keep_ghost)]
+use verus_rational::rational::Rational;
 
 verus! {
 
-///  Runtime-backed layout Node with rational coordinates.
-pub struct RuntimeNode {
-    pub x: RuntimeRational,
-    pub y: RuntimeRational,
-    pub size: RuntimeSize,
-    pub children: Vec<RuntimeNode>,
-    pub model: Ghost<Node<RationalModel>>,
+pub struct RuntimeNode<R, V: OrderedField> where R: RuntimeOrderedFieldOps<V> {
+    pub x: R,
+    pub y: R,
+    pub size: RuntimeSize<R, V>,
+    pub children: Vec<RuntimeNode<R, V>>,
+    pub model: Ghost<Node<V>>,
 }
 
-impl View for RuntimeNode {
-    type V = Node<RationalModel>;
-
-    open spec fn view(&self) -> Node<RationalModel> {
-        self.model@
-    }
+impl View for RuntimeNode<RuntimeRational, Rational> {
+    type V = Node<Rational>;
+    open spec fn view(&self) -> Node<Rational> { self.model@ }
 }
 
-impl RuntimeNode {
-    ///  Well-formedness: runtime fields match model, children are well-formed.
-    ///  Uses children depth as decreases measure for recursive call on children.
+impl<R: RuntimeOrderedFieldOps<V>, V: OrderedField> RuntimeNode<R, V> {
     pub open spec fn wf_spec(&self) -> bool
         decreases self.children@.len(),
     {
         &&& self.x.wf_spec()
         &&& self.y.wf_spec()
         &&& self.size.wf_spec()
-        &&& self.x@ == self@.x
-        &&& self.y@ == self@.y
-        &&& self.size@ == self@.size
-        &&& self.children@.len() == self@.children.len()
+        &&& self.x.model() == self.model@.x
+        &&& self.y.model() == self.model@.y
+        &&& self.size.model@ == self.model@.size
+        &&& self.children@.len() == self.model@.children.len()
         &&& forall|i: int| 0 <= i < self.children@.len() ==> {
             &&& (#[trigger] self.children@[i]).wf_shallow()
-            &&& self.children@[i]@ == self@.children[i]
+            &&& self.children@[i].model@ == self.model@.children[i]
         }
     }
 
-    ///  Deep well-formedness: recursively checks all children.
-    ///  Required for operations that traverse the full tree (e.g., hit testing).
     pub open spec fn wf_deep(&self, depth: nat) -> bool
         decreases depth,
     {
         &&& self.wf_shallow()
-        &&& self.children@.len() == self@.children.len()
+        &&& self.children@.len() == self.model@.children.len()
         &&& (depth > 0 ==> forall|i: int| 0 <= i < self.children@.len() ==> {
             &&& (#[trigger] self.children@[i]).wf_deep((depth - 1) as nat)
-            &&& self.children@[i]@ == self@.children[i]
+            &&& self.children@[i].model@ == self.model@.children[i]
         })
     }
 
-    ///  Shallow well-formedness: checks direct fields only, no recursive child check.
     pub open spec fn wf_shallow(&self) -> bool {
         &&& self.x.wf_spec()
         &&& self.y.wf_spec()
         &&& self.size.wf_spec()
-        &&& self.x@ == self@.x
-        &&& self.y@ == self@.y
-        &&& self.size@ == self@.size
+        &&& self.x.model() == self.model@.x
+        &&& self.y.model() == self.model@.y
+        &&& self.size.model@ == self.model@.size
     }
 
-    ///  A leaf node (no children).
-    pub fn leaf_exec(x: RuntimeRational, y: RuntimeRational, size: RuntimeSize) -> (out: Self)
-        requires
-            x.wf_spec(),
-            y.wf_spec(),
-            size.wf_spec(),
-        ensures
-            out.wf_spec(),
-            out@ == Node::leaf(x@, y@, size@),
+    pub fn leaf_exec(x: R, y: R, size: RuntimeSize<R, V>) -> (out: Self)
+        requires x.wf_spec(), y.wf_spec(), size.wf_spec(),
+        ensures out.wf_spec(), out.model@ == Node::leaf(x.model(), y.model(), size.model@),
     {
-        let ghost model = Node::leaf(x@, y@, size@);
-        RuntimeNode {
-            x,
-            y,
-            size,
-            children: Vec::new(),
-            model: Ghost(model),
-        }
+        let ghost model = Node::leaf(x.model(), y.model(), size.model@);
+        RuntimeNode { x, y, size, children: Vec::new(), model: Ghost(model) }
     }
 }
 

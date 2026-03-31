@@ -1,116 +1,88 @@
 use vstd::prelude::*;
 use verus_rational::RuntimeRational;
-use crate::runtime::RationalModel;
-use crate::runtime::copy_rational;
 use crate::runtime::size::RuntimeSize;
 use crate::limits::Limits;
+use verus_algebra::traits::field::OrderedField;
+use verus_algebra::traits::runtime::*;
+
+#[cfg(verus_keep_ghost)]
+use verus_rational::rational::Rational;
 
 verus! {
 
-///  Runtime-backed Limits with rational coordinates.
-pub struct RuntimeLimits {
-    pub min: RuntimeSize,
-    pub max: RuntimeSize,
-    pub model: Ghost<Limits<RationalModel>>,
+pub struct RuntimeLimits<R, V: OrderedField> where R: RuntimeOrderedFieldOps<V> {
+    pub min: RuntimeSize<R, V>,
+    pub max: RuntimeSize<R, V>,
+    pub model: Ghost<Limits<V>>,
 }
 
-impl View for RuntimeLimits {
-    type V = Limits<RationalModel>;
-
-    open spec fn view(&self) -> Limits<RationalModel> {
-        self.model@
-    }
+impl View for RuntimeLimits<RuntimeRational, Rational> {
+    type V = Limits<Rational>;
+    open spec fn view(&self) -> Limits<Rational> { self.model@ }
 }
 
-impl RuntimeLimits {
-    ///  Well-formedness.
+impl<R: RuntimeOrderedFieldOps<V>, V: OrderedField> RuntimeLimits<R, V> {
     pub open spec fn wf_spec(&self) -> bool {
         &&& self.min.wf_spec()
         &&& self.max.wf_spec()
-        &&& self.min@ == self@.min
-        &&& self.max@ == self@.max
+        &&& self.min.model@ == self.model@.min
+        &&& self.max.model@ == self.model@.max
     }
 
-    ///  Check semantic equality of two limits.
+    pub fn new(min: RuntimeSize<R, V>, max: RuntimeSize<R, V>) -> (out: Self)
+        requires min.wf_spec(), max.wf_spec(),
+        ensures out.wf_spec(), out.model@.min == min.model@, out.model@.max == max.model@,
+    {
+        let ghost model = Limits { min: min.model@, max: max.model@ };
+        RuntimeLimits { min, max, model: Ghost(model) }
+    }
+
     pub fn eq_exec(&self, rhs: &Self) -> (out: bool)
-        requires
-            self.wf_spec(),
-            rhs.wf_spec(),
-        ensures
-            out ==> (
-                self@.min.width.eqv_spec(rhs@.min.width) &&
-                self@.min.height.eqv_spec(rhs@.min.height) &&
-                self@.max.width.eqv_spec(rhs@.max.width) &&
-                self@.max.height.eqv_spec(rhs@.max.height)
-            ),
+        requires self.wf_spec(), rhs.wf_spec(),
+        ensures out ==> (
+            self.model@.min.width.eqv(rhs.model@.min.width) &&
+            self.model@.min.height.eqv(rhs.model@.min.height) &&
+            self.model@.max.width.eqv(rhs.model@.max.width) &&
+            self.model@.max.height.eqv(rhs.model@.max.height)
+        ),
     {
         self.min.eq_exec(&rhs.min) && self.max.eq_exec(&rhs.max)
     }
 
-    ///  Construct RuntimeLimits from min and max sizes.
-    pub fn new(min: RuntimeSize, max: RuntimeSize) -> (out: Self)
-        requires
-            min.wf_spec(),
-            max.wf_spec(),
-        ensures
-            out.wf_spec(),
-            out@.min == min@,
-            out@.max == max@,
-    {
-        let ghost model = Limits { min: min@, max: max@ };
-        RuntimeLimits { min, max, model: Ghost(model) }
-    }
-
-    ///  Resolve a desired size within these limits (clamp each dimension).
-    pub fn resolve_exec(&self, size: RuntimeSize) -> (out: RuntimeSize)
-        requires
-            self.wf_spec(),
-            size.wf_spec(),
-        ensures
-            out.wf_spec(),
-            out@ == self@.resolve(size@),
+    pub fn resolve_exec(&self, size: RuntimeSize<R, V>) -> (out: RuntimeSize<R, V>)
+        requires self.wf_spec(), size.wf_spec(),
+        ensures out.wf_spec(), out.model@ == self.model@.resolve(size.model@),
     {
         let w = self.min.width.max(&size.width.min(&self.max.width));
         let h = self.min.height.max(&size.height.min(&self.max.height));
         RuntimeSize::new(w, h)
     }
 
-    ///  Intersect two limits.
-    pub fn intersect_exec(&self, other: &RuntimeLimits) -> (out: Self)
-        requires
-            self.wf_spec(),
-            other.wf_spec(),
-        ensures
-            out.wf_spec(),
-            out@ == self@.intersect(other@),
+    pub fn intersect_exec(&self, other: &Self) -> (out: Self)
+        requires self.wf_spec(), other.wf_spec(),
+        ensures out.wf_spec(), out.model@ == self.model@.intersect(other.model@),
     {
         let new_min_w = self.min.width.max(&other.min.width);
         let new_min_h = self.min.height.max(&other.min.height);
         let new_max_w = new_min_w.max(&self.max.width.min(&other.max.width));
         let new_max_h = new_min_h.max(&self.max.height.min(&other.max.height));
-        let new_min = RuntimeSize::new(new_min_w, new_min_h);
-        let new_max = RuntimeSize::new(new_max_w, new_max_h);
-        RuntimeLimits::new(new_min, new_max)
+        RuntimeLimits::new(
+            RuntimeSize::new(new_min_w, new_min_h),
+            RuntimeSize::new(new_max_w, new_max_h),
+        )
     }
 
-    ///  Shrink limits by subtracting padding from the max (min unchanged).
-    pub fn shrink_exec(&self, pad_w: &RuntimeRational, pad_h: &RuntimeRational) -> (out: Self)
-        requires
-            self.wf_spec(),
-            pad_w.wf_spec(),
-            pad_h.wf_spec(),
-        ensures
-            out.wf_spec(),
-            out@ == self@.shrink(pad_w@, pad_h@),
+    pub fn shrink_exec(&self, pad_w: &R, pad_h: &R) -> (out: Self)
+        requires self.wf_spec(), pad_w.wf_spec(), pad_h.wf_spec(),
+        ensures out.wf_spec(), out.model@ == self.model@.shrink(pad_w.model(), pad_h.model()),
     {
         let new_max_w = self.min.width.max(&self.max.width.sub(pad_w));
         let new_max_h = self.min.height.max(&self.max.height.sub(pad_h));
-        let new_min = self.min.copy_size();
-        let new_max = RuntimeSize::new(new_max_w, new_max_h);
-        RuntimeLimits::new(new_min, new_max)
+        RuntimeLimits::new(self.min.copy_size(), RuntimeSize::new(new_max_w, new_max_h))
     }
+}
 
-    ///  Normalize all rational fields.
+impl RuntimeLimits<RuntimeRational, Rational> {
     pub fn normalize_exec(self) -> (out: Self)
         requires self.wf_spec(),
         ensures
@@ -124,10 +96,7 @@ impl RuntimeLimits {
             out@.max.width.normalized_spec(),
             out@.max.height.normalized_spec(),
     {
-        RuntimeLimits::new(
-            self.min.normalize_exec(),
-            self.max.normalize_exec(),
-        )
+        RuntimeLimits::new(self.min.normalize_exec(), self.max.normalize_exec())
     }
 }
 

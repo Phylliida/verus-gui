@@ -1,8 +1,8 @@
 use vstd::prelude::*;
 use verus_rational::RuntimeRational;
 use crate::runtime::{RationalModel, copy_rational};
-use crate::runtime::size::RuntimeSize;
-use crate::runtime::node::RuntimeNode;
+use crate::runtime::RuntimeSize;
+use crate::runtime::RuntimeNode;
 use crate::animation::*;
 use crate::node::Node;
 

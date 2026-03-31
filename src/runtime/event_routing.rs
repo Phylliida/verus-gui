@@ -2,7 +2,7 @@ use vstd::prelude::*;
 use verus_rational::RuntimeRational;
 use crate::runtime::RationalModel;
 use crate::runtime::copy_rational;
-use crate::runtime::node::RuntimeNode;
+use crate::runtime::RuntimeNode;
 use crate::runtime::widget::{RuntimeWidget, RuntimeLeafWidget, RuntimeWrapperWidget, RuntimeContainerWidget};
 use crate::widget::*;
 use crate::text_input::TextInputConfig;

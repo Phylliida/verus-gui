@@ -1,160 +1,91 @@
 use vstd::prelude::*;
 use verus_rational::RuntimeRational;
-use crate::runtime::{RationalModel, copy_rational};
 use crate::padding::Padding;
 use crate::layout::Axis;
+use verus_algebra::traits::field::OrderedField;
+use verus_algebra::traits::runtime::*;
+
+#[cfg(verus_keep_ghost)]
+use verus_rational::rational::Rational;
 
 verus! {
 
-///  Runtime-backed Padding with rational coordinates.
-pub struct RuntimePadding {
-    pub top: RuntimeRational,
-    pub right: RuntimeRational,
-    pub bottom: RuntimeRational,
-    pub left: RuntimeRational,
-    pub model: Ghost<Padding<RationalModel>>,
+pub struct RuntimePadding<R, V: OrderedField> where R: RuntimeOrderedFieldOps<V> {
+    pub top: R,
+    pub right: R,
+    pub bottom: R,
+    pub left: R,
+    pub model: Ghost<Padding<V>>,
 }
 
-impl View for RuntimePadding {
-    type V = Padding<RationalModel>;
-
-    open spec fn view(&self) -> Padding<RationalModel> {
-        self.model@
-    }
+impl View for RuntimePadding<RuntimeRational, Rational> {
+    type V = Padding<Rational>;
+    open spec fn view(&self) -> Padding<Rational> { self.model@ }
 }
 
-impl RuntimePadding {
-    ///  Well-formedness.
+impl<R: RuntimeOrderedFieldOps<V>, V: OrderedField> RuntimePadding<R, V> {
     pub open spec fn wf_spec(&self) -> bool {
-        &&& self.top.wf_spec()
-        &&& self.right.wf_spec()
-        &&& self.bottom.wf_spec()
-        &&& self.left.wf_spec()
-        &&& self.top@ == self@.top
-        &&& self.right@ == self@.right
-        &&& self.bottom@ == self@.bottom
-        &&& self.left@ == self@.left
+        &&& self.top.wf_spec() &&& self.right.wf_spec()
+        &&& self.bottom.wf_spec() &&& self.left.wf_spec()
+        &&& self.top.model() == self.model@.top
+        &&& self.right.model() == self.model@.right
+        &&& self.bottom.model() == self.model@.bottom
+        &&& self.left.model() == self.model@.left
     }
 
-    ///  Construct from four sides.
-    pub fn new(
-        top: RuntimeRational,
-        right: RuntimeRational,
-        bottom: RuntimeRational,
-        left: RuntimeRational,
-    ) -> (out: Self)
-        requires
-            top.wf_spec(),
-            right.wf_spec(),
-            bottom.wf_spec(),
-            left.wf_spec(),
-        ensures
-            out.wf_spec(),
-            out@.top == top@,
-            out@.right == right@,
-            out@.bottom == bottom@,
-            out@.left == left@,
+    pub fn new(top: R, right: R, bottom: R, left: R) -> (out: Self)
+        requires top.wf_spec(), right.wf_spec(), bottom.wf_spec(), left.wf_spec(),
+        ensures out.wf_spec(),
+            out.model@.top == top.model(), out.model@.right == right.model(),
+            out.model@.bottom == bottom.model(), out.model@.left == left.model(),
     {
-        let ghost model = Padding { top: top@, right: right@, bottom: bottom@, left: left@ };
+        let ghost model = Padding { top: top.model(), right: right.model(), bottom: bottom.model(), left: left.model() };
         RuntimePadding { top, right, bottom, left, model: Ghost(model) }
     }
 
-    ///  Check semantic equality of two paddings.
     pub fn eq_exec(&self, rhs: &Self) -> (out: bool)
-        requires
-            self.wf_spec(),
-            rhs.wf_spec(),
-        ensures
-            out ==> (
-                self@.top.eqv_spec(rhs@.top) &&
-                self@.right.eqv_spec(rhs@.right) &&
-                self@.bottom.eqv_spec(rhs@.bottom) &&
-                self@.left.eqv_spec(rhs@.left)
-            ),
+        requires self.wf_spec(), rhs.wf_spec(),
+        ensures out ==> (
+            self.model@.top.eqv(rhs.model@.top) && self.model@.right.eqv(rhs.model@.right) &&
+            self.model@.bottom.eqv(rhs.model@.bottom) && self.model@.left.eqv(rhs.model@.left)
+        ),
     {
         self.top.eq(&rhs.top) && self.right.eq(&rhs.right) &&
         self.bottom.eq(&rhs.bottom) && self.left.eq(&rhs.left)
     }
 
-    ///  Compute horizontal padding (left + right).
-    pub fn horizontal_exec(&self) -> (out: RuntimeRational)
-        requires
-            self.wf_spec(),
-        ensures
-            out.wf_spec(),
-            out@ == self@.horizontal(),
-    {
-        self.left.add(&self.right)
-    }
+    pub fn horizontal_exec(&self) -> (out: R)
+        requires self.wf_spec(),
+        ensures out.wf_spec(), out.model() == self.model@.horizontal(),
+    { self.left.add(&self.right) }
 
-    ///  Compute vertical padding (top + bottom).
-    pub fn vertical_exec(&self) -> (out: RuntimeRational)
-        requires
-            self.wf_spec(),
-        ensures
-            out.wf_spec(),
-            out@ == self@.vertical(),
-    {
-        self.top.add(&self.bottom)
-    }
+    pub fn vertical_exec(&self) -> (out: R)
+        requires self.wf_spec(),
+        ensures out.wf_spec(), out.model() == self.model@.vertical(),
+    { self.top.add(&self.bottom) }
 
-    ///  Main-axis padding at runtime.
-    pub fn main_padding_exec(&self, axis: &Axis) -> (out: RuntimeRational)
-        requires
-            self.wf_spec(),
-        ensures
-            out.wf_spec(),
-            out@ == self@.main_padding(*axis),
-    {
-        match axis {
-            Axis::Vertical => self.vertical_exec(),
-            Axis::Horizontal => self.horizontal_exec(),
-        }
-    }
+    pub fn main_padding_exec(&self, axis: &Axis) -> (out: R)
+        requires self.wf_spec(),
+        ensures out.wf_spec(), out.model() == self.model@.main_padding(*axis),
+    { match axis { Axis::Vertical => self.vertical_exec(), Axis::Horizontal => self.horizontal_exec() } }
 
-    ///  Cross-axis padding at runtime.
-    pub fn cross_padding_exec(&self, axis: &Axis) -> (out: RuntimeRational)
-        requires
-            self.wf_spec(),
-        ensures
-            out.wf_spec(),
-            out@ == self@.cross_padding(*axis),
-    {
-        match axis {
-            Axis::Vertical => self.horizontal_exec(),
-            Axis::Horizontal => self.vertical_exec(),
-        }
-    }
+    pub fn cross_padding_exec(&self, axis: &Axis) -> (out: R)
+        requires self.wf_spec(),
+        ensures out.wf_spec(), out.model() == self.model@.cross_padding(*axis),
+    { match axis { Axis::Vertical => self.horizontal_exec(), Axis::Horizontal => self.vertical_exec() } }
 
-    ///  Main-axis start padding at runtime.
-    pub fn main_start_exec(&self, axis: &Axis) -> (out: RuntimeRational)
-        requires
-            self.wf_spec(),
-        ensures
-            out.wf_spec(),
-            out@ == self@.main_start(*axis),
-    {
-        match axis {
-            Axis::Vertical => copy_rational(&self.top),
-            Axis::Horizontal => copy_rational(&self.left),
-        }
-    }
+    pub fn main_start_exec(&self, axis: &Axis) -> (out: R)
+        requires self.wf_spec(),
+        ensures out.wf_spec(), out.model() == self.model@.main_start(*axis),
+    { match axis { Axis::Vertical => self.top.copy(), Axis::Horizontal => self.left.copy() } }
 
-    ///  Cross-axis start padding at runtime.
-    pub fn cross_start_exec(&self, axis: &Axis) -> (out: RuntimeRational)
-        requires
-            self.wf_spec(),
-        ensures
-            out.wf_spec(),
-            out@ == self@.cross_start(*axis),
-    {
-        match axis {
-            Axis::Vertical => copy_rational(&self.left),
-            Axis::Horizontal => copy_rational(&self.top),
-        }
-    }
+    pub fn cross_start_exec(&self, axis: &Axis) -> (out: R)
+        requires self.wf_spec(),
+        ensures out.wf_spec(), out.model() == self.model@.cross_start(*axis),
+    { match axis { Axis::Vertical => self.left.copy(), Axis::Horizontal => self.top.copy() } }
+}
 
-    ///  Normalize all rational fields.
+impl RuntimePadding<RuntimeRational, Rational> {
     pub fn normalize_exec(self) -> (out: Self)
         requires self.wf_spec(),
         ensures
@@ -168,14 +99,10 @@ impl RuntimePadding {
             out@.bottom.normalized_spec(),
             out@.left.normalized_spec(),
     {
-        let t = self.top.normalize();
-        let r = self.right.normalize();
-        let b = self.bottom.normalize();
-        let l = self.left.normalize();
-        RuntimePadding {
-            top: t, right: r, bottom: b, left: l,
-            model: Ghost(Padding { top: t@, right: r@, bottom: b@, left: l@ }),
-        }
+        RuntimePadding::new(
+            self.top.normalize(), self.right.normalize(),
+            self.bottom.normalize(), self.left.normalize(),
+        )
     }
 }
 

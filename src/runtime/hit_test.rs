@@ -2,7 +2,7 @@ use vstd::prelude::*;
 use verus_rational::RuntimeRational;
 use crate::runtime::RationalModel;
 use crate::runtime::copy_rational;
-use crate::runtime::node::RuntimeNode;
+use crate::runtime::RuntimeNode;
 use crate::node::Node;
 use crate::hit_test::{hit_test, hit_test_inner, hit_test_scan, point_in_node};
 

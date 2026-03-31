@@ -2,8 +2,8 @@ use vstd::prelude::*;
 use verus_algebra::traits::Equivalence;
 use verus_rational::RuntimeRational;
 use crate::runtime::RationalModel;
-use crate::runtime::node::RuntimeNode;
-use crate::runtime::size::RuntimeSize;
+use crate::runtime::RuntimeNode;
+use crate::runtime::RuntimeSize;
 use crate::diff::{DiffResult, diff_nodes, diff_children};
 
 verus! {

@@ -3,7 +3,7 @@ use verus_rational::RuntimeRational;
 use verus_algebra::traits::ring::Ring;
 use crate::runtime::RationalModel;
 use crate::runtime::copy_rational;
-use crate::runtime::node::RuntimeNode;
+use crate::runtime::RuntimeNode;
 use crate::node::Node;
 use crate::draw::*;
 use crate::draw_proofs::*;

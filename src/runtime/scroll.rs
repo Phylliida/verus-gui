@@ -2,7 +2,7 @@ use vstd::prelude::*;
 use verus_rational::RuntimeRational;
 use crate::runtime::RationalModel;
 use crate::runtime::copy_rational;
-use crate::runtime::size::RuntimeSize;
+use crate::runtime::RuntimeSize;
 use crate::size::Size;
 use crate::layout::child_y_position;
 use crate::scroll::child_visible;

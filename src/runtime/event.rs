@@ -1,7 +1,7 @@
 use vstd::prelude::*;
 use verus_rational::RuntimeRational;
 use crate::runtime::RationalModel;
-use crate::runtime::node::RuntimeNode;
+use crate::runtime::RuntimeNode;
 use crate::runtime::hit_test::hit_test_exec;
 use crate::runtime::text_model::RuntimeTextModel;
 use crate::node::Node;
