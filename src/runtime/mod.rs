@@ -9,8 +9,8 @@ use verus_rational::rational::Rational;
 #[cfg(verus_keep_ghost)]
 pub type RationalModel = Rational;
 
-//  Type aliases for the concrete Rational instantiation.
-//  Callers use these during incremental migration.
+//  Concrete type aliases — callers use these until individually converted to generic.
+//  Remove once all callers are converted.
 pub type RuntimeSize = size::RuntimeSize<RuntimeRational, Rational>;
 pub type RuntimeLimits = limits::RuntimeLimits<RuntimeRational, Rational>;
 pub type RuntimePadding = padding::RuntimePadding<RuntimeRational, Rational>;

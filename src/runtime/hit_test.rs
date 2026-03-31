@@ -1,19 +1,16 @@
 use vstd::prelude::*;
-use verus_rational::RuntimeRational;
-use crate::runtime::RationalModel;
-use crate::runtime::copy_rational;
-use crate::runtime::RuntimeNode;
+use crate::runtime::node::RuntimeNode;
 use crate::node::Node;
 use crate::hit_test::{hit_test, hit_test_inner, hit_test_scan, point_in_node};
+use verus_algebra::traits::field::OrderedField;
+use verus_algebra::traits::runtime::*;
 
 verus! {
 
-///  Runtime hit-test: find deepest node at (px, py).
-///  Returns Some(path) as Vec<usize> or None.
-pub fn hit_test_exec(
-    node: &RuntimeNode,
-    px: &RuntimeRational,
-    py: &RuntimeRational,
+pub fn hit_test_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
+    node: &RuntimeNode<R, V>,
+    px: &R,
+    py: &R,
     depth: usize,
 ) -> (out: Option<Vec<usize>>)
     requires
@@ -21,7 +18,7 @@ pub fn hit_test_exec(
         px.wf_spec(),
         py.wf_spec(),
     ensures
-        match (out, hit_test::<RationalModel>(node@, px@, py@, depth as nat)) {
+        match (out, hit_test::<V>(node.model@, px.model(), py.model(), depth as nat)) {
             (Some(exec_path), Some(spec_path)) => {
                 exec_path@.len() == spec_path.len()
                 && forall|i: int| 0 <= i < exec_path@.len() ==>
@@ -34,11 +31,10 @@ pub fn hit_test_exec(
     hit_test_inner_exec(node, px, py, depth)
 }
 
-///  Inner hit-test exec: check bounds, then scan children.
-fn hit_test_inner_exec(
-    node: &RuntimeNode,
-    px: &RuntimeRational,
-    py: &RuntimeRational,
+fn hit_test_inner_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
+    node: &RuntimeNode<R, V>,
+    px: &R,
+    py: &R,
     depth: usize,
 ) -> (out: Option<Vec<usize>>)
     requires
@@ -46,7 +42,7 @@ fn hit_test_inner_exec(
         px.wf_spec(),
         py.wf_spec(),
     ensures
-        match (out, hit_test_inner::<RationalModel>(node@, px@, py@, depth as nat)) {
+        match (out, hit_test_inner::<V>(node.model@, px.model(), py.model(), depth as nat)) {
             (Some(exec_path), Some(spec_path)) => {
                 exec_path@.len() == spec_path.len()
                 && forall|i: int| 0 <= i < exec_path@.len() ==>
@@ -57,19 +53,17 @@ fn hit_test_inner_exec(
         },
     decreases depth, node.children.len() + 1,
 {
-    //  Check point in bounds
-    let zero1 = RuntimeRational::from_int(0);
-    let zero2 = RuntimeRational::from_int(0);
-    if !(zero1.le(px) && px.le(&node.size.width)) {
+    let zero = px.zero_like();
+    if !(zero.le(px) && px.le(&node.size.width)) {
         return None;
     }
+    let zero2 = py.zero_like();
     if !(zero2.le(py) && py.le(&node.size.height)) {
         return None;
     }
 
     let n = node.children.len();
     if depth == 0 || n == 0 {
-        //  No children to check, or no depth budget — this node is the hit
         return Some(Vec::new());
     }
 
@@ -80,11 +74,10 @@ fn hit_test_inner_exec(
     }
 }
 
-///  Scan children in reverse [0..index).
-fn hit_test_scan_exec(
-    node: &RuntimeNode,
-    px: &RuntimeRational,
-    py: &RuntimeRational,
+fn hit_test_scan_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
+    node: &RuntimeNode<R, V>,
+    px: &R,
+    py: &R,
     index: usize,
     depth: usize,
 ) -> (out: Option<Vec<usize>>)
@@ -95,7 +88,7 @@ fn hit_test_scan_exec(
         depth > 0,
         index <= node.children@.len(),
     ensures
-        match (out, hit_test_scan::<RationalModel>(node@, px@, py@, index as nat, depth as nat)) {
+        match (out, hit_test_scan::<V>(node.model@, px.model(), py.model(), index as nat, depth as nat)) {
             (Some(exec_path), Some(spec_path)) => {
                 exec_path@.len() == spec_path.len()
                 && forall|i: int| 0 <= i < exec_path@.len() ==>
@@ -111,21 +104,17 @@ fn hit_test_scan_exec(
     }
     let i = index - 1;
 
-    //  Child wf from parent's wf_deep
     assert(node.children@[i as int].wf_deep((depth - 1) as nat));
 
-    //  Get child's position
-    let child_x = copy_rational(&node.children[i].x);
-    let child_y = copy_rational(&node.children[i].y);
+    let child_x = node.children[i].x.copy();
+    let child_y = node.children[i].y.copy();
 
-    //  Transform to local coordinates
     let local_x = px.sub(&child_x);
     let local_y = py.sub(&child_y);
 
     let result = hit_test_inner_exec(&node.children[i], &local_x, &local_y, depth - 1);
     match result {
         Some(sub_path) => {
-            //  Build path: [i] ++ sub_path
             let mut path: Vec<usize> = Vec::new();
             path.push(i);
             let mut j: usize = 0;

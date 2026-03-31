@@ -2074,6 +2074,44 @@ fn layout_container_exec(
                     padding@, spacing1@, spacing2@, child_sizes_seq, avail_w, 0nat);
             },
         }
+        //  Bridge @ ↔ model@ (View impl)
+        assert(layout_result@ == layout_result.model@);
+        assert(layout_result.children@.len() == layout_result.model@.children.len());
+        //  Per-branch: connect model@ to the spec layout, which has n children
+        match kind {
+            ContainerKind::Linear(axis) => {
+                reveal(linear_layout);
+                //  Bridge: generic ensures uses model@, caller uses @
+                assert(limits@ == limits.model@);
+                assert(padding@ == padding.model@);
+                //  Bridge child_sizes: generic uses model@, caller uses @
+                assert forall|j: int| 0 <= j < child_sizes@.len() implies
+                    child_sizes@[j]@ == (#[trigger] child_sizes@[j]).model@
+                by {};
+                assert(child_sizes_seq =~= Seq::new(child_sizes@.len() as nat, |i: int| child_sizes@[i].model@));
+                assert(layout_result.model@.children.len() == n as nat);
+            },
+            ContainerKind::Stack => {
+                reveal(crate::layout::stack::stack_layout);
+                assert(limits@ == limits.model@);
+                assert(padding@ == padding.model@);
+                assert forall|j: int| 0 <= j < child_sizes@.len() implies
+                    child_sizes@[j]@ == (#[trigger] child_sizes@[j]).model@
+                by {};
+                assert(child_sizes_seq =~= Seq::new(child_sizes@.len() as nat, |i: int| child_sizes@[i].model@));
+                assert(layout_result.model@.children.len() == n as nat);
+            },
+            ContainerKind::Wrap => {
+                reveal(wrap_layout);
+                assert(limits@ == limits.model@);
+                assert(padding@ == padding.model@);
+                assert forall|j: int| 0 <= j < child_sizes@.len() implies
+                    child_sizes@[j]@ == (#[trigger] child_sizes@[j]).model@
+                by {};
+                assert(child_sizes_seq =~= Seq::new(child_sizes@.len() as nat, |i: int| child_sizes@[i].model@));
+                assert(layout_result.model@.children.len() == n as nat);
+            },
+        }
         assert(layout_result.children@.len() == child_nodes@.len());
     }
 

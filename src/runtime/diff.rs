@@ -1,14 +1,13 @@
 use vstd::prelude::*;
 use verus_algebra::traits::Equivalence;
-use verus_rational::RuntimeRational;
-use crate::runtime::RationalModel;
-use crate::runtime::RuntimeNode;
-use crate::runtime::RuntimeSize;
+use crate::runtime::node::RuntimeNode;
+use crate::runtime::size::RuntimeSize;
 use crate::diff::{DiffResult, diff_nodes, diff_children};
+use verus_algebra::traits::field::OrderedField;
+use verus_algebra::traits::runtime::*;
 
 verus! {
 
-///  Runtime diff result.
 pub enum RuntimeDiffResult {
     Same,
     PositionChanged,
@@ -17,30 +16,21 @@ pub enum RuntimeDiffResult {
     ChildrenChanged { diffs: Vec<(usize, RuntimeDiffResult)> },
 }
 
-///  Check if two RuntimeRationals are equivalent (a <= b && b <= a).
-fn rational_eqv(a: &RuntimeRational, b: &RuntimeRational) -> (out: bool)
-    requires a.wf_spec(), b.wf_spec(),
-    ensures out == a@.eqv(b@),
-{
-    a.le(b) && b.le(a)
-}
-
-///  Compare two runtime nodes.
-pub fn diff_nodes_exec(
-    old: &RuntimeNode,
-    new: &RuntimeNode,
+pub fn diff_nodes_exec<R: RuntimeOrderedFieldOps<V>, V: OrderedField>(
+    old: &RuntimeNode<R, V>,
+    new: &RuntimeNode<R, V>,
     fuel: usize,
 ) -> (out: RuntimeDiffResult)
     requires
         old.wf_deep(fuel as nat),
         new.wf_deep(fuel as nat),
     ensures
-        match (&out, diff_nodes::<RationalModel>(old@, new@, fuel as nat)) {
-            (RuntimeDiffResult::Same, DiffResult::<RationalModel>::Same) => true,
-            (RuntimeDiffResult::PositionChanged, DiffResult::<RationalModel>::PositionChanged) => true,
-            (RuntimeDiffResult::SizeChanged, DiffResult::<RationalModel>::SizeChanged) => true,
-            (RuntimeDiffResult::ChildCountChanged, DiffResult::<RationalModel>::ChildCountChanged) => true,
-            (RuntimeDiffResult::ChildrenChanged { .. }, DiffResult::<RationalModel>::ChildrenChanged { .. }) => true,
+        match (&out, diff_nodes::<V>(old.model@, new.model@, fuel as nat)) {
+            (RuntimeDiffResult::Same, DiffResult::<V>::Same) => true,
+            (RuntimeDiffResult::PositionChanged, DiffResult::<V>::PositionChanged) => true,
+            (RuntimeDiffResult::SizeChanged, DiffResult::<V>::SizeChanged) => true,
+            (RuntimeDiffResult::ChildCountChanged, DiffResult::<V>::ChildCountChanged) => true,
+            (RuntimeDiffResult::ChildrenChanged { .. }, DiffResult::<V>::ChildrenChanged { .. }) => true,
             _ => false,
         },
     decreases fuel,
@@ -49,11 +39,11 @@ pub fn diff_nodes_exec(
         return RuntimeDiffResult::Same;
     }
 
-    if !(rational_eqv(&old.x, &new.x)) || !(rational_eqv(&old.y, &new.y)) {
+    if !(old.x.eq(&new.x)) || !(old.y.eq(&new.y)) {
         return RuntimeDiffResult::PositionChanged;
     }
 
-    if !(rational_eqv(&old.size.width, &new.size.width)) || !(rational_eqv(&old.size.height, &new.size.height)) {
+    if !(old.size.width.eq(&new.size.width)) || !(old.size.height.eq(&new.size.height)) {
         return RuntimeDiffResult::SizeChanged;
     }
 
@@ -72,7 +62,7 @@ pub fn diff_nodes_exec(
             old.wf_deep(fuel as nat),
             new.wf_deep(fuel as nat),
             fuel > 0,
-            diffs@.len() == diff_children::<RationalModel>(old@, new@, i as nat, (fuel - 1) as nat).len(),
+            diffs@.len() == diff_children::<V>(old.model@, new.model@, i as nat, (fuel - 1) as nat).len(),
         decreases n - i,
     {
         assert(old.children@[i as int].wf_deep((fuel - 1) as nat));

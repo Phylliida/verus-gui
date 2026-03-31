@@ -16,7 +16,6 @@ pub struct RuntimeSize<R, V: OrderedField> where R: RuntimeOrderedFieldOps<V> {
     pub model: Ghost<Size<V>>,
 }
 
-//  View impl for the concrete Rational instantiation — keeps @ working for existing callers.
 impl View for RuntimeSize<RuntimeRational, Rational> {
     type V = Size<Rational>;
     open spec fn view(&self) -> Size<Rational> { self.model@ }
