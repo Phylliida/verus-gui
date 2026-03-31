@@ -16,9 +16,9 @@ pub struct RuntimeSize<R, V: OrderedField> where R: RuntimeOrderedFieldOps<V> {
     pub model: Ghost<Size<V>>,
 }
 
-impl View for RuntimeSize<RuntimeRational, Rational> {
-    type V = Size<Rational>;
-    open spec fn view(&self) -> Size<Rational> { self.model@ }
+impl<R: RuntimeOrderedFieldOps<V>, V: OrderedField> View for RuntimeSize<R, V> {
+    type V = Size<V>;
+    open spec fn view(&self) -> Size<V> { self.model@ }
 }
 
 impl<R: RuntimeOrderedFieldOps<V>, V: OrderedField> RuntimeSize<R, V> {
