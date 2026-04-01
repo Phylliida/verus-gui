@@ -273,8 +273,13 @@ pub fn node_local_coords_exec(
 
     let child_x = copy_rational(&node.children[idx].x);
     let child_y = copy_rational(&node.children[idx].y);
-    let local_x = px.sub(&child_x);
-    let local_y = py.sub(&child_y);
+    let local_x = px.sub(&child_x).normalize();
+    let local_y = py.sub(&child_y).normalize();
+    proof {
+        use verus_rational::rational::Rational;
+        Rational::lemma_canonical_unique(px@.sub_spec(child_x@), local_x@);
+        Rational::lemma_canonical_unique(py@.sub_spec(child_y@), local_y@);
+    }
 
     proof {
         let ghost spec_path = Seq::new((path@.len() - path_offset) as nat, |i: int|

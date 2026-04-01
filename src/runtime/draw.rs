@@ -2,6 +2,8 @@ use vstd::prelude::*;
 use verus_rational::RuntimeRational;
 use verus_algebra::traits::ring::Ring;
 use crate::runtime::RationalModel;
+#[cfg(verus_keep_ghost)]
+use verus_rational::rational::Rational;
 use crate::runtime::copy_rational;
 use crate::runtime::RuntimeNode;
 use crate::node::Node;
@@ -135,9 +137,13 @@ pub fn flatten_node_exec(
     let ghost spec_result = flatten_node_to_draws::<RationalModel>(
         node@, offset_x@, offset_y@, depth as nat, fuel as nat);
 
-    //  Compute absolute position of this node
-    let abs_x = offset_x.add(&node.x);
-    let abs_y = offset_y.add(&node.y);
+    //  Compute absolute position of this node (normalize to match spec canonical)
+    let abs_x = offset_x.add(&node.x).normalize();
+    let abs_y = offset_y.add(&node.y).normalize();
+    proof {
+        Rational::lemma_canonical_unique(offset_x@.add_spec(node@.x), abs_x@);
+        Rational::lemma_canonical_unique(offset_y@.add_spec(node@.y), abs_y@);
+    }
 
     //  Ghost: the spec self_draw matches what flatten_node_to_draws produces
     let ghost self_draw_model = DrawCommand::<RationalModel> {
@@ -203,11 +209,7 @@ pub fn flatten_node_exec(
             assert(result@[0]@ === self_draw_model);
 
             //  Bridge: abs_x@ matches the spec's offset_x.add(node.x)
-            //  abs_x@ = offset_x@.add_spec(node.x@) (from RuntimeRational::add)
-            //  node.x@ == node@.x (from wf_deep)
-            //  Ring::add == add_spec (from open trait impl)
-            assert(abs_x@ == offset_x@.add_spec(node@.x));
-            assert(abs_y@ == offset_y@.add_spec(node@.y));
+            //  abs_x@ == add_spec(offset_x@, node@.x).canonical() == Ring::add(offset_x@, node@.x)
 
             assert forall|i: int| 0 <= i < result@.len() implies
                 (#[trigger] result@[i]).wf_spec() &&
